@@ -11,6 +11,30 @@ class Bot(irc.IRCClient):
     sourceURL = 'http://github.com/csyork/csbot/'
     lineRate = 1
 
+    HOOKS = ['privmsg', 'action']
+
+    def __init__(self, plugins):
+        self.hooks = dict((h, []) for h in Bot.HOOKS)
+        self.plugins = dict((P.__name__, P(self)) for P in plugins)
+
+        for p in self.plugins.itervalues():
+            for h in p.HOOKS:
+                if h in self.hooks:
+                    self.hooks[h].append(p)
+
+    def fire_hook(self, hook, *args, **kwargs):
+        for plugin in self.hooks[hook]:
+            if hasattr(plugin, hook):
+                getattr(plugin, hook)(*args, **kwargs)
+
+    def log_msg(self, msg):
+        """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
+        log.msg(msg)
+
+    def log_err(self, err):
+        """Convenience wrapper around ``twisted.python.log.err`` for plugins"""
+        log.err(err)
+
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
         print "[Connected]"
@@ -27,8 +51,13 @@ class Bot(irc.IRCClient):
 
 
 class Plugin(object):
+    """Bot plugin base class.
+
+    All plugins should subclass this class to be automatically detected and
+    loaded.
+    """
     def __init__(self, bot):
-        raise NotImplementedError
+        self.bot = bot
 
 
 class BotFactory(protocol.ClientFactory):
@@ -37,7 +66,7 @@ class BotFactory(protocol.ClientFactory):
         self.channels = channels
 
     def buildProtocol(self, addr):
-        p = Bot()
+        p = Bot(self.plugins)
         p.factory = self
         return p
 
@@ -48,7 +77,7 @@ class BotFactory(protocol.ClientFactory):
         reactor.stop()
 
 
-if __name__ == '__main__':
+def main(argv):
     import sys
     from straight.plugin import load
 

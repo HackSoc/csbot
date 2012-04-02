@@ -2,4 +2,7 @@ from csbot import Plugin
 
 
 class Example(Plugin):
-    pass
+    HOOKS = ['privmsg']
+
+    def privmsg(self, user, channel, msg):
+        pass
