@@ -11,21 +11,23 @@ class Bot(irc.IRCClient):
     sourceURL = 'http://github.com/csyork/csbot/'
     lineRate = 1
 
-    HOOKS = ['privmsg', 'action']
-
     def __init__(self, plugins):
-        self.hooks = dict((h, []) for h in Bot.HOOKS)
-        self.plugins = dict((P.__name__, P(self)) for P in plugins)
-
-        for p in self.plugins.itervalues():
-            for h in p.HOOKS:
-                if h in self.hooks:
-                    self.hooks[h].append(p)
+        self.plugins = [P(self) for P in plugins]
+        self.plugin_lookup = dict()
+        for p in self.plugins:
+            if hasattr(p.__class__, 'NAME'):
+                if p.__class__.NAME in self.plugin_lookup:
+                    self.log_err('Plugin name ' + p.__class__.NAME +
+                                 ' already in use')
+                else:
+                    self.plugin_lookup[p.__class__.NAME] = p
 
     def fire_hook(self, hook, *args, **kwargs):
-        for plugin in self.hooks[hook]:
-            if hasattr(plugin, hook):
-                getattr(plugin, hook)(*args, **kwargs)
+        """Call *hook* on every plugin that has implemented it"""
+        for plugin in self.plugins:
+            f = getattr(plugin, hook, None)
+            if callable(f):
+                f(*args, **kwargs)
 
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
@@ -45,9 +47,11 @@ class Bot(irc.IRCClient):
 
     def signedOn(self):
         map(self.join, self.factory.channels)
+        self.fire_hook('signedOn')
 
     def privmsg(self, user, channel, msg):
         print ">>>", msg
+        self.fire_hook('privmsg', user, channel, msg)
 
 
 class Plugin(object):

@@ -2,7 +2,6 @@ from csbot import Plugin
 
 
 class Example(Plugin):
-    HOOKS = ['privmsg']
-
+    NAME = 'example'
     def privmsg(self, user, channel, msg):
-        pass
+        print ">>>", msg
