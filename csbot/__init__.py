@@ -1,6 +1,27 @@
+from functools import wraps
+
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
+
+
+def hook(f):
+    """Create a plugin hook.
+
+    Used as a method decorator this will cause the hook of the same name to be
+    fired after the method.  Used to create a new method, *f* names the hook
+    that will be fired by the method.
+    """
+    if callable(f):
+        @wraps(f)
+        def newf(self, *args, **kwargs):
+            f(self, *args, **kwargs)
+            self.fire_hook(f.__name__, *args, **kwargs)
+    else:
+        def newf(self, *args, **kwargs):
+            self.fire_hook(f, *args, **kwargs)
+        newf.__doc__ = "Generated hook trigger for ``{}``".format(f)
+    return newf
 
 
 class Bot(irc.IRCClient):
@@ -47,11 +68,14 @@ class Bot(irc.IRCClient):
 
     def signedOn(self):
         map(self.join, self.factory.channels)
-        self.fire_hook('signedOn')
 
+    @hook
     def privmsg(self, user, channel, msg):
-        print ">>>", msg
-        self.fire_hook('privmsg', user, channel, msg)
+        if msg.startswith(self.factory.command_prefix):
+            # Handle commands
+            pass
+
+    action = hook('action')
 
 
 class Plugin(object):
@@ -65,9 +89,10 @@ class Plugin(object):
 
 
 class BotFactory(protocol.ClientFactory):
-    def __init__(self, plugins, channels):
+    def __init__(self, plugins, channels, command_prefix):
         self.plugins = plugins
         self.channels = channels
+        self.command_prefix = command_prefix
 
     def buildProtocol(self, addr):
         p = Bot(self.plugins)
@@ -93,6 +118,6 @@ def main(argv):
     print "Plugins found:", plugins
 
     # Start client
-    f = BotFactory(plugins=plugins, channels=['#cs-york-dev'])
+    f = BotFactory(plugins=plugins, channels=['#cs-york-dev'], command_prefix='!')
     reactor.connectTCP('irc.freenode.net', 6667, f)
     reactor.run()
