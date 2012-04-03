@@ -1,4 +1,4 @@
-from csbot import Plugin
+from csbot import Plugin, command
 
 
 class EmptyPlugin(Plugin):
@@ -6,9 +6,7 @@ class EmptyPlugin(Plugin):
 
 
 class Example(Plugin):
-    def setup(self):
-        self.bot.register_command('test', self.test_command)
-
+    @command('test')
     def test_command(self, user, channel, data):
         self.bot.reply(user, channel,
                        'test invoked: {}'.format((user, channel, data)))

@@ -25,6 +25,22 @@ def hook(f):
     return newf
 
 
+def command(name, raw=False):
+    """Mark a plugin method as a bot command.
+
+    Using this decorator is shorthand for registering the method as a command
+    in the plugin setup method.  Commands created with the decorator will be
+    registered in the plugin's constructor, i.e. before any setup methods are
+    run.
+
+    .. seealso:: :meth:`Bot.register_command`
+    """
+    def decorate(f):
+        f.command = {'name': name, 'raw': raw}
+        return f
+    return decorate
+
+
 def nick(user):
     """Get nick from user string.
 
@@ -233,6 +249,15 @@ class Plugin(object):
     """
     def __init__(self, bot):
         self.bot = bot
+
+        # Register decorated commands
+        for k in dir(self):
+            if not k.startswith('_'):
+                print k
+                f = getattr(self, k)
+                if hasattr(f, 'command'):
+                    self.bot.register_command(f.command['name'], f,
+                                              f.command['raw'])
 
     def setup(self):
         pass
