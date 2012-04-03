@@ -277,7 +277,7 @@ class Plugin(object):
             return self.bot.config.get("DEFAULT", name)
 
         # Raise an exception
-        raise Exception("{} is not a valid option.".format(name))
+        raise KeyError("{} is not a valid option.".format(name))
 
         # Register decorated commands
         for k in dir(self):
