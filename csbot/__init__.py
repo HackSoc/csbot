@@ -1,5 +1,6 @@
 from functools import wraps
 import shlex
+import ConfigParser
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -95,13 +96,27 @@ def plugin_name(obj):
 
 class Bot(irc.IRCClient):
 
-    nickname = "csyorkbot"
-    username = "csyorkbot"
-    realname = "cs-york bot"
-    sourceURL = 'http://github.com/csyork/csbot/'
-    lineRate = 1
+    cfgfile = "csbot.cfg"
 
     def __init__(self, plugins):
+        # Load the configuration file, with default values
+        # for the global settings if missing.
+        self.config = ConfigParser.SafeConfigParser(defaults={
+            "nickname": "csyorkbot",
+            "username": "csyorkbot",
+            "realname": "cs-york bot",
+            "sourceURL": "http://github.com/csyork/csbot/",
+            "lineRate": "1"},
+            allow_no_value=True)
+
+        self.config.read(self.cfgfile)
+
+        self.nickname = self.config.get("DEFAULT", "nickname")
+        self.username = self.config.get("DEFAULT", "username")
+        self.realname = self.config.get("DEFAULT", "realname")
+        self.sourceURL = self.config.get("DEFAULT", "sourceURL")
+        self.lineRate = self.config.getint("DEFAULT", "lineRate")
+
         self.commands = dict()
         self.plugins = dict()
 
@@ -249,6 +264,20 @@ class Plugin(object):
     """
     def __init__(self, bot):
         self.bot = bot
+        self.plugin = plugin_name(self)
+
+    def cfg(self, name):
+        # Check plugin config
+        if self.bot.config.has_section(self.plugin):
+            if self.bot.config.has_option(self.plugin, name):
+                return self.bot.config.get(self.plugin, name)
+
+        # Check default config
+        if self.bot.config.has_option("DEFAULT", name):
+            return self.bot.config.get("DEFAULT", name)
+
+        # Raise an exception
+        raise Exception("{} is not a valid option.".format(name))
 
         # Register decorated commands
         for k in dir(self):
