@@ -96,10 +96,10 @@ def plugin_name(obj):
 
 class Bot(irc.IRCClient):
 
-    def __init__(self, plugins, conf="csbot.cfg"):
+    def __init__(self, config, plugins):
         # Load the configuration file, with default values
         # for the global settings if missing.
-        self.cfgfile = conf
+        self.cfgfile = config
 
         self.config = ConfigParser.SafeConfigParser(defaults={
             "nickname": "csyorkbot",
@@ -295,13 +295,14 @@ class Plugin(object):
 
 
 class BotFactory(protocol.ClientFactory):
-    def __init__(self, plugins, channels, command_prefix):
+    def __init__(self, config, plugins, channels, command_prefix):
+        self.config = config
         self.plugins = plugins
         self.channels = channels
         self.command_prefix = command_prefix
 
     def buildProtocol(self, addr):
-        p = Bot(self.plugins)
+        p = Bot(self.config, self.plugins)
         p.factory = self
         return p
 
@@ -314,7 +315,13 @@ class BotFactory(protocol.ClientFactory):
 
 def main(argv):
     import sys
+    import argparse
     from straight.plugin import load
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', default='csbot.cfg',
+                        help='Configuration file [default: %(default)s]')
+    args = parser.parse_args(argv[1:])
 
     # Start twisted logging
     log.startLogging(sys.stdout)
@@ -324,7 +331,8 @@ def main(argv):
     print "Plugins found:", plugins
 
     # Start client
-    f = BotFactory(plugins=plugins,
+    f = BotFactory(config=args.config,
+                   plugins=plugins,
                    channels=['#cs-york-dev'],
                    command_prefix='!')
     reactor.connectTCP('irc.freenode.net', 6667, f)
