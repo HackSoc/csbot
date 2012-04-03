@@ -1,5 +1,6 @@
 from functools import wraps
 import shlex
+import ConfigParser
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -95,11 +96,7 @@ def plugin_name(obj):
 
 class Bot(irc.IRCClient):
 
-    nickname = "csyorkbot"
-    username = "csyorkbot"
-    realname = "cs-york bot"
-    sourceURL = 'http://github.com/csyork/csbot/'
-    lineRate = 1
+    cfgfile = "csbot.cfg"
 
     def __init__(self, plugins):
         self.commands = dict()
@@ -113,6 +110,24 @@ class Bot(irc.IRCClient):
             else:
                 self.plugins[name] = p
                 self.log_msg('Loaded plugin: ' + name)
+
+        # Load the configuration file, with default values
+        # for the global settings if missing.
+        self.config = ConfigParser.SafeConfigParser(defaults={
+            "nickname": "csyorkbot",
+            "username": "csyorkbot",
+            "realname": "cs-york bot",
+            "sourceURL": "http://github.com/csyork/csbot/",
+            "lineRate": "1"},
+            allow_no_value=True)
+
+        self.config.read(self.cfgfile)
+
+        self.nickname = self.config.get("DEFAULT", "nickname")
+        self.username = self.config.get("DEFAULT", "username")
+        self.realname = self.config.get("DEFAULT", "realname")
+        self.sourceURL = self.config.get("DEFAULT", "sourceURL")
+        self.lineRate = self.config.getint("DEFAULT", "lineRate")
 
     def fire_hook(self, hook, *args, **kwargs):
         """Call *hook* on every plugin that has implemented it"""
