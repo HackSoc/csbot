@@ -174,10 +174,14 @@ class Bot(irc.IRCClient):
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
         print "[Connected]"
+        for p in self.plugins.itervalues():
+            p.setup()
 
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
+        for p in self.plugins.itervalues():
+            p.teardown()
 
     def signedOn(self):
         map(self.join, self.factory.channels)
@@ -229,6 +233,12 @@ class Plugin(object):
     """
     def __init__(self, bot):
         self.bot = bot
+
+    def setup(self):
+        pass
+
+    def teardown(self):
+        pass
 
 
 class BotFactory(protocol.ClientFactory):
