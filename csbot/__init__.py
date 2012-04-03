@@ -267,12 +267,12 @@ class Plugin(object):
         self.config = config
 
     def cfg(self, name):
-        if self.config.has_option (self.__class__.NAME, name):
+        if self.config.has_option(self.__class__.NAME, name):
             return self.config.get(self.__class__.NAME, name)
 
-        if self.config.has_option ("DEFAULT", name):
+        if self.config.has_option("DEFAULT", name):
             return self.config.get("DEFAULT", name)
-        
+
         raise Exception("{} is not a valid option.".format(name))
 
         # Register decorated commands
