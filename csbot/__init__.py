@@ -96,11 +96,11 @@ def plugin_name(obj):
 
 class Bot(irc.IRCClient):
 
-    cfgfile = "csbot.cfg"
-
-    def __init__(self, plugins):
+    def __init__(self, plugins, conf="csbot.cfg"):
         # Load the configuration file, with default values
         # for the global settings if missing.
+        self.cfgfile = conf
+
         self.config = ConfigParser.SafeConfigParser(defaults={
             "nickname": "csyorkbot",
             "username": "csyorkbot",
