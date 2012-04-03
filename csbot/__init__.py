@@ -264,7 +264,7 @@ class Plugin(object):
     """
     def __init__(self, bot, config):
         self.bot = bot
-        self.config = config
+        self.config = botconfig
 
     def cfg(self, name):
         if self.config.has_option(self.__class__.NAME, name):
