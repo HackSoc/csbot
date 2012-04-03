@@ -1,6 +1,10 @@
 from csbot import Plugin
 
 
+class EmptyPlugin(Plugin):
+    pass
+
+
 class Example(Plugin):
 
     NAME = 'example'

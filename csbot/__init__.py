@@ -26,15 +26,55 @@ def hook(f):
 
 
 def nick(user):
+    """Get nick from user string.
+
+    >>> nick('csyorkbot!~csbot@example.com')
+    'csyorkbot'
+    """
     return user.split('!', 1)[0]
 
 
+def username(user):
+    """Get username from user string.
+
+    >>> username('csyorkbot!~csbot@example.com')
+    'csbot'
+    """
+    return user.rsplit('@', 1)[0].rsplit('~', 1)[1]
+
+
 def host(user):
+    """Get hostname from user string.
+
+    >>> host('csyorkbot!~csbot@example.com')
+    'example.com'
+    """
     return user.rsplit('@', 1)[1]
 
 
 def is_channel(channel):
+    """Check if *channel* is a channel or private chat.
+
+    >>> is_channel('#cs-york')
+    True
+    >>> is_channel('csyorkbot')
+    False
+    """
     return channel.startswith('#')
+
+
+def plugin_name(obj):
+    """Get the name for a plugin object.
+
+    A plugin's name is its fully qualified module path, excluding the leading
+    component (which will always be ``csbot_plugins``).
+
+    >>> from csbot_plugins.example import EmptyPlugin
+    >>> plugin_name(EmptyPlugin(None))
+    'example.EmptyPlugin'
+    """
+    return (obj.__class__.__module__.split('.', 1)[1] +
+            '.' + obj.__class__.__name__)
 
 
 class Bot(irc.IRCClient):
