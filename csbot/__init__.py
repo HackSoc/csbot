@@ -176,7 +176,7 @@ class Bot(irc.IRCClient):
         print "[Connected]"
 
     def connectionLost(self, reason):
-        irc.IRCClient.connectionMade(self)
+        irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
 
     def signedOn(self):
