@@ -87,19 +87,20 @@ class Bot(irc.IRCClient):
 
     def __init__(self, plugins):
         self.commands = dict()
-        self.plugins = [P(self) for P in plugins]
-        self.plugin_lookup = dict()
-        for p in self.plugins:
-            if hasattr(p.__class__, 'NAME'):
-                if p.__class__.NAME in self.plugin_lookup:
-                    self.log_err('Plugin name ' + p.__class__.NAME +
-                                 ' already in use')
-                else:
-                    self.plugin_lookup[p.__class__.NAME] = p
+        self.plugins = dict()
+
+        for P in plugins:
+            p = P(self)
+            name = plugin_name(p)
+            if name in self.plugins:
+                self.log_err('Duplicate plugin name: ' + name)
+            else:
+                self.plugins[name] = p
+                self.log_msg('Loaded plugin: ' + name)
 
     def fire_hook(self, hook, *args, **kwargs):
         """Call *hook* on every plugin that has implemented it"""
-        for plugin in self.plugins:
+        for plugin in self.plugins.itervalues():
             f = getattr(plugin, hook, None)
             if callable(f):
                 f(*args, **kwargs)
