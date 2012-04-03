@@ -1,0 +1,2 @@
+Twisted==12.0.0
+straight.plugin==1.3
