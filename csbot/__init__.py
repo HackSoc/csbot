@@ -266,6 +266,15 @@ class Plugin(object):
         self.bot = bot
         self.plugin = plugin_name(self)
 
+        # Register decorated commands
+        for k in dir(self):
+            if not k.startswith('_'):
+                print k
+                f = getattr(self, k)
+                if hasattr(f, 'command'):
+                    self.bot.register_command(f.command['name'], f,
+                                              f.command['raw'])
+
     def cfg(self, name):
         # Check plugin config
         if self.bot.config.has_section(self.plugin):
@@ -278,15 +287,6 @@ class Plugin(object):
 
         # Raise an exception
         raise KeyError("{} is not a valid option.".format(name))
-
-        # Register decorated commands
-        for k in dir(self):
-            if not k.startswith('_'):
-                print k
-                f = getattr(self, k)
-                if hasattr(f, 'command'):
-                    self.bot.register_command(f.command['name'], f,
-                                              f.command['raw'])
 
     def setup(self):
         pass
