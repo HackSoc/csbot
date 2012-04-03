@@ -1,4 +1,4 @@
-from csbot import Plugin, command
+from csbot.core import Plugin, command
 
 
 class EmptyPlugin(Plugin):
