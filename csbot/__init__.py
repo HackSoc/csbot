@@ -264,14 +264,13 @@ class Plugin(object):
     """
     def __init__(self, bot, config):
         self.bot = bot
-        self.config = botconfig
 
     def cfg(self, name):
-        if self.config.has_option(self.__class__.NAME, name):
-            return self.config.get(self.__class__.NAME, name)
+        if self.bot.config.has_option(self.__class__.NAME, name):
+            return self.bot.config.get(self.__class__.NAME, name)
 
-        if self.config.has_option("DEFAULT", name):
-            return self.config.get("DEFAULT", name)
+        if self.bot.config.has_option("DEFAULT", name):
+            return self.bot.config.get("DEFAULT", name)
 
         raise Exception("{} is not a valid option.".format(name))
 
