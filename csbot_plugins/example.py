@@ -17,7 +17,7 @@ class Example(Plugin):
 
         if len(data) > 0:
             try:
-                msg = "{0} = {1}".format(data[0], self.cfg(data[0]))
+                msg = "{} = {}".format(data[0], self.cfg(data[0]))
             except Exception:
                 msg = "I don't know a {}".format(data[0])
 

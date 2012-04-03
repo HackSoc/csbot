@@ -262,16 +262,21 @@ class Plugin(object):
     All plugins should subclass this class to be automatically detected and
     loaded.
     """
-    def __init__(self, bot, config):
+    def __init__(self, bot):
         self.bot = bot
+        self.plugin = plugin_name(self)
 
     def cfg(self, name):
-        if self.bot.config.has_option(self.__class__.NAME, name):
-            return self.bot.config.get(self.__class__.NAME, name)
+        # Check plugin config
+        if self.bot.config.has_section(self.plugin):
+            if self.bot.config.has_option(self.plugin, name):
+                return self.bot.config.get(self.plugin, name)
 
+        # Check default config
         if self.bot.config.has_option("DEFAULT", name):
             return self.bot.config.get("DEFAULT", name)
 
+        # Raise an exception
         raise Exception("{} is not a valid option.".format(name))
 
         # Register decorated commands
