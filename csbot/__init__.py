@@ -26,15 +26,55 @@ def hook(f):
 
 
 def nick(user):
+    """Get nick from user string.
+
+    >>> nick('csyorkbot!~csbot@example.com')
+    'csyorkbot'
+    """
     return user.split('!', 1)[0]
 
 
+def username(user):
+    """Get username from user string.
+
+    >>> username('csyorkbot!~csbot@example.com')
+    'csbot'
+    """
+    return user.rsplit('@', 1)[0].rsplit('~', 1)[1]
+
+
 def host(user):
+    """Get hostname from user string.
+
+    >>> host('csyorkbot!~csbot@example.com')
+    'example.com'
+    """
     return user.rsplit('@', 1)[1]
 
 
 def is_channel(channel):
+    """Check if *channel* is a channel or private chat.
+
+    >>> is_channel('#cs-york')
+    True
+    >>> is_channel('csyorkbot')
+    False
+    """
     return channel.startswith('#')
+
+
+def plugin_name(obj):
+    """Get the name for a plugin object.
+
+    A plugin's name is its fully qualified module path, excluding the leading
+    component (which will always be ``csbot_plugins``).
+
+    >>> from csbot_plugins.example import EmptyPlugin
+    >>> plugin_name(EmptyPlugin(None))
+    'example.EmptyPlugin'
+    """
+    return (obj.__class__.__module__.split('.', 1)[1] +
+            '.' + obj.__class__.__name__)
 
 
 class Bot(irc.IRCClient):
@@ -47,19 +87,20 @@ class Bot(irc.IRCClient):
 
     def __init__(self, plugins):
         self.commands = dict()
-        self.plugins = [P(self) for P in plugins]
-        self.plugin_lookup = dict()
-        for p in self.plugins:
-            if hasattr(p.__class__, 'NAME'):
-                if p.__class__.NAME in self.plugin_lookup:
-                    self.log_err('Plugin name ' + p.__class__.NAME +
-                                 ' already in use')
-                else:
-                    self.plugin_lookup[p.__class__.NAME] = p
+        self.plugins = dict()
+
+        for P in plugins:
+            p = P(self)
+            name = plugin_name(p)
+            if name in self.plugins:
+                self.log_err('Duplicate plugin name: ' + name)
+            else:
+                self.plugins[name] = p
+                self.log_msg('Loaded plugin: ' + name)
 
     def fire_hook(self, hook, *args, **kwargs):
         """Call *hook* on every plugin that has implemented it"""
-        for plugin in self.plugins:
+        for plugin in self.plugins.itervalues():
             f = getattr(plugin, hook, None)
             if callable(f):
                 f(*args, **kwargs)
@@ -99,11 +140,25 @@ class Bot(irc.IRCClient):
         cmd['f'](user, channel, data)
 
     def reply(self, user, channel, msg):
-        if nick(user) != channel:
-            msg = nick(user) + ': ' + msg
-        self.msg(channel, msg)
+        """Send a reply message to *channel*.
+
+        Plugins should use this instead of :meth:`msg`.  It automatically
+        handles replying to the user correctly in private chats and addressing
+        the user by name in channels.
+        """
+        if channel == self.nickname:
+            self.msg(nick(user), msg)
+        else:
+            self.msg(channel, nick(user) + ': ' + msg)
 
     def error(self, user, channel, msg, direct):
+        """Respond with an error.
+
+        Log *msg* as an error, and if *direct* is True also respond in the
+        channel with the error message.  (This is to prevent the bot spamming
+        the channel with errors for things it doesn't understand unless
+        addressed explicitly.)
+        """
         self.log_err(msg)
         if direct:
             self.reply(user, channel, "Error: " + msg)
@@ -119,10 +174,14 @@ class Bot(irc.IRCClient):
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
         print "[Connected]"
+        for p in self.plugins.itervalues():
+            p.setup()
 
     def connectionLost(self, reason):
-        irc.IRCClient.connectionMade(self)
+        irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
+        for p in self.plugins.itervalues():
+            p.teardown()
 
     def signedOn(self):
         map(self.join, self.factory.channels)
@@ -152,8 +211,7 @@ class Bot(irc.IRCClient):
                 if len(msg) > 0 and msg[0] in ',:;.':
                     command = msg.lstrip(',:;.')
                     direct = True
-        elif channel == self.nickname:
-            channel = nick(user)
+        else:
             command = msg
             direct = True
 
@@ -175,6 +233,12 @@ class Plugin(object):
     """
     def __init__(self, bot):
         self.bot = bot
+
+    def setup(self):
+        pass
+
+    def teardown(self):
+        pass
 
 
 class BotFactory(protocol.ClientFactory):
