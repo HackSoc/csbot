@@ -3,7 +3,7 @@
 We are developing an IRC bot and plugin system for the #cs-york channel on irc.freenode.net.
 
 ## Development ##
-It's written in Python 2.7, sing the PEP 8 coding style.
+It's written in Python 2.7, using the PEP 8 coding style.
 
 ## Code Management & Version Control ##
 The code is stored [here](http://github.com/csyork/csbot/) on github.com. Please fork it if you want to help with it.
