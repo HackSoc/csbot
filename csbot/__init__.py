@@ -85,11 +85,11 @@ def plugin_name(obj):
     A plugin's name is its fully qualified module path, excluding the leading
     component (which will always be ``csbot_plugins``).
 
-    >>> from csbot_plugins.example import EmptyPlugin
+    >>> from csbot.plugins.example import EmptyPlugin
     >>> plugin_name(EmptyPlugin(None))
     'example.EmptyPlugin'
     """
-    return (obj.__class__.__module__.split('.', 1)[1] +
+    return (obj.__class__.__module__.split('.', 2)[2] +
             '.' + obj.__class__.__name__)
 
 
@@ -253,7 +253,6 @@ class Plugin(object):
         # Register decorated commands
         for k in dir(self):
             if not k.startswith('_'):
-                print k
                 f = getattr(self, k)
                 if hasattr(f, 'command'):
                     self.bot.register_command(f.command['name'], f,
@@ -292,7 +291,7 @@ def main(argv):
     log.startLogging(sys.stdout)
 
     # Find plugins
-    plugins = load('csbot_plugins', subclasses=Plugin)
+    plugins = load('csbot.plugins', subclasses=Plugin)
     print "Plugins found:", plugins
 
     # Start client
