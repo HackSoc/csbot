@@ -11,6 +11,18 @@ class Example(Plugin):
         self.bot.reply(user, channel,
                        'test invoked: {}'.format((user, channel, data)))
 
+    @command('cfg')
+    def test_cfg(self, user, channel, data):
+        msg = "You need to tell me what to look for!"
+
+        if len(data) > 0:
+            try:
+                msg = "{0} = {1}".format(data[0], self.cfg(data[0]))
+            except Exception:
+                msg = "I don't know a {}".format(data[0])
+
+        self.bot.reply(user, channel, msg)
+
     def privmsg(self, user, channel, msg):
         print ">>>", msg
 

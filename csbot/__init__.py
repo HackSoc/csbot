@@ -99,18 +99,6 @@ class Bot(irc.IRCClient):
     cfgfile = "csbot.cfg"
 
     def __init__(self, plugins):
-        self.commands = dict()
-        self.plugins = dict()
-
-        for P in plugins:
-            p = P(self)
-            name = plugin_name(p)
-            if name in self.plugins:
-                self.log_err('Duplicate plugin name: ' + name)
-            else:
-                self.plugins[name] = p
-                self.log_msg('Loaded plugin: ' + name)
-
         # Load the configuration file, with default values
         # for the global settings if missing.
         self.config = ConfigParser.SafeConfigParser(defaults={
@@ -128,6 +116,18 @@ class Bot(irc.IRCClient):
         self.realname = self.config.get("DEFAULT", "realname")
         self.sourceURL = self.config.get("DEFAULT", "sourceURL")
         self.lineRate = self.config.getint("DEFAULT", "lineRate")
+
+        self.commands = dict()
+        self.plugins = dict()
+
+        for P in plugins:
+            p = P(self)
+            name = plugin_name(p)
+            if name in self.plugins:
+                self.log_err('Duplicate plugin name: ' + name)
+            else:
+                self.plugins[name] = p
+                self.log_msg('Loaded plugin: ' + name)
 
     def fire_hook(self, hook, *args, **kwargs):
         """Call *hook* on every plugin that has implemented it"""
@@ -262,8 +262,18 @@ class Plugin(object):
     All plugins should subclass this class to be automatically detected and
     loaded.
     """
-    def __init__(self, bot):
+    def __init__(self, bot, config):
         self.bot = bot
+        self.config = config
+
+    def cfg(self, name):
+        if self.config.has_option (self.__class__.NAME, name):
+            return self.config.get(self.__class__.NAME, name)
+
+        if self.config.has_option ("DEFAULT", name):
+            return self.config.get("DEFAULT", name)
+        
+        raise Exception("{} is not a valid option.".format(name))
 
         # Register decorated commands
         for k in dir(self):
