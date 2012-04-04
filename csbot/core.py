@@ -305,23 +305,22 @@ class CommandEvent(object):
                 raise e
         return self.data_
 
-    def reply(self, msg, verbose=False):
+    def reply(self, msg, is_verbose=False):
         """Send a reply message.
 
         All plugin responses should be via this method.  The :attr:`user` is
         addressed by name if the response is in a channel rather than a private
-        chat.  The reply is suppressed if the command was triggered indirectly
-        (i.e. by command prefix instead of addressing the bot by name) and
-        *verbose* is True.
+        chat.  If *is_verbose* is True, the reply is suppressed unless the bot
+        was addressed directly, i.e. in private chat or by name in a channel.
         """
         if self.channel == self.bot.nickname:
             self.bot.msg(nick(self.user), msg)
-        elif self.direct or not verbose:
+        elif self.direct or not is_verbose:
             self.bot.msg(self.channel, msg)
 
     def error(self, err):
         """Send an error message."""
-        self.reply('Error: ' + err, verbose=True)
+        self.reply('Error: ' + err, is_verbose=True)
 
 
 class BotFactory(protocol.ClientFactory):
