@@ -9,7 +9,8 @@ class Example(Plugin):
     @command('test')
     def test_command(self, event):
         event.reply(('test invoked: {0.user}, {0.channel}, '
-                     '{0.data}, {0.raw_data}').format(event))
+                     '{0.data}').format(event))
+        event.reply('raw data: ' + event.raw_data, verbose=True)
 
     @command('cfg')
     def test_cfg(self, event):
