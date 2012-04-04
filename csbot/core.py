@@ -158,30 +158,6 @@ class Bot(irc.IRCClient):
         handler = self.commands[command.command]
         handler['f'](command)
 
-    def reply(self, user, channel, msg):
-        """Send a reply message to *channel*.
-
-        Plugins should use this instead of :meth:`msg`.  It automatically
-        handles replying to the user correctly in private chats and addressing
-        the user by name in channels.
-        """
-        if channel == self.nickname:
-            self.msg(nick(user), msg)
-        else:
-            self.msg(channel, nick(user) + ': ' + msg)
-
-    def error(self, user, channel, msg, direct):
-        """Respond with an error.
-
-        Log *msg* as an error, and if *direct* is True also respond in the
-        channel with the error message.  (This is to prevent the bot spamming
-        the channel with errors for things it doesn't understand unless
-        addressed explicitly.)
-        """
-        self.log_err(msg)
-        if direct:
-            self.reply(user, channel, "Error: " + msg)
-
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
         log.msg(msg)
