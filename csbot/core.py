@@ -299,7 +299,13 @@ class CommandEvent(object):
         """
         if self.data_ is None:
             try:
-                self.data_ = shlex.split(self.raw_data, posix=False)
+                # Create a shlex instance just like shlex.split does
+                lex = shlex.shlex(self.raw_data, posix=True)
+                lex.whitespace_split = True
+                # Don't treat ' as a quote character, so it can be used
+                # naturally in words
+                lex.quotes = '"'
+                self.data_ = list(lex)
             except ValueError as e:
                 self.error('Unmatched quotation marks')
                 raise e
