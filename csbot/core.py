@@ -37,7 +37,7 @@ def command(name, raw=False):
     .. seealso:: :meth:`Bot.register_command`
     """
     def decorate(f):
-        f.command = {'name': name, 'raw': raw}
+        f.command = {'name': name}
         return f
     return decorate
 
@@ -136,39 +136,27 @@ class Bot(irc.IRCClient):
             if callable(f):
                 f(*args, **kwargs)
 
-    def register_command(self, command, f, raw=False):
+    def register_command(self, command, f):
         """Register *f* as the callback for *command*.
 
-        The callback will be called as ``f(user, channel, data)``.  If *raw* is
-        False (default) then ``data`` will be a list of arguments split with
-        :func:`shlex.split`.  If *raw* is True then ``data`` will be the entire
-        trailing string.
+        The callback will be called with a :class:`CommandEvent` object.
 
         Returns False if the command already exists, otherwise returns True.
         """
         if command in self.commands:
             self.log_err('Command {} already registered'.format(command))
             return False
-        self.commands[command] = {'f': f, 'raw': raw}
+        self.commands[command] = {'f': f}
         return True
 
-    def fire_command(self, command, user, channel, data, direct):
+    def fire_command(self, command):
         """Dispatch *command* to its callback."""
-        if command not in self.commands:
-            self.error(user, channel,
-                       'Command "{}" not found'.format(command),
-                       direct)
+        if command.command not in self.commands:
+            command.error('Command "{0.command}" not found'.format(command))
             return
 
-        cmd = self.commands[command]
-        if not cmd['raw']:
-            try:
-                data = shlex.split(data, posix=False)
-            except ValueError:
-                self.error(user, channel, 'Unmatched quotation marks', direct)
-                return
-
-        cmd['f'](user, channel, data)
+        handler = self.commands[command.command]
+        handler['f'](command)
 
     def reply(self, user, channel, msg):
         """Send a reply message to *channel*.
@@ -220,38 +208,10 @@ class Bot(irc.IRCClient):
     @hook
     def privmsg(self, user, channel, msg):
         """Handle commands in channel messages.
-
-        Figure out if the message is a user trying to trigger a command, and
-        fire that command if it is.  Also figure out if the bot was addressed
-        directly (by nick in a channel, or in a private chat) - this will
-        decide whether or not the bot shows errors for a failed command.
         """
-        # TODO: need a cleaner way to handle this "direct/indirect" thing
-        command = None
-        direct = False
-        if is_channel(channel):
-            # In channel, must be triggered explicitly
-            if msg.startswith(self.factory.command_prefix):
-                # Triggered by command prefix: "<prefix><cmd> <args>"
-                command = msg[len(self.factory.command_prefix):]
-            elif msg.startswith(self.nickname):
-                # Addressing the bot by name: "<nick>, <cmd> <args>"
-                msg = msg[len(self.nickname):].lstrip()
-                # Check that the bot was specifically addressed, rather than
-                # a similar nick or just talking about the bot
-                if len(msg) > 0 and msg[0] in ',:;.':
-                    command = msg.lstrip(',:;.')
-                    direct = True
-        else:
-            command = msg
-            direct = True
-
-        if command:
-            cmd = command.split(None, 1)
-            if len(cmd) == 1:
-                self.fire_command(cmd[0], user, channel, "", direct)
-            elif len(cmd) == 2:
-                self.fire_command(cmd[0], user, channel, cmd[1], direct)
+        command = CommandEvent.create(self, user, channel, msg)
+        if command is not None:
+            self.fire_command(command)
 
     action = hook('action')
 
@@ -271,8 +231,7 @@ class Plugin(object):
             if not k.startswith('_'):
                 f = getattr(self, k)
                 if hasattr(f, 'command'):
-                    self.bot.register_command(f.command['name'], f,
-                                              f.command['raw'])
+                    self.bot.register_command(f.command['name'], f)
 
     def cfg(self, name):
         # Check plugin config
@@ -292,6 +251,101 @@ class Plugin(object):
 
     def teardown(self):
         pass
+
+
+class CommandEvent(object):
+    #: The :class:`Bot` this command was received by
+    bot = None
+    #: The command invoked (minus any trigger characters)
+    command = None
+    #: User string for the source of the command
+    user = None
+    #: Channel that the command was received on
+    channel = None
+    #: False if the command was triggered by the command prefix, True otherwise
+    direct = False
+    #: The rest of the line after the command name
+    raw_data = None
+    #: Cached argument list, see :attr:`data`
+    data_ = None
+
+    def __init__(self, bot, user, channel, command, direct, raw_data):
+        self.bot = bot
+        self.command = command
+        self.user = user
+        self.channel = channel
+        self.direct = direct
+        self.raw_data = raw_data
+        self.data_ = None
+
+    @staticmethod
+    def create(bot, user, channel, msg):
+        """Attempt to create an event from *msg*.
+
+        Returns None if *msg* is not a command, otherwise returns a new
+        :class:`CommandEvent`.
+        """
+        command = None
+        direct = False
+
+        if is_channel(channel):
+            # In channel, must be triggered explicitly
+            if msg.startswith(bot.factory.command_prefix):
+                # Triggered by command prefix: "<prefix><cmd> <args>"
+                command = msg[len(bot.factory.command_prefix):]
+            elif msg.startswith(bot.nickname):
+                # Addressing the bot by name: "<nick>, <cmd> <args>"
+                msg = msg[len(bot.nickname):].lstrip()
+                # Check that the bot was specifically addressed, rather than
+                # a similar nick or just talking about the bot
+                if len(msg) > 0 and msg[0] in ',:;.':
+                    command = msg.lstrip(',:;.')
+                    direct = True
+        else:
+            command = msg
+            direct = True
+
+        if command is None or command.strip() == '':
+            return None
+
+        command = command.split(None, 1)
+        cmd = command[0]
+        data = command[1] if len(command) == 2 else ''
+        return CommandEvent(bot, user, channel, cmd, direct, data)
+
+    @property
+    def data(self):
+        """Command data as an argument list.
+
+        :attr:`raw_data` is processed using :py:func:`shlex.split` the first
+        time this attribute is accessed.  If this fails, :meth:`error` is
+        called and a :py:class:`ValueError` is raised.
+        """
+        if self.data_ is None:
+            try:
+                self.data_ = shlex.split(self.raw_data, posix=False)
+            except ValueError as e:
+                self.error('Unmatched quotation marks')
+                raise e
+        return self.data_
+
+    def reply(self, msg, verbose=False):
+        """Send a reply message.
+
+        All plugin responses should be via this method.  The :attr:`user` is
+        addressed by name if the response is in a channel rather than a private
+        chat.  The reply is suppressed if the command was triggered indirectly
+        (i.e. by command prefix instead of addressing the bot by name) and
+        *verbose* is True.
+        """
+        if self.channel == self.bot.nickname:
+            self.bot.msg(nick(self.user), msg)
+        elif self.direct or not verbose:
+            self.bot.msg(self.channel, msg)
+
+    def error(self, err):
+        """Send an error message."""
+        self.reply('Error: ' + err, verbose=True)
 
 
 class BotFactory(protocol.ClientFactory):

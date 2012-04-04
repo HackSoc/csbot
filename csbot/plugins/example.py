@@ -7,21 +7,20 @@ class EmptyPlugin(Plugin):
 
 class Example(Plugin):
     @command('test')
-    def test_command(self, user, channel, data):
-        self.bot.reply(user, channel,
-                       'test invoked: {}'.format((user, channel, data)))
+    def test_command(self, event):
+        event.reply(('test invoked: {0.user}, {0.channel}, '
+                     '{0.data}, {0.raw_data}').format(event))
 
     @command('cfg')
-    def test_cfg(self, user, channel, data):
-        msg = "You need to tell me what to look for!"
-
-        if len(data) > 0:
+    def test_cfg(self, event):
+        if len(event.data) == 0:
+            event.error("You need to tell me what to look for!")
+        else:
             try:
-                msg = "{} = {}".format(data[0], self.cfg(data[0]))
-            except Exception:
-                msg = "I don't know a {}".format(data[0])
-
-        self.bot.reply(user, channel, msg)
+                event.reply("{} = {}".format(event.data[0],
+                                             self.cfg(event.data[0])))
+            except KeyError:
+                event.error("I don't know a {}".format(event.data[0]))
 
     def privmsg(self, user, channel, msg):
         print ">>>", msg
