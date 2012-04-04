@@ -293,9 +293,12 @@ class CommandEvent(object):
     def data(self):
         """Command data as an argument list.
 
-        :attr:`raw_data` is processed using :py:func:`shlex.split` the first
-        time this attribute is accessed.  If this fails, :meth:`error` is
-        called and a :py:class:`ValueError` is raised.
+        On first access, the argument list is processed from :attr:`raw_data`
+        using :py:mod:`shlex`.  The lexer is customised to only use `"` for
+        argument quoting, allowing `'` to be used naturally within arguments.
+
+        If the lexer fails to process the argument list, :meth:`error` is
+        called and :py:class:`ValueError` is raised.
         """
         if self.data_ is None:
             try:
