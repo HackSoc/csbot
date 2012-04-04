@@ -80,20 +80,6 @@ def is_channel(channel):
     return channel.startswith('#')
 
 
-def plugin_name(obj):
-    """Get the name for a plugin object.
-
-    A plugin's name is its fully qualified module path, excluding the leading
-    component (which will always be ``csbot_plugins``).
-
-    >>> from csbot.plugins.example import EmptyPlugin
-    >>> plugin_name(EmptyPlugin(None))
-    'example.EmptyPlugin'
-    """
-    return (obj.__class__.__module__.split('.', 2)[2] +
-            '.' + obj.__class__.__name__)
-
-
 class Bot(irc.IRCClient):
 
     def __init__(self, config, plugins):
@@ -121,11 +107,11 @@ class Bot(irc.IRCClient):
         self.plugins = dict()
 
         for P in plugins:
-            p = P(self)
-            name = plugin_name(p)
+            name = P.plugin_name()
             if name in self.plugins:
                 self.log_err('Duplicate plugin name: ' + name)
             else:
+                p = P(self)
                 self.plugins[name] = p
                 self.log_msg('Loaded plugin: ' + name)
 
@@ -200,7 +186,6 @@ class Plugin(object):
     """
     def __init__(self, bot):
         self.bot = bot
-        self.plugin = plugin_name(self)
 
         # Register decorated commands
         for k in dir(self):
@@ -209,11 +194,30 @@ class Plugin(object):
                 if hasattr(f, 'command'):
                     self.bot.register_command(f.command['name'], f)
 
+    @classmethod
+    def plugin_name(cls):
+        """Get the plugin's name.
+
+        A plugin's name is its fully qualified path, excluding the leading
+        component (which will always be ``csbot.plugins``).
+
+        >>> from csbot.plugins.example import EmptyPlugin
+        >>> EmptyPlugin.plugin_name()
+        'example.EmptyPlugin'
+        >>> p = EmptyPlugin(None)
+        >>> p.plugin_name()
+        'example.EmptyPlugin'
+        """
+        return cls.__module__.split('.', 2)[2] + '.' + cls.__name__
+
+
     def cfg(self, name):
+        plugin = self.plugin_name()
+
         # Check plugin config
-        if self.bot.config.has_section(self.plugin):
-            if self.bot.config.has_option(self.plugin, name):
-                return self.bot.config.get(self.plugin, name)
+        if self.bot.config.has_section(plugin):
+            if self.bot.config.has_option(plugin, name):
+                return self.bot.config.get(plugin, name)
 
         # Check default config
         if self.bot.config.has_option("DEFAULT", name):
