@@ -1,4 +1,5 @@
 from functools import wraps
+import types
 import shlex
 import ConfigParser
 
@@ -24,22 +25,6 @@ def hook(f):
             self.fire_hook(f, *args, **kwargs)
         newf.__doc__ = "Generated hook trigger for ``{}``".format(f)
     return newf
-
-
-def command(name, raw=False):
-    """Mark a plugin method as a bot command.
-
-    Using this decorator is shorthand for registering the method as a command
-    in the plugin setup method.  Commands created with the decorator will be
-    registered in the plugin's constructor, i.e. before any setup methods are
-    run.
-
-    .. seealso:: :meth:`Bot.register_command`
-    """
-    def decorate(f):
-        f.command = {'name': name}
-        return f
-    return decorate
 
 
 def nick(user):
@@ -92,7 +77,8 @@ class Bot(irc.IRCClient):
             "username": "csyorkbot",
             "realname": "cs-york bot",
             "sourceURL": "http://github.com/csyork/csbot/",
-            "lineRate": "1"},
+            "lineRate": "1",
+            "keyvalfile": "keyval.cfg"},
             allow_no_value=True)
 
         self.config.read(self.cfgfile)
@@ -102,6 +88,11 @@ class Bot(irc.IRCClient):
         self.realname = self.config.get("DEFAULT", "realname")
         self.sourceURL = self.config.get("DEFAULT", "sourceURL")
         self.lineRate = self.config.getint("DEFAULT", "lineRate")
+        self.keyvalfile = self.config.get("DEFAULT", "keyvalfile")
+
+        # Read in the plugin key/value database
+        self.plugindata = ConfigParser.SafeConfigParser(allow_no_value=True)
+        self.plugindata.read(self.keyvalfile)
 
         self.commands = dict()
         self.plugins = dict()
@@ -116,11 +107,10 @@ class Bot(irc.IRCClient):
                 self.log_msg('Loaded plugin: ' + name)
 
     def fire_hook(self, hook, *args, **kwargs):
-        """Call *hook* on every plugin that has implemented it"""
+        """Fire *hook* on every plugin.
+        """
         for plugin in self.plugins.itervalues():
-            f = getattr(plugin, hook, None)
-            if callable(f):
-                f(*args, **kwargs)
+            plugin.features.fire_hook(hook, *args, **kwargs)
 
     def register_command(self, command, f):
         """Register *f* as the callback for *command*.
@@ -132,7 +122,7 @@ class Bot(irc.IRCClient):
         if command in self.commands:
             self.log_err('Command {} already registered'.format(command))
             return False
-        self.commands[command] = {'f': f}
+        self.commands[command] = f
         return True
 
     def fire_command(self, command):
@@ -142,7 +132,7 @@ class Bot(irc.IRCClient):
             return
 
         handler = self.commands[command.command]
-        handler['f'](command)
+        handler(command)
 
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
@@ -164,6 +154,10 @@ class Bot(irc.IRCClient):
         for p in self.plugins.itervalues():
             p.teardown()
 
+        # Save the plugin data
+        with open(self.keyvalfile, 'wb') as kvf:
+            self.plugindata.write(kvf)
+
     def signedOn(self):
         map(self.join, self.factory.channels)
 
@@ -178,21 +172,79 @@ class Bot(irc.IRCClient):
     action = hook('action')
 
 
+class PluginFeatures(object):
+    """Utility class to simplify defining plugin features.
+
+    Plugins can define hooks and commands.  This class provides a
+    decorator-based approach to creating these features.
+    """
+    def __init__(self):
+        self.commands = dict()
+        self.hooks = dict()
+
+    def instantiate(self, inst):
+        """Create a duplicate :class:`PluginFeatures` bound to *inst*.
+
+        Returns an exact duplicate of this object, but every method that has
+        been registered with a decorator is bound to *inst* so when it's called
+        it acts like a normal method call.
+        """
+        cls = inst.__class__
+        features = PluginFeatures()
+        features.commands = dict((c, types.MethodType(f, inst, cls))
+                                 for c, f in self.commands.iteritems())
+        features.hooks = dict((h, [types.MethodType(f, inst, cls) for f in fs])
+                              for h, fs in self.hooks.iteritems())
+        return features
+
+    def hook(self, hook):
+        """Create a decorator to register a handler for *hook*.
+        """
+        if hook not in self.hooks:
+            self.hooks[hook] = list()
+        def decorate(f):
+            self.hooks[hook].append(f)
+            return f
+        return decorate
+
+    def command(self, command, help=None):
+        """Create a decorator to register a handler for *command*.
+
+        Raises a :class:`KeyError` if this class has already registered a
+        handler for *command*.
+        """
+        if command in self.commands:
+            raise KeyError('Duplicate command: {}'.format(command))
+        def decorate(f):
+            f.help = help
+            self.commands[command] = f
+            return f
+        return decorate
+
+    def fire_hook(self, hook, *args, **kwargs):
+        """Run all handlers for *hook*.
+
+        The handlers are run in the order they were registered for *hook*,
+        which should correspond to the order they were defined in.  All
+        extra arguments are passed through to every handler.
+        """
+        if hook in self.hooks:
+            for f in self.hooks[hook]:
+                f(*args, **kwargs)
+
+
 class Plugin(object):
     """Bot plugin base class.
-
-    All plugins should subclass this class to be automatically detected and
-    loaded.
     """
+
+    features = PluginFeatures()
+
     def __init__(self, bot):
         self.bot = bot
+        self.features = self.features.instantiate(self)
 
-        # Register decorated commands
-        for k in dir(self):
-            if not k.startswith('_'):
-                f = getattr(self, k)
-                if hasattr(f, 'command'):
-                    self.bot.register_command(f.command['name'], f)
+        for command, handler in self.features.commands.iteritems():
+            self.bot.register_command(command, handler)
 
     @classmethod
     def plugin_name(cls):
@@ -210,7 +262,6 @@ class Plugin(object):
         """
         return cls.__module__.split('.', 2)[2] + '.' + cls.__name__
 
-
     def cfg(self, name):
         plugin = self.plugin_name()
 
@@ -225,6 +276,30 @@ class Plugin(object):
 
         # Raise an exception
         raise KeyError("{} is not a valid option.".format(name))
+
+    def get(self, key):
+        """Get a value from the plugin key/value store by key. If the key
+        is not found, a KeyError is raised.
+        """
+
+        plugin = self.plugin_name()
+
+        if self.bot.plugindata.has_section(plugin):
+            if self.bot.plugindata.has_option(plugin, key):
+                return self.bot.plugindata.get(plugin, key)
+
+        raise KeyError("{} is not defined.".format(key))
+
+    def set(self, key, value):
+        """Set a value in the plugin key/value store by key.
+        """
+
+        plugin = self.plugin_name()
+
+        if not self.bot.plugindata.has_section(plugin):
+            self.bot.plugindata.add_section(plugin)
+
+        self.bot.plugindata.set(plugin, key, value)
 
     def setup(self):
         pass
