@@ -3,8 +3,23 @@ from time import localtime, strftime
 
 
 class Tell(Plugin):
-    messages = {}   # This is a dict, storing nickname -> [messages] pairs
-                    # Messages are dicts with message, time and from attributes.
+    # Messages are stored in a dict, storing nickname -> [messages] pairs
+    # Each message is a dict with message, time and from attributes.
+
+    def __init__(self, bot):
+        super(Tell, self).__init__(bot)
+        self.messages = {}
+
+    @command('printmsgs')
+    """
+    This is just for debugging so I can get it to print the currently known messages
+    to check things are working. I'll remove it when private messages get added probably.
+    """
+    def print_messages_command(self, event):
+        for user in self.messages:
+            messages = self.messages[user]
+            for message in messages:
+                print(message)
 
     @command('tell')
     def tell_command(self, event):
@@ -31,7 +46,9 @@ class Tell(Plugin):
         - We need to handle messages which are just long enough to fit in one message when
             saved but too long when the citation and time is added.
         """
-        (to_user, message) = event.data.split(" ", 1)[0]
+        print(event.data)
+        to_user = event.data[0]
+        message = " ".join(event.data[1:])
         from_user = event.user
         time = localtime()  # TODO: this should probably do some i18n but
                             # being as the channel is largely in the UK...
@@ -41,10 +58,10 @@ class Tell(Plugin):
             event.reply("{}, {} is here, you can tell them yourself.".format(from_user, to_user))
         else:
             msg = {'message': message, 'from': from_user, 'time': time}
-            if (messages.has_key(to_user)):
-                messages[to_user].append(msg)
+            if (self.messages.has_key(to_user)):
+                self.messages[to_user].append(msg)
             else:
-                messages[to_user] = [msg]
+                self.messages[to_user] = [msg]
 
             event.reply("{}, I'll let {} know.".format(from_user, to_user))
 
@@ -71,8 +88,8 @@ class Tell(Plugin):
             messages = getMessages(event.user)
             if (len(messages) <= 1):
                 # If there is only one message we can tell them in the channel
-                sendMessage(event, messages[0]
-            for msg : getMessages(user):
+                sendMessage(event, messages[0])
+            for msg in messages:
                 # If there is more than one message we need to PM them and tell
                 # to check their PM.
                 sendMessage(event, msg, isPM=True)
@@ -83,17 +100,16 @@ class Tell(Plugin):
         to_user = message['to']
         message = message['message']
         time = message['time']
-        event.reply("{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time)
-
+        event.reply("{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time))
 
     def getMessages(self, user):
-        if (messages.has_key(user)):
-            return messages.get(user)
+        if (self.messages.has_key(user)):
+            return self.messages.get(user)
         else:
             return []
 
     def hasMessages(self, user):
-        return (messages.has_key(user))
+        return (self.messages.has_key(user))
 
     def action(self, user, channel, action):
         print "*", action
