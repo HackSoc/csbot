@@ -1,16 +1,15 @@
-from csbot.core import Plugin, command
+from csbot.core import Plugin, PluginFeatures, nick
 from time import localtime, strftime
 
 
 class Tell(Plugin):
+    features = PluginFeatures()
+    messages = {}
+
     # Messages are stored in a dict, storing nickname -> [messages] pairs
     # Each message is a dict with message, time and from attributes.
 
-    def __init__(self, bot):
-        super(Tell, self).__init__(bot)
-        self.messages = {}
-
-    @command('printmsgs')
+    @features.command('printmsgs')
     """
     This is just for debugging so I can get it to print the currently known messages
     to check things are working. I'll remove it when private messages get added probably.
@@ -21,7 +20,7 @@ class Tell(Plugin):
             for message in messages:
                 print(message)
 
-    @command('tell')
+    @features.command('tell')
     def tell_command(self, event):
         """
         Stores a message for a user to be delivered when the user is next in the channel.
@@ -49,7 +48,7 @@ class Tell(Plugin):
         print(event.data)
         to_user = event.data[0]
         message = " ".join(event.data[1:])
-        from_user = event.user
+        from_user = nick(event.user)
         time = localtime()  # TODO: this should probably do some i18n but
                             # being as the channel is largely in the UK...
         user_is_here = False
@@ -83,7 +82,8 @@ class Tell(Plugin):
         """
         # TODO: implement
 
-    def on_join(event):
+    @features.hook('userJoined')
+    def userJoined(event):
         if (hasMessages(event.user)):
             messages = getMessages(event.user)
             if (len(messages) <= 1):
