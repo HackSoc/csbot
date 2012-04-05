@@ -1,4 +1,4 @@
-from csbot.core import Plugin, command
+from csbot.core import Plugin, PluginFeatures
 
 
 class EmptyPlugin(Plugin):
@@ -6,13 +6,15 @@ class EmptyPlugin(Plugin):
 
 
 class Example(Plugin):
-    @command('test')
+    features = PluginFeatures()
+
+    @features.command('test')
     def test_command(self, event):
         event.reply(('test invoked: {0.user}, {0.channel}, '
                      '{0.data}').format(event))
         event.reply('raw data: ' + event.raw_data, is_verbose=True)
 
-    @command('cfg')
+    @features.command('cfg')
     def test_cfg(self, event):
         if len(event.data) == 0:
             event.error("You need to tell me what to look for!")
@@ -23,8 +25,10 @@ class Example(Plugin):
             except KeyError:
                 event.error("I don't know a {}".format(event.data[0]))
 
+    @features.hook('privmsg')
     def privmsg(self, user, channel, msg):
         print ">>>", msg
 
+    @features.hook('action')
     def action(self, user, channel, action):
         print "*", action
