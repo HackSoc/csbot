@@ -23,6 +23,27 @@ class Example(Plugin):
             except KeyError:
                 event.error("I don't know a {}".format(event.data[0]))
 
+    @command('set')
+    def test_set(self, event):
+        try:
+            key = event.data[0]
+            val = event.data[1]
+
+            self.set(key, val)
+
+            event.reply("{} has been set to {}.".format(key, val))
+        except IndexError:
+            event.error("You need to tell me the name and the value to store!")
+
+    @command('get')
+    def test_get(self, event):
+        key = event.data[0]
+
+        try:
+            event.reply("{} is {}.".format(key, self.get(key)))
+        except KeyError:
+            event.error("I don't know the meaning of {}.".format(key))
+
     def privmsg(self, user, channel, msg):
         print ">>>", msg
 

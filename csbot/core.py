@@ -92,7 +92,8 @@ class Bot(irc.IRCClient):
             "username": "csyorkbot",
             "realname": "cs-york bot",
             "sourceURL": "http://github.com/csyork/csbot/",
-            "lineRate": "1"},
+            "lineRate": "1",
+            "keyvalfile": "keyval.cfg"},
             allow_no_value=True)
 
         self.config.read(self.cfgfile)
@@ -102,6 +103,11 @@ class Bot(irc.IRCClient):
         self.realname = self.config.get("DEFAULT", "realname")
         self.sourceURL = self.config.get("DEFAULT", "sourceURL")
         self.lineRate = self.config.getint("DEFAULT", "lineRate")
+        self.keyvalfile = self.config.get("DEFAULT", "keyvalfile")
+
+        # Read in the plugin key/value database
+        self.plugindata = ConfigParser.SafeConfigParser(allow_no_value=True)
+        self.plugindata.read(self.keyvalfile)
 
         self.commands = dict()
         self.plugins = dict()
@@ -164,6 +170,10 @@ class Bot(irc.IRCClient):
         for p in self.plugins.itervalues():
             p.teardown()
 
+        # Save the plugin data
+        with open(self.keyvalfile, 'wb') as kvf:
+            self.plugindata.write(kvf)
+
     def signedOn(self):
         map(self.join, self.factory.channels)
 
@@ -210,7 +220,6 @@ class Plugin(object):
         """
         return cls.__module__.split('.', 2)[2] + '.' + cls.__name__
 
-
     def cfg(self, name):
         plugin = self.plugin_name()
 
@@ -225,6 +234,30 @@ class Plugin(object):
 
         # Raise an exception
         raise KeyError("{} is not a valid option.".format(name))
+
+    def get(self, key):
+        """Get a value from the plugin key/value store by key. If the key
+        is not found, a KeyError is raised.
+        """
+
+        plugin = self.plugin_name()
+
+        if self.bot.plugindata.has_section(plugin):
+            if self.bot.plugindata.has_option(plugin, key):
+                return self.bot.plugindata.get(plugin, key)
+
+        raise KeyError("{} is not defined.".format(key))
+
+    def set(self, key, value):
+        """Set a value in the plugin key/value store by key.
+        """
+
+        plugin = self.plugin_name()
+
+        if not self.bot.plugindata.has_section(plugin):
+            self.bot.plugindata.add_section(plugin)
+
+        self.bot.plugindata.set(plugin, key, value)
 
     def setup(self):
         pass
