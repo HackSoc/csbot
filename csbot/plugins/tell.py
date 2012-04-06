@@ -10,11 +10,11 @@ class Tell(Plugin):
     # Each message is a dict with message, time and from attributes.
 
     @features.command('printmsgs')
-    """
-    This is just for debugging so I can get it to print the currently known messages
-    to check things are working. I'll remove it when private messages get added probably.
-    """
     def print_messages_command(self, event):
+        """
+        This is just for debugging so I can get it to print the currently known messages
+        to check things are working. I'll remove it when private messages get added probably.
+        """
         for user in self.messages:
             messages = self.messages[user]
             for message in messages:
@@ -68,7 +68,7 @@ class Tell(Plugin):
         #             '{0.data}').format(event))
         #event.reply('raw data: ' + event.raw_data, is_verbose=True)
 
-    @command('messages')
+    @features.command('messages')
     def messages_command(self, event):
         """
         Notifies a user if they have received any messages recently
@@ -83,17 +83,19 @@ class Tell(Plugin):
         # TODO: implement
 
     @features.hook('userJoined')
-    def userJoined(event):
-        if (hasMessages(event.user)):
-            messages = getMessages(event.user)
-            if (len(messages) <= 1):
+    def userJoined(self, user, channel):
+        print("user {} has joined the channel {}".format(user, channel))
+        nick = nick(user)
+        #if (hasMessages(nick)):
+            #messages = getMessages(nick)
+            #if (len(messages) <= 1):
                 # If there is only one message we can tell them in the channel
-                sendMessage(event, messages[0])
-            for msg in messages:
+                #sendMessage(event, messages[0])
+            #for msg in messages:
                 # If there is more than one message we need to PM them and tell
                 # to check their PM.
-                sendMessage(event, msg, isPM=True)
-            event.reply("{}, several people left messages for you. Please check the PM I sent you.".format(event.user))
+                #sendMessage(event, msg, isPM=True)
+            #event.reply("{}, several people left messages for you. Please check the PM I sent you.".format(event.user))
 
     def sendMessage(event, message, isPM=False):
         from_user = message['from']
