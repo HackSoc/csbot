@@ -85,24 +85,25 @@ class Tell(Plugin):
     @features.hook('userJoined')
     def userJoined(self, user, channel):
         print("user {} has joined the channel {}".format(user, channel))
-        nickname = nick(user)
-        #if (hasMessages(nick)):
-            #messages = getMessages(nick)
-            #if (len(messages) <= 1):
+        if (self.hasMessages(user)):
+            messages = self.getMessages(user)
+            for msg in messages:
+                from_user = msg['from']
+                time = strftime("%H:%M", msg['time'])
+                message = msg['message']
+                self.sendMessage(channel, from_user, user, message, time)
+#            if (len(messages) <= 1):
                 # If there is only one message we can tell them in the channel
-                #sendMessage(event, messages[0])
-            #for msg in messages:
+#                sendMessage(event, messages[0])
+#            for msg in messages:
                 # If there is more than one message we need to PM them and tell
                 # to check their PM.
-                #sendMessage(event, msg, isPM=True)
+                #sendMessage(channel, , msg, isPM=True)
             #event.reply("{}, several people left messages for you. Please check the PM I sent you.".format(event.user))
 
-    def sendMessage(event, message, isPM=False):
-        from_user = message['from']
-        to_user = message['to']
-        message = message['message']
-        time = message['time']
-        event.reply("{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time))
+    def sendMessage(self, channel, from_user, to_user, message, time):
+        msg = "{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time)
+        self.bot.msg(channel, msg)
 
     def getMessages(self, user):
         if (self.messages.has_key(user)):
