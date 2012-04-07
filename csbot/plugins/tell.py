@@ -87,27 +87,33 @@ class Tell(Plugin):
         print("user {} has joined the channel {}".format(user, channel))
         if (self.hasMessages(user)):
             messages = self.getMessages(user)
-            for msg in messages:
+            if (len(messages) <= 1):
+                # If there is only one message we can tell them in the channel
+                msg = messages[0]
                 from_user = msg['from']
                 time = strftime("%H:%M", msg['time'])
                 message = msg['message']
                 self.sendMessage(channel, from_user, user, message, time)
-#            if (len(messages) <= 1):
-                # If there is only one message we can tell them in the channel
-#                sendMessage(event, messages[0])
-#            for msg in messages:
+            else:
                 # If there is more than one message we need to PM them and tell
                 # to check their PM.
-                #sendMessage(channel, , msg, isPM=True)
-            #event.reply("{}, several people left messages for you. Please check the PM I sent you.".format(event.user))
+                for msg in messages:
+                    from_user = msg['from']
+                    time = strftime("%H:%M", msg['time'])
+                    message = msg['message']
+                    self.sendMessage(user, from_user, user, message, time)
+                self.bot.msg(channel, "{}, several people left messages for you. Please check the PM I sent you.".format(user))
 
     def sendMessage(self, channel, from_user, to_user, message, time):
         msg = "{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time)
         self.bot.msg(channel, msg)
 
     def getMessages(self, user):
+        """
+        Gets the list of messages, removing it from the dictionary
+        """
         if (self.messages.has_key(user)):
-            return self.messages.get(user)
+            return self.messages.pop(user)
         else:
             return []
 
