@@ -170,6 +170,7 @@ class Bot(irc.IRCClient):
             self.fire_command(command)
 
     action = hook('action')
+    userJoined = hook('userJoined')
 
 
 class PluginFeatures(object):

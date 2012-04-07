@@ -85,7 +85,7 @@ class Tell(Plugin):
     @features.hook('userJoined')
     def userJoined(self, user, channel):
         print("user {} has joined the channel {}".format(user, channel))
-        nick = nick(user)
+        nickname = nick(user)
         #if (hasMessages(nick)):
             #messages = getMessages(nick)
             #if (len(messages) <= 1):
