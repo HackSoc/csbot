@@ -1,18 +1,9 @@
 from csbot.core import Plugin, PluginFeatures, nick
 from datetime import datetime
-from pymongo import Connection
 
 
 class Tell(Plugin):
     features = PluginFeatures()
-    #messages = {}
-
-    def __init__(self, bot):
-        super(Tell, self).__init__(bot)
-        # Connect to mongo db and set up the database object
-        conn = Connection()
-        db = conn.tell
-        self.messages = db.messages
 
     @features.command('printmsgs')
     def print_messages_command(self, event):
@@ -20,7 +11,7 @@ class Tell(Plugin):
         This is just for debugging so I can get it to print the currently known messages
         to check things are working. I'll remove it when private messages get added probably.
         """
-        for msg in self.messages.find():
+        for msg in self.db.messages.find():
             print(msg)
 
     @features.command('tell')
@@ -60,26 +51,25 @@ class Tell(Plugin):
             event.reply("{}, {} is here, you can tell them yourself.".format(from_user, to_user))
         else:
             msg = {'message': message, 'from': from_user, 'to': to_user,'time': time}
-            self.messages.insert(msg)
+            self.db.messages.insert(msg)
             event.reply("{}, I'll let {} know.".format(from_user, to_user))
 
     @features.hook('userJoined')
     def userJoined(self, user, channel):
         print("user {} has joined the channel {}".format(user, channel))
-        if (self.hasMessages(user)):
-            msgs = self.getMessages(user)
-            if msgs.count() > 1:
-                deliver_to = user
-                self.bot.msg(channel, "{}, several people left messages for you. Please check the PMs I'm sending you.".format(user))
-            else:
-                deliver_to = channel
-            for msg in msgs:
-                from_user = msg['from']
-                time = msg['time'].strftime('%H:%M')
-                message = msg['message']
-                self.sendMessage(deliver_to, from_user, user, message, time)
-                # Remove the message now we've delivered it
-                self.messages.remove(msg['_id'])
+        msgs = self.getMessages(user)
+        if msgs.count() > 1:
+            deliver_to = user
+            self.bot.msg(channel, "{}, several people left messages for you. Please check the PMs I'm sending you.".format(user))
+        else:
+            deliver_to = channel
+        for msg in msgs:
+            from_user = msg['from']
+            time = msg['time'].strftime('%H:%M')
+            message = msg['message']
+            self.sendMessage(deliver_to, from_user, user, message, time)
+            # Remove the message now we've delivered it
+            self.db.messages.remove(msg['_id'])
 
     def sendMessage(self, channel, from_user, to_user, message, time):
         msg = "{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time)
@@ -89,10 +79,10 @@ class Tell(Plugin):
         """
         Gets a mongodb cursor to allow iterating over all the messages for a user
         """
-        return self.messages.find({'to': user})
+        return self.db.messages.find({'to': user})
 
     def hasMessages(self, user):
-        return (self.messages.find({'to': user}).count() > 0)
+        return (self.db.messages.find({'to': user}).count() > 0)
 
     def action(self, user, channel, action):
         print "*", action

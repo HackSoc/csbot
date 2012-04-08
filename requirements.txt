@@ -1,4 +1,0 @@
-Twisted
-pep8
-pymongo
-straight.plugin
