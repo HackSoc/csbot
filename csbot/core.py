@@ -110,7 +110,6 @@ class Bot(object):
                 self.config.get('DEFAULT', 'mongodb_host'),
                 self.config.getint('DEFAULT', 'mongodb_port'))
 
-
         self.available_plugins = dict((P.plugin_name(), P) for P in plugins)
         self.plugins = dict()
         self.commands = dict()
@@ -272,6 +271,7 @@ class PluginFeatures(object):
         """
         if hook not in self.hooks:
             self.hooks[hook] = list()
+
         def decorate(f):
             self.hooks[hook].append(f)
             return f
@@ -285,6 +285,7 @@ class PluginFeatures(object):
         """
         if command in self.commands:
             raise KeyError('Duplicate command: {}'.format(command))
+
         def decorate(f):
             f.help = help
             self.commands[command] = f
@@ -394,7 +395,8 @@ class CommandEvent(object):
     #: Cached argument list, see :attr:`data`
     data_ = None
 
-    def __init__(self, bot, protocol, user, channel, command, direct, raw_data):
+    def __init__(self, bot, protocol, user, channel, command, direct,
+                 raw_data):
         self.bot = bot
         self.protocol = protocol
         self.command = command
