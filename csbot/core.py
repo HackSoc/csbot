@@ -7,6 +7,8 @@ from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
 
+from pymongo import Connection
+
 
 def hook(f):
     """Create a plugin hook.
@@ -170,6 +172,7 @@ class Bot(irc.IRCClient):
             self.fire_command(command)
 
     action = hook('action')
+    userJoined = hook('userJoined')
 
 
 class PluginFeatures(object):
@@ -242,6 +245,8 @@ class Plugin(object):
     def __init__(self, bot):
         self.bot = bot
         self.features = self.features.instantiate(self)
+        conn = Connection()
+        self.db = conn[self.plugin_name().replace('.', '__')]
 
         for command, handler in self.features.commands.iteritems():
             self.bot.register_command(command, handler)
