@@ -1,13 +1,18 @@
 from csbot.core import Plugin, PluginFeatures, nick
-from time import localtime, strftime
+from datetime import datetime
+from pymongo import Connection
 
 
 class Tell(Plugin):
     features = PluginFeatures()
-    messages = {}
+    #messages = {}
 
-    # Messages are stored in a dict, storing nickname -> [messages] pairs
-    # Each message is a dict with message, time and from attributes.
+    def __init__(self, bot):
+        super(Tell, self).__init__(bot)
+        # Connect to mongo db and set up the database object
+        conn = Connection()
+        db = conn.tell
+        self.messages = db.messages
 
     @features.command('printmsgs')
     def print_messages_command(self, event):
@@ -15,10 +20,8 @@ class Tell(Plugin):
         This is just for debugging so I can get it to print the currently known messages
         to check things are working. I'll remove it when private messages get added probably.
         """
-        for user in self.messages:
-            messages = self.messages[user]
-            for message in messages:
-                print(message)
+        for msg in self.messages.find():
+            print(msg)
 
     @features.command('tell')
     def tell_command(self, event):
@@ -49,24 +52,50 @@ class Tell(Plugin):
         to_user = event.data[0]
         message = " ".join(event.data[1:])
         from_user = nick(event.user)
-        time = localtime()  # TODO: this should probably do some i18n but
+        time = datetime.now() # TODO: this should probably do some i18n but
                             # being as the channel is largely in the UK...
         user_is_here = False
         if (user_is_here):
             # TODO: implement the check
             event.reply("{}, {} is here, you can tell them yourself.".format(from_user, to_user))
         else:
-            msg = {'message': message, 'from': from_user, 'time': time}
-            if (self.messages.has_key(to_user)):
-                self.messages[to_user].append(msg)
-            else:
-                self.messages[to_user] = [msg]
-
+            msg = {'message': message, 'from': from_user, 'to': to_user,'time': time}
+            self.messages.insert(msg)
             event.reply("{}, I'll let {} know.".format(from_user, to_user))
 
-        #event.reply(('test invoked: {0.user}, {0.channel}, '
-        #             '{0.data}').format(event))
-        #event.reply('raw data: ' + event.raw_data, is_verbose=True)
+    @features.hook('userJoined')
+    def userJoined(self, user, channel):
+        print("user {} has joined the channel {}".format(user, channel))
+        if (self.hasMessages(user)):
+            msgs = self.getMessages(user)
+            if msgs.count() > 1:
+                deliver_to = user
+                self.bot.msg(channel, "{}, several people left messages for you. Please check the PMs I'm sending you.".format(user))
+            else:
+                deliver_to = channel
+            for msg in msgs:
+                from_user = msg['from']
+                time = msg['time'].strftime('%H:%M')
+                message = msg['message']
+                self.sendMessage(deliver_to, from_user, user, message, time)
+                # Remove the message now we've delivered it
+                self.messages.remove(msg['_id'])
+
+    def sendMessage(self, channel, from_user, to_user, message, time):
+        msg = "{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time)
+        self.bot.msg(channel, msg)
+
+    def getMessages(self, user):
+        """
+        Gets a mongodb cursor to allow iterating over all the messages for a user
+        """
+        return self.messages.find({'to': user})
+
+    def hasMessages(self, user):
+        return (self.messages.find({'to': user}).count() > 0)
+
+    def action(self, user, channel, action):
+        print "*", action
 
     @features.command('messages')
     def messages_command(self, event):
@@ -82,43 +111,3 @@ class Tell(Plugin):
         """
         # TODO: implement
 
-    @features.hook('userJoined')
-    def userJoined(self, user, channel):
-        print("user {} has joined the channel {}".format(user, channel))
-        if (self.hasMessages(user)):
-            messages = self.getMessages(user)
-            if (len(messages) <= 1):
-                # If there is only one message we can tell them in the channel
-                msg = messages[0]
-                from_user = msg['from']
-                time = strftime("%H:%M", msg['time'])
-                message = msg['message']
-                self.sendMessage(channel, from_user, user, message, time)
-            else:
-                # If there is more than one message we need to PM them and tell
-                # to check their PM.
-                for msg in messages:
-                    from_user = msg['from']
-                    time = strftime("%H:%M", msg['time'])
-                    message = msg['message']
-                    self.sendMessage(user, from_user, user, message, time)
-                self.bot.msg(channel, "{}, several people left messages for you. Please check the PM I sent you.".format(user))
-
-    def sendMessage(self, channel, from_user, to_user, message, time):
-        msg = "{}, \"{}\" - {} (at {})".format(to_user, message, from_user, time)
-        self.bot.msg(channel, msg)
-
-    def getMessages(self, user):
-        """
-        Gets the list of messages, removing it from the dictionary
-        """
-        if (self.messages.has_key(user)):
-            return self.messages.pop(user)
-        else:
-            return []
-
-    def hasMessages(self, user):
-        return (self.messages.has_key(user))
-
-    def action(self, user, channel, action):
-        print "*", action
