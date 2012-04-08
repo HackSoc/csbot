@@ -2,6 +2,7 @@ from functools import wraps
 import types
 import shlex
 import ConfigParser
+from datetime import datetime
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -64,6 +65,30 @@ def is_channel(channel):
     False
     """
     return channel.startswith('#')
+
+
+def eventproxy(event_type, attributes):
+    """Proxy :class:`BotProtocol` events to the :class:`Bot`.
+
+    Wraps the bot, protocol and arguments into an :class:`Event`.  The
+    *attributes* list defines the attribute names on the :class:`Event` that
+    will be used for each of the positional arguments to the decorated method.
+
+    First the :class:`Bot`'s method with the same name as *event_type* will be
+    called (if one exists), then :meth:`Bot.fire_hook` will be called with
+    *event_type* and the newly generated event.
+    """
+    def newf(self, *args):
+        event = Event(self.bot, self, event_type, dict(zip(attributes, args)))
+        method = getattr(self.bot, event_type, None)
+        if method is not None:
+            method(event)
+        self.bot.fire_hook(event_type, event)
+    newf.__doc__ = """Proxy method for `t.w.p.i.IRCClient.{}`.
+
+Attributes set: {}.
+""".format(event_type, ', '.join(attributes))
+    return newf
 
 
 class Bot(object):
@@ -207,6 +232,15 @@ class Bot(object):
         """Convenience wrapper around ``twisted.python.log.err`` for plugins"""
         log.err(err)
 
+    def signedOn(self, event):
+        map(event.protocol.join,
+            self.config.get('DEFAULT', 'channels').split())
+
+    def privmsg(self, event):
+        command = CommandEvent.create(event)
+        if command is not None:
+            self.fire_command(command)
+
 
 class BotProtocol(irc.IRCClient):
     def __init__(self, bot):
@@ -226,19 +260,15 @@ class BotProtocol(irc.IRCClient):
         irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
 
-    def signedOn(self):
-        map(self.join, self.bot.config.get('DEFAULT', 'channels').split())
-
-    @hook
-    def privmsg(self, user, channel, msg):
-        """Handle commands in channel messages.
-        """
-        command = CommandEvent.create(self.bot, self, user, channel, msg)
-        if command is not None:
-            self.bot.fire_command(command)
-
-    action = hook('action')
-    userJoined = hook('userJoined')
+    signedOn = eventproxy('signedOn', ())
+    privmsg = eventproxy('privmsg', ('user', 'channel', 'message'))
+    noticed = eventproxy('noticed', ('user', 'channel', 'message'))
+    action = eventproxy('action', ('user', 'channel', 'message'))
+    joined = eventproxy('joined', ('channel',))
+    left = eventproxy('left', ('channel',))
+    userJoined = eventproxy('userJoined', ('user', 'channel'))
+    userLeft = eventproxy('userLeft', ('user', 'channel'))
+    userQuit = eventproxy('userQuit', ('user', 'channel', 'message'))
 
 
 class PluginFeatures(object):
@@ -377,7 +407,20 @@ class Plugin(object):
         pass
 
 
-class CommandEvent(object):
+class Event(object):
+    def __init__(self, bot, protocol, event_type, attributes):
+        # Set datetime before attributes so it can be forced
+        self.datetime = datetime.now()
+        # Set attributes from dictionary
+        for attr, value in attributes.iteritems():
+            setattr(self, attr, value)
+        # Set attributes from arguments
+        self.bot = bot
+        self.protocol = protocol
+        self.event_type = event_type
+
+
+class CommandEvent(Event):
     #: The :class:`Bot` this command was received by
     bot = None
     #: The :class:`BotProtocol` this event was received by
@@ -395,25 +438,17 @@ class CommandEvent(object):
     #: Cached argument list, see :attr:`data`
     data_ = None
 
-    def __init__(self, bot, protocol, user, channel, command, direct,
-                 raw_data):
-        self.bot = bot
-        self.protocol = protocol
-        self.command = command
-        self.user = user
-        self.channel = channel
-        self.direct = direct
-        self.raw_data = raw_data
-        self.data_ = None
-
     @staticmethod
-    def create(bot, protocol, user, channel, msg):
-        """Attempt to create an event from *msg*.
+    def create(event):
+        """Attempt to create a :class:`CommandEvent` from an :class:`Event`.
 
-        Returns None if *msg* is not a command, otherwise returns a new
+        Returns None if *event* does not contain a command, otherwise returns a
         :class:`CommandEvent`.
         """
-        command_prefix = bot.config.get('DEFAULT', 'command_prefix')
+        command_prefix = event.bot.config.get('DEFAULT', 'command_prefix')
+        own_nick = event.protocol.nickname
+        msg = event.message
+        channel = event.channel
 
         command = None
         direct = False
@@ -423,9 +458,9 @@ class CommandEvent(object):
             if msg.startswith(command_prefix):
                 # Triggered by command prefix: "<prefix><cmd> <args>"
                 command = msg[len(command_prefix):]
-            elif msg.startswith(protocol.nickname):
+            elif msg.startswith(own_nick):
                 # Addressing the bot by name: "<nick>, <cmd> <args>"
-                msg = msg[len(protocol.nickname):].lstrip()
+                msg = msg[len(own_nick):].lstrip()
                 # Check that the bot was specifically addressed, rather than
                 # a similar nick or just talking about the bot
                 if len(msg) > 0 and msg[0] in ',:;.':
@@ -441,7 +476,14 @@ class CommandEvent(object):
         command = command.split(None, 1)
         cmd = command[0]
         data = command[1] if len(command) == 2 else ''
-        return CommandEvent(bot, protocol, user, channel, cmd, direct, data)
+        return CommandEvent(event.bot, event.protocol, command, {
+            'datetime': event.datetime,
+            'user': event.user,
+            'channel': event.channel,
+            'command': cmd,
+            'direct': direct,
+            'raw_data': data,
+        })
 
     @property
     def data(self):
