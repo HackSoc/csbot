@@ -77,7 +77,7 @@ class Bot(object):
         """Load a named plugin and register all of its commands.
 
         When a plugin is loaded, it is added to the bot, all of its defined
-        commands are registered, and then its :meth:`Plugin.setup` is run.
+        commands are registered, and then its :meth:`~Plugin.setup` is run.
 
         .. todo: use :py:func:`reload` to update plugin first
         """
@@ -320,9 +320,25 @@ class Plugin(object):
         self.bot.plugindata.set(plugin, key, value)
 
     def setup(self):
+        """Run setup actions for the plugin.
+
+        This should be overloaded in plugins to perform actions that need to
+        happen before receiving any events.
+
+        .. note:: Plugin setup order is not guaranteed to be consistent, so do
+                  not rely on it.
+        """
         pass
 
     def teardown(self):
+        """Run teardown actions for the plugin.
+
+        This should be overloaded in plugins to perform teardown actions, for
+        example writing stuff to file/database, before the bot is destroyed.
+
+        .. note:: Plugin teardown order is not guaranteed to be consistent, so
+                  do not rely on it.
+        """
         pass
 
 

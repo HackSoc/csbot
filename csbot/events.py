@@ -21,7 +21,7 @@ def proxy(event_type, attributes):
         if method is not None:
             method(event)
         self.bot.fire_hook(event_type, event)
-    newf.__doc__ = """Proxy method for `t.w.p.i.IRCClient.{}`.
+    newf.__doc__ = """Proxy method for ``t.w.p.i.IRCClient.{}``.
 
 Attributes set: {}.
 """.format(event_type, ', '.join(attributes))
@@ -120,7 +120,7 @@ class CommandEvent(Event):
         argument quoting, allowing `'` to be used naturally within arguments.
 
         If the lexer fails to process the argument list, :meth:`error` is
-        called and :py:class:`ValueError` is raised.
+        called and :py:exc:`~exceptions.ValueError` is raised.
         """
         if self.data_ is None:
             try:

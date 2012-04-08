@@ -17,6 +17,22 @@ csbot Package
     :undoc-members:
     :show-inheritance:
 
+:mod:`events` Module
+--------------------
+
+.. automodule:: csbot.events
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`util` Module
+------------------
+
+.. automodule:: csbot.util
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Subpackages
 -----------
 

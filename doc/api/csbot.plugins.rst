@@ -17,3 +17,11 @@ plugins Package
     :undoc-members:
     :show-inheritance:
 
+:mod:`tell` Module
+------------------
+
+.. automodule:: csbot.plugins.tell
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
