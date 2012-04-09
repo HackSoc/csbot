@@ -167,7 +167,8 @@ class CommandEvent(Event):
         if self.channel == self.protocol.nickname:
             self.protocol.msg(nick(self.user), msg)
         elif self.direct or not is_verbose:
-            self.protocol.msg(self.channel, msg)
+            self.protocol.msg(self.channel,
+                              nick(self.user) + ': ' + msg)
 
     def error(self, err):
         """Send an error message."""
