@@ -4,17 +4,35 @@ import shlex
 from csbot.util import nick, is_channel
 
 
+PROXY_DOCSTRING = """Proxy method for Twisted `IRCClient.{event}({attrs})`_.
+
+.. _`IRCClient.{event}({attrs})`: http://twistedmatrix.com/documents/current/
+                                  api/twisted.words.protocols.irc
+                                  .IRCClient.html#{event}
+"""
+
+
 def proxy(event_type, attributes):
-    """Proxy :class:`csbot.core.BotProtocol` events to the
-    :class:`csbot.core.Bot`.
+    """Proxy :class:`.BotProtocol` events to the :class:`.Bot`.
 
-    Wraps the bot, protocol and arguments into an :class:`Event`.  The
-    *attributes* list defines the attribute names on the :class:`Event` that
-    will be used for each of the positional arguments to the decorated method.
+    This function is for creating methods on :class:`.BotProtocol` that
+    implement Twisted :class:`IRCClient`'s callbacks and wrap the
+    :class:`.Bot`, :class:`.BotProtocol` and arguments received by the method
+    into an :class:`Event`.  This event is posted to the :class:`.Bot`'s
+    corresponding method and then all hooks for the event.
 
-    First the :class:`Bot`'s method with the same name as *event_type* will be
-    called (if one exists), then :meth:`Bot.fire_hook` will be called with
-    *event_type* and the newly generated event.
+    The *event_type* will become the :attr:`~Event.event_type` attribute of the
+    :class:`Event`.  It's also the name of the method that will be called on
+    the :class:`.Bot`, and the name of the hook that should be registered by a
+    plugin to receive the events.
+
+    The *attributes* list defines the attribute names to assign the positional
+    arguments to on the :class:`Event`.
+
+    For example, to handle :meth:`IRCClient.privmsg`::
+
+        class BotProtocol(IRCClient):
+            privmsg = events.proxy('privmsg', ('user', 'channel', 'message'))
     """
     def newf(self, *args):
         event = Event(self.bot, self, event_type, dict(zip(attributes, args)))
@@ -22,22 +40,19 @@ def proxy(event_type, attributes):
         if method is not None:
             method(event)
         self.bot.fire_hook(event_type, event)
-    newf.__doc__ = """Proxy method for ``t.w.p.i.IRCClient.{}``.
-
-Attributes set: {}.
-""".format(event_type, ', '.join(attributes))
+    newf.__doc__ = PROXY_DOCSTRING.format(event=event_type,
+                                          attrs=', '.join(attributes))
     return newf
 
 
 class Event(object):
-    #: The :class:`~csbot.core.Bot` for which the message was received.
+    #: The :class:`.Bot` for which the message was received.
     bot = None
-    #: The :class:`~csbot.core.BotProtocol` which received the message - this
-    #: subclasses :class:`twisted.words.protocols.irc.IRCClient` and so exposes
-    #: all of the same methods.
+    #: The :class:`.BotProtocol` which received the message.  This subclasses
+    #: Twisted :class:`IRCClient` and so exposes all of the same methods.
     protocol = None
-    #: The name of the event type - this will usually correspond to an event
-    #: method in :class:`twisted.words.protocols.irc.IRCClient`.
+    #: The name of the event type.  This will usually correspond to an event
+    #: method in Twisted :class:`IRCClient`.
     event_type = None
     #: The value of :meth:`datetime.datetime.now()` when the message was
     #: first received.
@@ -56,17 +71,17 @@ class Event(object):
 
 
 class CommandEvent(Event):
-    #: The command invoked (minus any trigger characters)
+    #: The command invoked (minus any trigger characters).
     command = None
-    #: User string for the source of the command
+    #: User string for the source of the command.
     user = None
-    #: Channel that the command was received on
+    #: Channel that the command was received on.
     channel = None
-    #: False if the command was triggered by the command prefix, True otherwise
+    #: False if the command was triggered by the command prefix, True otherwise.
     direct = False
-    #: The rest of the line after the command name
+    #: The rest of the line after the command name.
     raw_data = None
-    #: Cached argument list, see :attr:`data`
+    #: Cached argument list, see :attr:`data`.
     data_ = None
 
     @staticmethod
@@ -121,11 +136,11 @@ class CommandEvent(Event):
         """Command data as an argument list.
 
         On first access, the argument list is processed from :attr:`raw_data`
-        using :py:mod:`shlex`.  The lexer is customised to only use `"` for
-        argument quoting, allowing `'` to be used naturally within arguments.
+        using :mod:`shlex`.  The lexer is customised to only use ``"`` for
+        argument quoting, allowing ``'`` to be used naturally within arguments.
 
         If the lexer fails to process the argument list, :meth:`error` is
-        called and :py:exc:`~exceptions.ValueError` is raised.
+        called and :exc:`~exceptions.ValueError` is raised.
         """
         if self.data_ is None:
             try:
