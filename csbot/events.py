@@ -5,7 +5,8 @@ from csbot.util import nick, is_channel
 
 
 def proxy(event_type, attributes):
-    """Proxy :class:`csbot.BotProtocol` events to the :class:`csbot.Bot`.
+    """Proxy :class:`csbot.core.BotProtocol` events to the
+    :class:`csbot.core.Bot`.
 
     Wraps the bot, protocol and arguments into an :class:`Event`.  The
     *attributes* list defines the attribute names on the :class:`Event` that
@@ -29,14 +30,18 @@ Attributes set: {}.
 
 
 class Event(object):
-    #: The :py:class:`datetime.datetime` for when the message was received
-    datetime = None
-    #: The :class:`csbot.Bot` for which the message was received
+    #: The :class:`~csbot.core.Bot` for which the message was received.
     bot = None
-    #: The :class:`csbot.BotProtocol` which received the message
+    #: The :class:`~csbot.core.BotProtocol` which received the message - this
+    #: subclasses :class:`twisted.words.protocols.irc.IRCClient` and so exposes
+    #: all of the same methods.
     protocol = None
-    #: The name of the event type
+    #: The name of the event type - this will usually correspond to an event
+    #: method in :class:`twisted.words.protocols.irc.IRCClient`.
     event_type = None
+    #: The value of :meth:`datetime.datetime.now()` when the message was
+    #: first received.
+    datetime = None
 
     def __init__(self, bot, protocol, event_type, attributes):
         # Set datetime before attributes so it can be forced
