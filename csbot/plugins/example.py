@@ -47,9 +47,9 @@ class Example(Plugin):
             event.error("I don't know the meaning of {}.".format(key))
 
     @features.hook('privmsg')
-    def privmsg(self, user, channel, msg):
-        print ">>>", msg
+    def privmsg(self, event):
+        print ">>>", event.message
 
     @features.hook('action')
-    def action(self, user, channel, action):
-        print "*", action
+    def action(self, event):
+        print "*", event.message

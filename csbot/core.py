@@ -1,140 +1,147 @@
 from functools import wraps
 import types
-import shlex
 import ConfigParser
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
+import pymongo
 
-from pymongo import Connection
+import csbot.events as events
 
 
-def hook(f):
-    """Create a plugin hook.
+class Bot(object):
+    """The IRC bot.
 
-    Used as a method decorator this will cause the hook of the same name to be
-    fired after the method.  Used to create a new method, *f* names the hook
-    that will be fired by the method.
+    Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
+    losing and regaining connection.
     """
-    if callable(f):
-        @wraps(f)
-        def newf(self, *args, **kwargs):
-            f(self, *args, **kwargs)
-            self.fire_hook(f.__name__, *args, **kwargs)
-    else:
-        def newf(self, *args, **kwargs):
-            self.fire_hook(f, *args, **kwargs)
-        newf.__doc__ = "Generated hook trigger for ``{}``".format(f)
-    return newf
 
+    #: Default configuration values
+    DEFAULTS = {
+            'nickname': 'csyorkbot',
+            'username': 'csyorkbot',
+            'realname': 'cs-york bot',
+            'sourceURL': 'http://github.com/csyork/csbot/',
+            'lineRate': '1',
+            'keyvalfile': 'keyval.cfg',
+            'irc_host': 'irc.freenode.net',
+            'irc_port': '6667',
+            'command_prefix': '!',
+            'channels': ' '.join([
+                '#cs-york-dev',
+            ]),
+            'plugins': ' '.join([
+                'example.Example',
+            ]),
+            'mongodb_host': 'localhost',
+            'mongodb_port': '27017',
+    }
 
-def nick(user):
-    """Get nick from user string.
+    def __init__(self, configpath, plugins):
+        # Load the configuration file
+        self.configpath = configpath
+        self.config = ConfigParser.SafeConfigParser(defaults=self.DEFAULTS,
+                                                    allow_no_value=True)
+        self.config.read(self.configpath)
 
-    >>> nick('csyorkbot!~csbot@example.com')
-    'csyorkbot'
-    """
-    return user.split('!', 1)[0]
-
-
-def username(user):
-    """Get username from user string.
-
-    >>> username('csyorkbot!~csbot@example.com')
-    'csbot'
-    """
-    return user.rsplit('@', 1)[0].rsplit('~', 1)[1]
-
-
-def host(user):
-    """Get hostname from user string.
-
-    >>> host('csyorkbot!~csbot@example.com')
-    'example.com'
-    """
-    return user.rsplit('@', 1)[1]
-
-
-def is_channel(channel):
-    """Check if *channel* is a channel or private chat.
-
-    >>> is_channel('#cs-york')
-    True
-    >>> is_channel('csyorkbot')
-    False
-    """
-    return channel.startswith('#')
-
-
-class Bot(irc.IRCClient):
-
-    def __init__(self, config, plugins):
-        # Load the configuration file, with default values
-        # for the global settings if missing.
-        self.cfgfile = config
-
-        self.config = ConfigParser.SafeConfigParser(defaults={
-            "nickname": "csyorkbot",
-            "username": "csyorkbot",
-            "realname": "cs-york bot",
-            "sourceURL": "http://github.com/csyork/csbot/",
-            "lineRate": "1",
-            "keyvalfile": "keyval.cfg"},
-            allow_no_value=True)
-
-        self.config.read(self.cfgfile)
-
-        self.nickname = self.config.get("DEFAULT", "nickname")
-        self.username = self.config.get("DEFAULT", "username")
-        self.realname = self.config.get("DEFAULT", "realname")
-        self.sourceURL = self.config.get("DEFAULT", "sourceURL")
-        self.lineRate = self.config.getint("DEFAULT", "lineRate")
-        self.keyvalfile = self.config.get("DEFAULT", "keyvalfile")
-
-        # Read in the plugin key/value database
+        # Load plugin "key-value" store
         self.plugindata = ConfigParser.SafeConfigParser(allow_no_value=True)
-        self.plugindata.read(self.keyvalfile)
+        self.plugindata.read(self.config.get('DEFAULT', 'keyvalfile'))
 
-        self.commands = dict()
+        # Make mongodb connection
+        self.mongodb = pymongo.Connection(
+                self.config.get('DEFAULT', 'mongodb_host'),
+                self.config.getint('DEFAULT', 'mongodb_port'))
+
+        self.available_plugins = dict((P.plugin_name(), P) for P in plugins)
         self.plugins = dict()
+        self.commands = dict()
 
-        for P in plugins:
-            name = P.plugin_name()
-            if name in self.plugins:
-                self.log_err('Duplicate plugin name: ' + name)
+    def setup(self):
+        """Load plugins defined in configuration.
+        """
+        map(self.load_plugin, self.config.get('DEFAULT', 'plugins').split())
+
+    def teardown(self):
+        """Unload plugins and save data.
+        """
+        for name in self.plugins.keys():
+            self.unload_plugin(name)
+
+        # Save the plugin data
+        with open(self.config.get('DEFAULT', 'keyvalfile'), 'wb') as kvf:
+            self.plugindata.write(kvf)
+
+    def load_plugin(self, name):
+        """Load a named plugin and register all of its commands.
+
+        When a plugin is loaded, it is added to the bot, all of its defined
+        commands are registered, and then its :meth:`~Plugin.setup` is run.
+
+        .. todo: use :py:func:`reload` to update plugin first
+        """
+        if name not in self.available_plugins:
+            self.log_err('Plugin {} does not exist'.format(name))
+            return
+
+        if name in self.plugins:
+            self.log_err('Plugin {} already loaded'.format(name))
+            return
+
+        p = self.available_plugins[name](self)
+        self.plugins[name] = p
+        self.log_msg('Loaded plugin {}'.format(name))
+
+        for command, handler in p.features.commands.iteritems():
+            if command in self.commands:
+                self.log_err('Command {} already provided by plugin {}'.format(
+                             command,
+                             self.commands[command].im_class.plugin_name()))
             else:
-                p = P(self)
-                self.plugins[name] = p
-                self.log_msg('Loaded plugin: ' + name)
+                self.log_msg('Registering command {}'.format(command))
+                self.commands[command] = handler
 
-    def fire_hook(self, hook, *args, **kwargs):
-        """Fire *hook* on every plugin.
+        p.setup()
+
+    def unload_plugin(self, name):
+        """Unload a named plugin and unregister all of its commands.
+
+        When a plugin is unloaded, its :meth:'Plugin.teardown' method is run,
+        all of its commands are unregistered, and then the plugin itself is
+        removed from the :class:`Bot`.
         """
-        for plugin in self.plugins.itervalues():
-            plugin.features.fire_hook(hook, *args, **kwargs)
+        if name not in self.plugins:
+            self.log_err('Plugin {} not loaded'.format(name))
+            return
 
-    def register_command(self, command, f):
-        """Register *f* as the callback for *command*.
+        p = self.plugins[name]
+        p.teardown()
 
-        The callback will be called with a :class:`CommandEvent` object.
+        delcmds = [n for n, h in self.commands.iteritems()
+                   if h.im_class.plugin_name() == name]
+        for cmd in delcmds:
+            self.log_msg('Unregistering command {}'.format(cmd))
+            del self.commands[cmd]
 
-        Returns False if the command already exists, otherwise returns True.
-        """
-        if command in self.commands:
-            self.log_err('Command {} already registered'.format(command))
-            return False
-        self.commands[command] = f
-        return True
+        del self.plugins[name]
+        self.log_msg('Unloaded plugin {}'.format(name))
 
     def fire_command(self, command):
-        """Dispatch *command* to its callback."""
+        """Dispatch *command* to its callback.
+        """
         if command.command not in self.commands:
             command.error('Command "{0.command}" not found'.format(command))
             return
 
         handler = self.commands[command.command]
         handler(command)
+
+    def fire_hook(self, hook, *args, **kwargs):
+        """Fire *hook* on every plugin.
+        """
+        for plugin in self.plugins.itervalues():
+            plugin.features.fire_hook(hook, *args, **kwargs)
 
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
@@ -144,35 +151,43 @@ class Bot(irc.IRCClient):
         """Convenience wrapper around ``twisted.python.log.err`` for plugins"""
         log.err(err)
 
+    def signedOn(self, event):
+        map(event.protocol.join,
+            self.config.get('DEFAULT', 'channels').split())
+
+    def privmsg(self, event):
+        command = events.CommandEvent.create(event)
+        if command is not None:
+            self.fire_command(command)
+
+
+class BotProtocol(irc.IRCClient):
+    def __init__(self, bot):
+        self.bot = bot
+        # Get IRCClient configuration from the Bot
+        self.nickname = bot.config.get('DEFAULT', 'nickname')
+        self.username = bot.config.get('DEFAULT', 'username')
+        self.realname = bot.config.get('DEFAULT', 'realname')
+        self.sourceURL = bot.config.get('DEFAULT', 'sourceURL')
+        self.lineRate = bot.config.getint('DEFAULT', 'lineRate')
+
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
         print "[Connected]"
-        for p in self.plugins.itervalues():
-            p.setup()
 
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
-        for p in self.plugins.itervalues():
-            p.teardown()
 
-        # Save the plugin data
-        with open(self.keyvalfile, 'wb') as kvf:
-            self.plugindata.write(kvf)
-
-    def signedOn(self):
-        map(self.join, self.factory.channels)
-
-    @hook
-    def privmsg(self, user, channel, msg):
-        """Handle commands in channel messages.
-        """
-        command = CommandEvent.create(self, user, channel, msg)
-        if command is not None:
-            self.fire_command(command)
-
-    action = hook('action')
-    userJoined = hook('userJoined')
+    signedOn = events.proxy('signedOn', ())
+    privmsg = events.proxy('privmsg', ('user', 'channel', 'message'))
+    noticed = events.proxy('noticed', ('user', 'channel', 'message'))
+    action = events.proxy('action', ('user', 'channel', 'message'))
+    joined = events.proxy('joined', ('channel',))
+    left = events.proxy('left', ('channel',))
+    userJoined = events.proxy('userJoined', ('user', 'channel'))
+    userLeft = events.proxy('userLeft', ('user', 'channel'))
+    userQuit = events.proxy('userQuit', ('user', 'channel', 'message'))
 
 
 class PluginFeatures(object):
@@ -205,6 +220,7 @@ class PluginFeatures(object):
         """
         if hook not in self.hooks:
             self.hooks[hook] = list()
+
         def decorate(f):
             self.hooks[hook].append(f)
             return f
@@ -218,6 +234,7 @@ class PluginFeatures(object):
         """
         if command in self.commands:
             raise KeyError('Duplicate command: {}'.format(command))
+
         def decorate(f):
             f.help = help
             self.commands[command] = f
@@ -245,11 +262,7 @@ class Plugin(object):
     def __init__(self, bot):
         self.bot = bot
         self.features = self.features.instantiate(self)
-        conn = Connection()
-        self.db = conn[self.plugin_name().replace('.', '__')]
-
-        for command, handler in self.features.commands.iteritems():
-            self.bot.register_command(command, handler)
+        self.db = self.bot.mongodb[self.plugin_name().replace('.', '__')]
 
     @classmethod
     def plugin_name(cls):
@@ -307,124 +320,34 @@ class Plugin(object):
         self.bot.plugindata.set(plugin, key, value)
 
     def setup(self):
+        """Run setup actions for the plugin.
+
+        This should be overloaded in plugins to perform actions that need to
+        happen before receiving any events.
+
+        .. note:: Plugin setup order is not guaranteed to be consistent, so do
+                  not rely on it.
+        """
         pass
 
     def teardown(self):
+        """Run teardown actions for the plugin.
+
+        This should be overloaded in plugins to perform teardown actions, for
+        example writing stuff to file/database, before the bot is destroyed.
+
+        .. note:: Plugin teardown order is not guaranteed to be consistent, so
+                  do not rely on it.
+        """
         pass
 
 
-class CommandEvent(object):
-    #: The :class:`Bot` this command was received by
-    bot = None
-    #: The command invoked (minus any trigger characters)
-    command = None
-    #: User string for the source of the command
-    user = None
-    #: Channel that the command was received on
-    channel = None
-    #: False if the command was triggered by the command prefix, True otherwise
-    direct = False
-    #: The rest of the line after the command name
-    raw_data = None
-    #: Cached argument list, see :attr:`data`
-    data_ = None
-
-    def __init__(self, bot, user, channel, command, direct, raw_data):
-        self.bot = bot
-        self.command = command
-        self.user = user
-        self.channel = channel
-        self.direct = direct
-        self.raw_data = raw_data
-        self.data_ = None
-
-    @staticmethod
-    def create(bot, user, channel, msg):
-        """Attempt to create an event from *msg*.
-
-        Returns None if *msg* is not a command, otherwise returns a new
-        :class:`CommandEvent`.
-        """
-        command = None
-        direct = False
-
-        if is_channel(channel):
-            # In channel, must be triggered explicitly
-            if msg.startswith(bot.factory.command_prefix):
-                # Triggered by command prefix: "<prefix><cmd> <args>"
-                command = msg[len(bot.factory.command_prefix):]
-            elif msg.startswith(bot.nickname):
-                # Addressing the bot by name: "<nick>, <cmd> <args>"
-                msg = msg[len(bot.nickname):].lstrip()
-                # Check that the bot was specifically addressed, rather than
-                # a similar nick or just talking about the bot
-                if len(msg) > 0 and msg[0] in ',:;.':
-                    command = msg.lstrip(',:;.')
-                    direct = True
-        else:
-            command = msg
-            direct = True
-
-        if command is None or command.strip() == '':
-            return None
-
-        command = command.split(None, 1)
-        cmd = command[0]
-        data = command[1] if len(command) == 2 else ''
-        return CommandEvent(bot, user, channel, cmd, direct, data)
-
-    @property
-    def data(self):
-        """Command data as an argument list.
-
-        On first access, the argument list is processed from :attr:`raw_data`
-        using :py:mod:`shlex`.  The lexer is customised to only use `"` for
-        argument quoting, allowing `'` to be used naturally within arguments.
-
-        If the lexer fails to process the argument list, :meth:`error` is
-        called and :py:class:`ValueError` is raised.
-        """
-        if self.data_ is None:
-            try:
-                # Create a shlex instance just like shlex.split does
-                lex = shlex.shlex(self.raw_data, posix=True)
-                lex.whitespace_split = True
-                # Don't treat ' as a quote character, so it can be used
-                # naturally in words
-                lex.quotes = '"'
-                self.data_ = list(lex)
-            except ValueError as e:
-                self.error('Unmatched quotation marks')
-                raise e
-        return self.data_
-
-    def reply(self, msg, is_verbose=False):
-        """Send a reply message.
-
-        All plugin responses should be via this method.  The :attr:`user` is
-        addressed by name if the response is in a channel rather than a private
-        chat.  If *is_verbose* is True, the reply is suppressed unless the bot
-        was addressed directly, i.e. in private chat or by name in a channel.
-        """
-        if self.channel == self.bot.nickname:
-            self.bot.msg(nick(self.user), msg)
-        elif self.direct or not is_verbose:
-            self.bot.msg(self.channel, msg)
-
-    def error(self, err):
-        """Send an error message."""
-        self.reply('Error: ' + err, is_verbose=True)
-
-
 class BotFactory(protocol.ClientFactory):
-    def __init__(self, config, plugins, channels, command_prefix):
-        self.config = config
-        self.plugins = plugins
-        self.channels = channels
-        self.command_prefix = command_prefix
+    def __init__(self, bot):
+        self.bot = bot
 
     def buildProtocol(self, addr):
-        p = Bot(self.config, self.plugins)
+        p = BotProtocol(self.bot)
         p.factory = self
         return p
 
@@ -452,10 +375,15 @@ def main(argv):
     plugins = load('csbot.plugins', subclasses=Plugin)
     print "Plugins found:", plugins
 
-    # Start client
-    f = BotFactory(config=args.config,
-                   plugins=plugins,
-                   channels=['#cs-york-dev'],
-                   command_prefix='!')
-    reactor.connectTCP('irc.freenode.net', 6667, f)
+    # Create bot and run setup functions
+    bot = Bot(args.config, plugins)
+    bot.setup()
+
+    # Connect and enter the reactor loop
+    reactor.connectTCP(bot.config.get('DEFAULT', 'irc_host'),
+                       bot.config.getint('DEFAULT', 'irc_port'),
+                       BotFactory(bot))
     reactor.run()
+
+    # Run teardown functions before exiting
+    bot.teardown()

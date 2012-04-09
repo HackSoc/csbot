@@ -1,4 +1,5 @@
-from csbot.core import Plugin, PluginFeatures, nick
+from csbot.core import Plugin, PluginFeatures
+from csbot.util import nick
 from datetime import datetime
 
 
