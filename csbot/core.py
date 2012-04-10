@@ -1,6 +1,7 @@
 from functools import wraps
 import types
 import ConfigParser
+import sys
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -84,13 +85,16 @@ class Bot(object):
         plugins = straight.plugin.load(cls.PLUGIN_PACKAGE, subclasses=Plugin)
         return dict((P.plugin_name(), P) for P in plugins)
 
+    def has_plugin(self, name):
+        """Check if the bot has the named plugin loaded.
+        """
+        return name in self.plugins
+
     def load_plugin(self, name):
         """Load a named plugin and register all of its commands.
 
         When a plugin is loaded, it is added to the bot, all of its defined
         commands are registered, and then its :meth:`~Plugin.setup` is run.
-
-        .. todo: use :py:func:`reload` to update plugin first
         """
         available_plugins = self.discover_plugins()
 
@@ -135,6 +139,28 @@ class Bot(object):
 
         del self.plugins[name]
         self.log_msg('Unloaded plugin {}'.format(name))
+
+    def reload_plugin(self, name):
+        """Reload a named plugin, re-reading its source file.
+
+        Attempts to :func:`reload` the source file containing the named plugin
+        before unloading it and loading it again.
+        """
+        if name not in self.plugins:
+            raise PluginError('{} not loaded'.format(name))
+
+        # Reload the module this plugin came from, so that the next call to
+        # discover_plugins() will get the newest code
+        p = self.plugins[name]
+        try:
+            reload(sys.modules[p.__module__])
+        except Exception as e:
+            raise PluginError('reload failed', e)
+
+        # Unload the plugin, unregistering all its commands etc.
+        self.unload_plugin(name)
+        # Load the plugin
+        self.load_plugin(name)
 
     def fire_command(self, command):
         """Dispatch *command* to its callback.
