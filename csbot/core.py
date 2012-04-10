@@ -275,7 +275,7 @@ class Plugin(object):
     def __init__(self, bot):
         self.bot = bot
         self.features = self.features.instantiate(self)
-        self.db = self.bot.mongodb[self.plugin_name().replace('.', '__')]
+        self.db_ = None
 
     @classmethod
     def plugin_name(cls):
@@ -292,6 +292,12 @@ class Plugin(object):
         'example.EmptyPlugin'
         """
         return cls.__module__.split('.', 2)[2] + '.' + cls.__name__
+
+    @property
+    def db(self):
+        if self.db_ is None:
+            self.db_ = self.bot.mongodb[self.plugin_name().replace('.', '__')]
+        return self.db_
 
     def cfg(self, name):
         plugin = self.plugin_name()
