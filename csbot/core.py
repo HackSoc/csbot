@@ -150,11 +150,11 @@ class Bot(object):
         handler = self.commands[command.command]
         handler(command)
 
-    def fire_hook(self, hook, *args, **kwargs):
-        """Fire *hook* on every plugin.
+    def fire_hook(self, hook, event):
+        """Fire *hook* with *event* on every plugin.
         """
         for plugin in self.plugins.itervalues():
-            plugin.features.fire_hook(hook, *args, **kwargs)
+            plugin.features.fire_hook(hook, event)
 
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
@@ -200,7 +200,7 @@ class BotProtocol(irc.IRCClient):
     left = events.proxy('left', ('channel',))
     userJoined = events.proxy('userJoined', ('user', 'channel'))
     userLeft = events.proxy('userLeft', ('user', 'channel'))
-    userQuit = events.proxy('userQuit', ('user', 'channel', 'message'))
+    userQuit = events.proxy('userQuit', ('user', 'message'))
 
 
 class PluginFeatures(object):

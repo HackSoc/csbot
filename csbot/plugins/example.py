@@ -1,4 +1,5 @@
 from csbot.core import Plugin, PluginFeatures
+from csbot.util import nick
 
 
 class EmptyPlugin(Plugin):
@@ -48,8 +49,32 @@ class Example(Plugin):
 
     @features.hook('privmsg')
     def privmsg(self, event):
-        print ">>>", event.message
+        print '[{timestamp}][{event.channel}] <{nick}> {event.message}'.format(
+                event=event,
+                nick=nick(event.user),
+                timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
 
     @features.hook('action')
     def action(self, event):
-        print "*", event.message
+        print '[{timestamp}][{event.channel}] * {nick} {event.message}'.format(
+                event=event,
+                nick=nick(event.user),
+                timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
+
+    @features.hook('userJoined')
+    def userJoined(self, event):
+        print '[{timestamp}][{event.channel}] {event.user} has joined'.format(
+                event=event,
+                timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
+
+    @features.hook('userLeft')
+    def userLeft(self, event):
+        print '[{timestamp}][{event.channel}] {event.user} has left'.format(
+                event=event,
+                timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
+
+    @features.hook('userQuit')
+    def userQuit(self, event):
+        print '[{timestamp}] {event.user} quit ({event.message})'.format(
+                event=event,
+                timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
