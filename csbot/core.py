@@ -70,12 +70,20 @@ class Bot(object):
     def teardown(self):
         """Unload plugins and save data.
         """
+        # Save currently loaded plugins
+        self.config.set('DEFAULT', 'plugins', ' '.join(self.plugins))
+
+        # Unload plugins
         for name in self.plugins.keys():
             self.unload_plugin(name)
 
         # Save the plugin data
         with open(self.config.get('DEFAULT', 'keyvalfile'), 'wb') as kvf:
             self.plugindata.write(kvf)
+
+        # Save configuration
+        with open(self.configpath, 'wb') as cfg:
+            self.config.write(cfg)
 
     @classmethod
     def discover_plugins(cls):
