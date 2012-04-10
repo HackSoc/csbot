@@ -5,6 +5,7 @@ import ConfigParser
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
+import straight.plugin
 import pymongo
 
 import csbot.events as events
@@ -38,7 +39,10 @@ class Bot(object):
             'mongodb_port': '27017',
     }
 
-    def __init__(self, configpath, plugins):
+    #: The top-level package for all bot plugins
+    PLUGIN_PACKAGE = 'csbot.plugins'
+
+    def __init__(self, configpath):
         # Load the configuration file
         self.configpath = configpath
         self.config = ConfigParser.SafeConfigParser(defaults=self.DEFAULTS,
@@ -54,7 +58,6 @@ class Bot(object):
                 self.config.get('DEFAULT', 'mongodb_host'),
                 self.config.getint('DEFAULT', 'mongodb_port'))
 
-        self.available_plugins = dict((P.plugin_name(), P) for P in plugins)
         self.plugins = dict()
         self.commands = dict()
 
@@ -73,6 +76,14 @@ class Bot(object):
         with open(self.config.get('DEFAULT', 'keyvalfile'), 'wb') as kvf:
             self.plugindata.write(kvf)
 
+    @classmethod
+    def discover_plugins(cls):
+        """Discover available plugins, returning a dictionary mapping from
+        plugin name to plugin class.
+        """
+        plugins = straight.plugin.load(cls.PLUGIN_PACKAGE, subclasses=Plugin)
+        return dict((P.plugin_name(), P) for P in plugins)
+
     def load_plugin(self, name):
         """Load a named plugin and register all of its commands.
 
@@ -81,7 +92,9 @@ class Bot(object):
 
         .. todo: use :py:func:`reload` to update plugin first
         """
-        if name not in self.available_plugins:
+        available_plugins = self.discover_plugins()
+
+        if name not in available_plugins:
             self.log_err('Plugin {} does not exist'.format(name))
             return
 
@@ -89,7 +102,7 @@ class Bot(object):
             self.log_err('Plugin {} already loaded'.format(name))
             return
 
-        p = self.available_plugins[name](self)
+        p = available_plugins[name](self)
         self.plugins[name] = p
         self.log_msg('Loaded plugin {}'.format(name))
 
@@ -361,7 +374,6 @@ class BotFactory(protocol.ClientFactory):
 def main(argv):
     import sys
     import argparse
-    from straight.plugin import load
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', default='csbot.cfg',
@@ -371,12 +383,8 @@ def main(argv):
     # Start twisted logging
     log.startLogging(sys.stdout)
 
-    # Find plugins
-    plugins = load('csbot.plugins', subclasses=Plugin)
-    print "Plugins found:", plugins
-
     # Create bot and run setup functions
-    bot = Bot(args.config, plugins)
+    bot = Bot(args.config)
     bot.setup()
 
     # Connect and enter the reactor loop
