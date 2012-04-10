@@ -95,12 +95,10 @@ class Bot(object):
         available_plugins = self.discover_plugins()
 
         if name not in available_plugins:
-            self.log_err('Plugin {} does not exist'.format(name))
-            return
+            raise PluginError('{} does not exist'.format(name))
 
         if name in self.plugins:
-            self.log_err('Plugin {} already loaded'.format(name))
-            return
+            raise PluginError('{} already loaded'.format(name))
 
         p = available_plugins[name](self)
         self.plugins[name] = p
@@ -108,9 +106,8 @@ class Bot(object):
 
         for command, handler in p.features.commands.iteritems():
             if command in self.commands:
-                self.log_err('Command {} already provided by plugin {}'.format(
-                             command,
-                             self.commands[command].im_class.plugin_name()))
+                raise PluginError('{} command already provided by {}'.format(
+                    command, self.commands[command].im_class.plugin_name()))
             else:
                 self.log_msg('Registering command {}'.format(command))
                 self.commands[command] = handler
@@ -125,8 +122,7 @@ class Bot(object):
         removed from the :class:`Bot`.
         """
         if name not in self.plugins:
-            self.log_err('Plugin {} not loaded'.format(name))
-            return
+            raise PluginError('{} not loaded'.format(name))
 
         p = self.plugins[name]
         p.teardown()
@@ -172,6 +168,10 @@ class Bot(object):
         command = events.CommandEvent.create(event)
         if command is not None:
             self.fire_command(command)
+
+
+class PluginError(Exception):
+    pass
 
 
 class BotProtocol(irc.IRCClient):
