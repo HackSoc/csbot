@@ -83,7 +83,20 @@ class Bot(object):
         plugin name to plugin class.
         """
         plugins = straight.plugin.load(cls.PLUGIN_PACKAGE, subclasses=Plugin)
-        return dict((P.plugin_name(), P) for P in plugins)
+        available = dict()
+
+        # Build dict of available plugins, error if there are multple plugins
+        # with the same name
+        for P in plugins:
+            if P.plugin_name() in available:
+                existing = available[P.plugin_name()]
+                raise PluginError(('Duplicate plugin name: '
+                        '{e.__module__}.{e.__name__} and '
+                        '{n.__module__}.{n.__name__}').format(e=existing, n=P))
+            else:
+                available[P.plugin_name()] = P
+
+        return available
 
     def has_plugin(self, name):
         """Check if the bot has the named plugin loaded.
