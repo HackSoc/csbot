@@ -34,7 +34,7 @@ class Bot(object):
                 '#cs-york-dev',
             ]),
             'plugins': ' '.join([
-                'example.Example',
+                'example',
             ]),
             'mongodb_host': 'localhost',
             'mongodb_port': '27017',
@@ -91,7 +91,20 @@ class Bot(object):
         plugin name to plugin class.
         """
         plugins = straight.plugin.load(cls.PLUGIN_PACKAGE, subclasses=Plugin)
-        return dict((P.plugin_name(), P) for P in plugins)
+        available = dict()
+
+        # Build dict of available plugins, error if there are multple plugins
+        # with the same name
+        for P in plugins:
+            if P.plugin_name() in available:
+                existing = available[P.plugin_name()]
+                raise PluginError(('Duplicate plugin name: '
+                        '{e.__module__}.{e.__name__} and '
+                        '{n.__module__}.{n.__name__}').format(e=existing, n=P))
+            else:
+                available[P.plugin_name()] = P
+
+        return available
 
     def has_plugin(self, name):
         """Check if the bot has the named plugin loaded.
@@ -346,22 +359,23 @@ class Plugin(object):
     def plugin_name(cls):
         """Get the plugin's name.
 
-        A plugin's name is its fully qualified path, excluding the leading
-        component (which will always be ``csbot.plugins``).
+        A plugin's name is its class name in lowercase.  Duplicate plugin names
+        are not permitted and plugin names should be handled case-insensitively
+        as ``name.lower()``.
 
         >>> from csbot.plugins.example import EmptyPlugin
         >>> EmptyPlugin.plugin_name()
-        'example.EmptyPlugin'
+        'emptyplugin'
         >>> p = EmptyPlugin(None)
         >>> p.plugin_name()
-        'example.EmptyPlugin'
+        'emptyplugin'
         """
-        return cls.__module__.split('.', 2)[2] + '.' + cls.__name__
+        return cls.__name__.lower()
 
     @property
     def db(self):
         if self.db_ is None:
-            self.db_ = self.bot.mongodb[self.plugin_name().replace('.', '__')]
+            self.db_ = self.bot.mongodb['csbot__' + self.plugin_name()]
         return self.db_
 
     def cfg(self, name):

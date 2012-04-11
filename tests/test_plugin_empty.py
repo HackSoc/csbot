@@ -8,4 +8,4 @@ class TestEmptyPlugin(unittest.TestCase):
         self.plugin = EmptyPlugin(None)
 
     def test_plugin_name(self):
-        self.assertEquals(self.plugin.plugin_name(), 'example.EmptyPlugin')
+        self.assertEquals(self.plugin.plugin_name(), 'emptyplugin')
