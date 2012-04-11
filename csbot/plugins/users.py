@@ -10,7 +10,9 @@ class Users(Plugin):
     keeping track of users and nicks.
     It also provides !seen and !spoke functionality.
 
-    To do this it gets a list of logged in users when it joins the channel and then updates this list when users change nick, leave the channel or join the channel.
+    To do this it gets a list of logged in users when it joins the channel and
+    then updates this list when users change nick, leave the channel or join
+    the channel.
     """
 
     def is_online(self, user):
@@ -35,13 +37,14 @@ class Users(Plugin):
     @features.command('spoke')
     def spoke(self, event):
         """
-        Tells the user who asked when the last time the user they asked about spoke.
+        Tells the user who asked when the last time the user they asked about
+        spoke.
         """
         usr = self.db.online_users.find_one({'user': event.data[0]})
         if usr:
-            if usr.has_key('time_last_spoke'):
-                event.reply("{} last said something {}".format(usr['user'],
-                    usr['time_last_spoke']))
+            if 'time_last_spoke' in usr:
+                event.reply("{} last said something {}".format(
+                    usr['user'], usr['time_last_spoke']))
             else:
                 event.reply("I don't remember {} saying anything.".format(
                     usr['user']))
@@ -51,7 +54,8 @@ class Users(Plugin):
     @features.command('seen')
     def seen(self, event):
         """
-        Tells the user who asked when the last time the user they asked about was online.
+        Tells the user who asked when the last time the user they asked about
+        was online.
         """
         usr = self.db.offline_users.find_one({'user': event.data[0]})
         if usr:
@@ -118,7 +122,10 @@ class Users(Plugin):
         self.db.online_users.remove({'user': event.user})
         self.db.offline_users.remove({'user': event.user})
         # Be offline
-        self.db.offline_users.insert({'user': event.user, 'time': datetime.now()})
+        self.db.offline_users.insert({
+            'user': event.user,
+            'time': datetime.now()
+            })
 
     @features.hook('userLeft')
     def userLeft(self, event):
