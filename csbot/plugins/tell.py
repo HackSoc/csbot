@@ -1,6 +1,5 @@
 from csbot.core import Plugin, PluginFeatures
 from csbot.util import nick
-from datetime import datetime
 
 
 class Tell(Plugin):
@@ -51,12 +50,10 @@ class Tell(Plugin):
         from_user = nick(event.user)
         # TODO: this should probably do some i18n but being as the channel is
         # largely in the UK...
-        time = datetime.now()
-        user_is_here = False
-        if (user_is_here):
-            # TODO: implement the check
-            event.reply("{}, {} is here, you can tell them yourself."
-                    .format(from_user, to_user))
+        time = event.datetime
+        if (self.bot.get_plugin("users.Users").is_online(to_user)):
+            event.reply("{} is here, you can tell them yourself."
+                    .format(to_user))
         else:
             msg = {'message': message,
                    'from': from_user,
@@ -66,28 +63,30 @@ class Tell(Plugin):
             event.reply("{}, I'll let {} know.".format(from_user, to_user))
 
     @features.hook('userJoined')
-    def userJoined(self, user, channel):
-        print("user {} has joined the channel {}".format(user, channel))
-        msgs = self.getMessages(user)
+    def userJoined(self, event):
+        print("user {} has joined the channel {}".format(event.user,
+            event.channel))
+        msgs = self.getMessages(event.user)
         if msgs.count() > 1:
-            deliver_to = user
-            self.bot.msg(channel,
+            deliver_to = event.user
+            event.protocol.msg(event.channel,
                     "{}, several people left messages for you. \
-                    Please check the PMs I'm sending you.".format(user))
+                    Please check the PMs I'm sending you.".format(event.user))
         else:
-            deliver_to = channel
+            deliver_to = event.channel
         for msg in msgs:
             from_user = msg['from']
             time = msg['time'].strftime('%H:%M')
             message = msg['message']
-            self.sendMessage(deliver_to, from_user, user, message, time)
+            self.sendMessage(event.protocol, deliver_to,
+                    from_user, event.user, message, time)
             # Remove the message now we've delivered it
             self.db.messages.remove(msg['_id'])
 
-    def sendMessage(self, channel, from_user, to_user, message, time):
+    def sendMessage(self, bot, channel, from_user, to_user, message, time):
         msg = "{}, \"{}\" - {} (at {})".format(
                 to_user, message, from_user, time)
-        self.bot.msg(channel, msg)
+        bot.msg(channel, msg)
 
     def getMessages(self, user):
         """

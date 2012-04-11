@@ -111,6 +111,14 @@ class Bot(object):
         """
         return name in self.plugins
 
+    def get_plugin(self, name):
+        """Get a loaded plugin by name.
+        """
+        if name not in self.plugins:
+            raise PluginError('{} not loaded'.format(name))
+
+        return self.plugins[name]
+
     def load_plugin(self, name):
         """Load a named plugin and register all of its commands.
 
@@ -279,7 +287,6 @@ class BotProtocol(irc.IRCClient):
 
         # Fire the event
         self.names(channel, names, raw_names)
-
 
 class PluginFeatures(object):
     """Utility class to simplify defining plugin features.
