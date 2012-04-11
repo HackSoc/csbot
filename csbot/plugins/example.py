@@ -78,3 +78,9 @@ class Example(Plugin):
         print '[{timestamp}] {event.user} quit ({event.message})'.format(
                 event=event,
                 timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
+
+    @features.hook('names')
+    def names(self, event):
+        print '[{timestamp}][{event.channel}] NAMES: {event.raw_names}'.format(
+                event=event,
+                timestamp=event.datetime.strftime('%Y/%m/%d %H:%M'))
