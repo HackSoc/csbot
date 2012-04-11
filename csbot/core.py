@@ -203,6 +203,10 @@ class Bot(object):
         if command is not None:
             self.fire_command(command)
 
+    def joined(self, event):
+        # Automatically request names list for newly joined channels
+        event.protocol.sendLine('NAMES ' + event.channel)
+
 
 class PluginError(Exception):
     pass
@@ -217,6 +221,10 @@ class BotProtocol(irc.IRCClient):
         self.realname = bot.config.get('DEFAULT', 'realname')
         self.sourceURL = bot.config.get('DEFAULT', 'sourceURL')
         self.lineRate = bot.config.getint('DEFAULT', 'lineRate')
+
+        # Keeps partial name lists between RPL_NAMREPLY and
+        # RPL_ENDOFNAMES events
+        self.names_accumulator = dict()
 
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
@@ -235,6 +243,33 @@ class BotProtocol(irc.IRCClient):
     userJoined = events.proxy('userJoined', ('user', 'channel'))
     userLeft = events.proxy('userLeft', ('user', 'channel'))
     userQuit = events.proxy('userQuit', ('user', 'message'))
+    names = events.proxy('names', ('channel', 'names', 'raw_names'))
+
+    def irc_RPL_NAMREPLY(self, prefix, params):
+        channel = params[2]
+        names = self.names_accumulator.get(channel, list())
+        names.extend(params[3].split())
+        self.names_accumulator[channel] = names
+
+    def irc_RPL_ENDOFNAMES(self, prefix, params):
+        # Get channel and raw names list
+        channel = params[1]
+        raw_names = self.names_accumulator.get(channel, list())
+
+        # Get a mapping from status characters to mode flags
+        prefixes = self.supported.getFeature('PREFIX')
+        inverse_prefixes = dict((v[0], k) for k, v in prefixes.iteritems())
+
+        # Get mode characters from name prefix
+        def f(name):
+            if name[0] in inverse_prefixes:
+                return (name[1:], set(inverse_prefixes[name[0]]))
+            else:
+                return (name, set())
+        names = map(f, raw_names)
+
+        # Fire the event
+        self.names(channel, names, raw_names)
 
 
 class PluginFeatures(object):
