@@ -1,6 +1,5 @@
 from csbot.core import Plugin, PluginFeatures
 from csbot.util import nick
-from datetime import datetime
 
 
 class Tell(Plugin):
@@ -51,7 +50,7 @@ class Tell(Plugin):
         from_user = nick(event.user)
         # TODO: this should probably do some i18n but being as the channel is
         # largely in the UK...
-        time = datetime.now()
+        time = event.datetime
         if (self.bot.get_plugin("users.Users").is_online(to_user)):
             event.reply("{} is here, you can tell them yourself."
                     .format(to_user))
