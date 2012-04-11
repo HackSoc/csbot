@@ -15,6 +15,12 @@ class Users(Plugin):
     the channel.
     """
 
+    def setup(self):
+        # Clear out any previous records as the may be out of date and can't be
+        # trusted any more
+        self.db.offline_users.remove()
+        self.db.online_users.remove()
+
     def is_online(self, user):
         """
         This checks to see if a user is known to be online.
@@ -90,6 +96,21 @@ class Users(Plugin):
             # if there is no record create a new one
             usr_matcher['join_time'] = event.datetime
             self.db.online_users.insert(usr_matcher)
+
+    @features.hook('names')
+    def names(self, event):
+        """
+        When we connect to a channel we get a list of the names. This handles
+        that list and updates the lists of users.
+        """
+        # Remove everyone in the db
+        self.db.online_users.remove()
+        self.db.offline_users.remove()
+        for nick, mode in event.names:
+            self.db.online_users.insert({
+                'user': nick,
+                'join_time': event.datetime,
+                })
 
     @features.hook('privmsg')
     def privmsg(self, event):
