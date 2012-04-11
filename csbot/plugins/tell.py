@@ -52,11 +52,9 @@ class Tell(Plugin):
         # TODO: this should probably do some i18n but being as the channel is
         # largely in the UK...
         time = datetime.now()
-        user_is_here = False
-        if (user_is_here):
-            # TODO: implement the check
-            event.reply("{}, {} is here, you can tell them yourself."
-                    .format(from_user, to_user))
+        if (self.bot.get_plugin("users.Users").is_online(to_user)):
+            event.reply("{} is here, you can tell them yourself."
+                    .format(to_user))
         else:
             msg = {'message': message,
                    'from': from_user,
