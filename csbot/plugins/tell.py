@@ -79,7 +79,8 @@ class Tell(Plugin):
             from_user = msg['from']
             time = msg['time'].strftime('%H:%M')
             message = msg['message']
-            self.sendMessage(event.protocol, deliver_to, from_user, event.user, message, time)
+            self.sendMessage(event.protocol, deliver_to,
+                    from_user, event.user, message, time)
             # Remove the message now we've delivered it
             self.db.messages.remove(msg['_id'])
 
