@@ -211,11 +211,6 @@ class Bot(object):
         if command is not None:
             self.fire_command(command)
 
-    def joined(self, event):
-        pass
-        # Automatically request names list for newly joined channels
-        #event.protocol.sendLine('NAMES ' + event.channel)
-
 
 class PluginError(Exception):
     pass
@@ -263,7 +258,7 @@ class BotProtocol(irc.IRCClient):
     def irc_RPL_ENDOFNAMES(self, prefix, params):
         # Get channel and raw names list
         channel = params[1]
-        raw_names = self.names_accumulator.get(channel, list())
+        raw_names = self.names_accumulator.pop(channel, list())
 
         # Get a mapping from status characters to mode flags
         prefixes = self.supported.getFeature('PREFIX')
@@ -279,10 +274,6 @@ class BotProtocol(irc.IRCClient):
 
         # Fire the event
         self.names(channel, names, raw_names)
-        # Now we have processed this name response forget the partial list for
-        # this channel
-        del self.names_accumulator[channel]
-
 
 class PluginFeatures(object):
     """Utility class to simplify defining plugin features.
