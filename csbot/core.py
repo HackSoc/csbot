@@ -212,8 +212,9 @@ class Bot(object):
             self.fire_command(command)
 
     def joined(self, event):
+        pass
         # Automatically request names list for newly joined channels
-        event.protocol.sendLine('NAMES ' + event.channel)
+        #event.protocol.sendLine('NAMES ' + event.channel)
 
 
 class PluginError(Exception):
@@ -278,6 +279,9 @@ class BotProtocol(irc.IRCClient):
 
         # Fire the event
         self.names(channel, names, raw_names)
+        # Now we have processed this name response forget the partial list for
+        # this channel
+        del self.names_accumulator[channel]
 
 
 class PluginFeatures(object):
