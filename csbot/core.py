@@ -251,16 +251,47 @@ class BotProtocol(irc.IRCClient):
         irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
 
-    signedOn = events.proxy('signedOn', ())
-    privmsg = events.proxy('privmsg', ('user', 'channel', 'message'))
-    noticed = events.proxy('noticed', ('user', 'channel', 'message'))
-    action = events.proxy('action', ('user', 'channel', 'message'))
-    joined = events.proxy('joined', ('channel',))
-    left = events.proxy('left', ('channel',))
-    userJoined = events.proxy('userJoined', ('user', 'channel'))
-    userLeft = events.proxy('userLeft', ('user', 'channel'))
-    userQuit = events.proxy('userQuit', ('user', 'message'))
-    names = events.proxy('names', ('channel', 'names', 'raw_names'))
+    @events.proxy
+    def signedOn(self):
+        pass
+
+    @events.proxy
+    def privmsg(self, user, channel, message):
+        pass
+
+    @events.proxy
+    def noticed(self, user, channel, message):
+        pass
+
+    @events.proxy
+    def action(self, user, channel, message):
+        pass
+
+    @events.proxy
+    def joined(self, channel):
+        pass
+
+    @events.proxy
+    def left(self, channel):
+        pass
+
+    @events.proxy
+    def userJoined(self, user, channel):
+        pass
+
+    @events.proxy
+    def userLeft(self, user, channel):
+        pass
+
+    @events.proxy
+    def userQuit(self, user, message):
+        pass
+
+    @events.proxy
+    def names(self, channel, names, raw_names):
+        """Called when the NAMES list for a channel has been received.
+        """
+        pass
 
     def irc_RPL_NAMREPLY(self, prefix, params):
         channel = params[2]

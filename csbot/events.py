@@ -1,48 +1,121 @@
 from datetime import datetime
 import shlex
+import inspect
+from functools import wraps
+
+from twisted.words.protocols import irc
 
 from csbot.util import nick, is_channel
 
 
-PROXY_DOCSTRING = """Proxy method for Twisted `IRCClient.{event}({attrs})`_.
+PROXY_DOC = """
 
-.. _`IRCClient.{event}({attrs})`: http://twistedmatrix.com/documents/current/
-                                  api/twisted.words.protocols.irc
-                                  .IRCClient.html#{event}
-"""
+Fires ``{event}`` :class:`.Event` with attributes ``({attrs})``."""
+PROXY_TWISTED_DOC = """
+
+Implements Twisted `IRCClient.{event}`_ callback.
+
+.. _`IRCClient.{event}`: http://twistedmatrix.com/documents/current/api/
+                         twisted.words.protocols.irc.IRCClient.html#{event}"""
 
 
-def proxy(event_type, attributes):
-    """Proxy :class:`.BotProtocol` events to the :class:`.Bot`.
+def proxy(*outer_args):
+    """Here be dragons (and magic).
 
-    This function is for creating methods on :class:`.BotProtocol` that
-    implement Twisted :class:`IRCClient`'s callbacks and wrap the
-    :class:`.Bot`, :class:`.BotProtocol` and arguments received by the method
-    into an :class:`Event`.  This event is posted to the :class:`.Bot`'s
-    corresponding method and then all hooks for the event.
+    This is a decorator for creating methods on :class:`.BotProtocol` that
+    result in events that can be hooked by the bot and plugins.
 
-    The *event_type* will become the :attr:`~Event.event_type` attribute of the
-    :class:`Event`.  It's also the name of the method that will be called on
-    the :class:`.Bot`, and the name of the hook that should be registered by a
-    plugin to receive the events.
+    When the new method is called, the decorated method is called first, as
+    normal.  Afterwards an :class:`Event` is created and the arguments are
+    stored in it as attributes.  The :attr:`~Event.event_type` is the name of
+    the method being decorated.  This event is passed to the :class:`.Bot`'s
+    method of the same name and then the hook of the same name.
 
-    The *attributes* list defines the attribute names to assign the positional
-    arguments to on the :class:`Event`.
-
-    For example, to handle :meth:`IRCClient.privmsg`::
+    If the decorator is used without arguments, the attribute names are defined
+    by the parameter names of the decorated method::
 
         class BotProtocol(IRCClient):
-            privmsg = events.proxy('privmsg', ('user', 'channel', 'message'))
+            # Creates events with 'user', 'channel' and 'message' attributes
+            @events.proxy
+            def privmsg(self, user, channel, message):
+                pass
+
+    If the decorator has arguments, then these define the attribute names
+    instead::
+
+        class BotProtocol(IRCClient):
+            # Creates events with 'u', 'c' and 'msg' attributes
+            @events.proxy('u', 'c', 'msg')
+            def privmsg(self, user, channel, message):
+                pass
+
+    Usually the decorated methods won't return anything, and the original
+    arguments are re-used for the :class:`Event`.  If the method *does* return
+    something, it will be treated as a tuple of arguments that should be used
+    instead of the original arguments::
+
+        class BotProtocol(IRCClient):
+            # Pretend we can't hear Alan
+            @events.proxy
+            def privmsg(self, user, channel, message):
+                if nick(user) == 'Alan':
+                    return (user, channel, '')
+
+            # Make an event with a completely different signature
+            @events.proxy('users')
+            def userJoined(self, user, channel):
+                self.users[channel].add(user)
+                return (self.users[channel],)
+
+    Docstrings on each decorated method are automatically augmented with
+    information about the events generated, and a link to the Twisted
+    documentation if the method implements part of the Twisted
+    :class:`IRCClient` interface.
     """
-    def newf(self, *args):
-        event = Event(self.bot, self, event_type, dict(zip(attributes, args)))
-        method = getattr(self.bot, event_type, None)
-        if method is not None:
-            method(event)
-        self.bot.fire_hook(event_type, event)
-    newf.__doc__ = PROXY_DOCSTRING.format(event=event_type,
-                                          attrs=', '.join(attributes))
-    return newf
+    def decorate(f, attrs=outer_args):
+        # The event type is the name of the method being decorated
+        event_type = f.__name__
+        # The attribute mapping can either be specified by the decorator
+        # or use the parameter names of the wrapped method.  The "no arguments"
+        # version of the decorator uses the latter approach by setting
+        # attrs=None
+        if attrs is None:
+            attrs = inspect.getargspec(f).args[1:]
+
+        # Create new function, copying info from f
+        @wraps(f)
+        def newf(self, *args):
+            # Fire the decorated function
+            result = f(self, *args)
+            # Allow the decorated function to return new arguments, but if it
+            # doesn't return anything keep the same arguments
+            args = result or args
+            # Create an Event
+            event = Event(self.bot, self, event_type, dict(zip(attrs, args)))
+            # Fire the Bot's method of the same name
+            method = getattr(self.bot, event_type, None)
+            if method is not None:
+                method(event)
+            # Fire the hook of the same name
+            self.bot.fire_hook(event_type, event)
+
+        # Augment documentation with a note about the event firing
+        newf.__doc__ = newf.__doc__ or ''
+        newf.__doc__ += PROXY_DOC.format(event=event_type,
+                                          attrs=', '.join(attrs))
+        # If this is a Twisted IRCClient callback, link to the relevant docs
+        if getattr(irc.IRCClient, event_type, None) is not None:
+            newf.__doc__ += PROXY_TWISTED_DOC.format(event=event_type)
+        newf.__doc__ = newf.__doc__.lstrip('\n')
+
+        return newf
+
+    # If decorating without arguments, the first argument to proxy will end up
+    # being the method to decorate.
+    if len(outer_args) == 1 and callable(outer_args[0]):
+        return decorate(outer_args[0], attrs=None)
+    else:
+        return decorate
 
 
 class Event(object):
@@ -51,8 +124,8 @@ class Event(object):
     #: The :class:`.BotProtocol` which received the message.  This subclasses
     #: Twisted :class:`IRCClient` and so exposes all of the same methods.
     protocol = None
-    #: The name of the event type.  This will usually correspond to an event
-    #: method in Twisted :class:`IRCClient`.
+    #: The name of the event.  This will usually correspond to a method in
+    #: :class:`.BotProtocol` marked by the :func:`proxy` decorator.
     event_type = None
     #: The value of :meth:`datetime.datetime.now()` when the message was
     #: first received.
