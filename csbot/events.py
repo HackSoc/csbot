@@ -19,7 +19,7 @@ Implements Twisted `IRCClient.{event}`_ callback.
                          twisted.words.protocols.irc.IRCClient.html#{event}"""
 
 
-def proxy(*outer_args):
+def proxy(*args, **kwargs):
     """Here be dragons (and magic).
 
     This is a decorator for creating methods on :class:`.BotProtocol` that
@@ -49,6 +49,15 @@ def proxy(*outer_args):
             def privmsg(self, user, channel, message):
                 pass
 
+    If the decorator has the *name* keyword argument it's used instead of the
+    method to define :attr:`~Event.event_type`::
+
+        class BotProtocol(IRCClient):
+            # Fires the 'messageReceived' event instead of 'privmsg'
+            @events.proxy(name='messageReceived')
+            def privmsg(self, user, channel, message):
+                pass
+
     Usually the decorated methods won't return anything, and the original
     arguments are re-used for the :class:`Event`.  If the method *does* return
     something, it will be treated as a tuple of arguments that should be used
@@ -72,9 +81,9 @@ def proxy(*outer_args):
     documentation if the method implements part of the Twisted
     :class:`IRCClient` interface.
     """
-    def decorate(f, attrs=outer_args):
+    def decorate(f, attrs=args, name=kwargs.get('name', None)):
         # The event type is the name of the method being decorated
-        event_type = f.__name__
+        event_type = name or f.__name__
         # The attribute mapping can either be specified by the decorator
         # or use the parameter names of the wrapped method.  The "no arguments"
         # version of the decorator uses the latter approach by setting
@@ -112,8 +121,8 @@ def proxy(*outer_args):
 
     # If decorating without arguments, the first argument to proxy will end up
     # being the method to decorate.
-    if len(outer_args) == 1 and callable(outer_args[0]):
-        return decorate(outer_args[0], attrs=None)
+    if len(args) == 1 and callable(args[0]):
+        return decorate(args[0], attrs=None, name=None)
     else:
         return decorate
 
