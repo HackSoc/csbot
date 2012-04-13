@@ -2,6 +2,7 @@ from functools import wraps
 import types
 import ConfigParser
 import sys
+import collections
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -61,6 +62,11 @@ class Bot(object):
 
         self.plugins = dict()
         self.commands = dict()
+
+        # Event queue
+        self.events = collections.deque()
+        # Are we currently processing the event queue?
+        self.events_running = False
 
     def setup(self):
         """Load plugins defined in configuration.
@@ -191,6 +197,23 @@ class Bot(object):
         # Load the plugin
         self.load_plugin(name)
 
+    def post_event(self, event):
+        """Post *event* into the bot event queue.
+
+        The event is added to the queue, and if the queue isn't already being
+        run then events start getting processed.  Usually all calls to this
+        method would be done from inside a hook, so the event queue will be
+        running and the newly added event will run shortly after the original
+        event.
+        """
+        self.events.append(event)
+        if not self.events_running:
+            self.events_running = True
+            while len(self.events) > 0:
+                e = self.events.popleft()
+                self.fire_hooks(e)
+            self.events_running = False
+
     def fire_command(self, command):
         """Dispatch *command* to its callback.
         """
@@ -231,7 +254,10 @@ class Bot(object):
     def privmsg(self, event):
         command = events.CommandEvent.create(event)
         if command is not None:
-            self.fire_command(command)
+            self.post_event(command)
+
+    def command(self, command_event):
+        self.fire_command(command_event)
 
 
 class PluginError(Exception):

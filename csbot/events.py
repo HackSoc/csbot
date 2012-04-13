@@ -102,8 +102,9 @@ def proxy(*args, **kwargs):
             args = result or args
             # Create an Event
             event = Event(self.bot, self, event_type, dict(zip(attrs, args)))
-            # Fire hooks for the event
-            self.bot.fire_hooks(event)
+            # Put the event into the queue, probably causing it to run
+            # immediately (see Bot.post_event())
+            self.bot.post_event(event)
 
         # Augment documentation with a note about the event firing
         newf.__doc__ = newf.__doc__ or ''
@@ -203,7 +204,8 @@ class CommandEvent(Event):
         command = command.split(None, 1)
         cmd = command[0]
         data = command[1] if len(command) == 2 else ''
-        return CommandEvent(event.bot, event.protocol, command, {
+        return CommandEvent(event.bot, event.protocol, 'command', {
+            'command': command,
             'datetime': event.datetime,
             'user': event.user,
             'channel': event.channel,
