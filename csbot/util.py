@@ -1,3 +1,6 @@
+import shlex
+
+
 def nick(user):
     """Get nick from user string.
 
@@ -34,3 +37,31 @@ def is_channel(channel):
     False
     """
     return channel.startswith('#')
+
+
+def parse_arguments(raw):
+    """Parse *raw* into a list of arguments using :mod:`shlex`.
+
+    The :mod:`shlex` lexer is customised to be more appropriate for grouping
+    natural language arguments by only treating ``"`` as a quote character.
+    This allows ``'`` to be used naturally.  A :exc:`~exceptions.ValueError`
+    will be raised if the string couldn't be parsed.
+
+    >>> parse_arguments("a test string")
+    ['a', 'test', 'string']
+    >>> parse_arguments("apostrophes aren't a problem")
+    ['apostrophes', "aren't", 'a', 'problem']
+    >>> parse_arguments('"string grouping" is useful')
+    ['string grouping', 'is', 'useful']
+    >>> parse_arguments('just remember to "match your quotes')
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in ?
+    ValueError: No closing quotation
+    """
+    # Start with a shlex instance similar to shlex.split
+    lex = shlex.shlex(raw, posix=True)
+    lex.whitespace_split = True
+    # Restrict quoting characters to "
+    lex.quotes = '"'
+    # Parse the string
+    return list(lex)

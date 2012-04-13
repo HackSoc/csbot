@@ -5,7 +5,7 @@ from functools import wraps
 
 from twisted.words.protocols import irc
 
-from csbot.util import nick, is_channel
+from csbot.util import nick, is_channel, parse_arguments
 
 
 PROXY_DOC = """
@@ -215,24 +215,17 @@ class CommandEvent(Event):
 
     @property
     def data(self):
-        """Command data as an argument list.
+        """Command data as an argument list, using
+        :func:`.util.parse_arguments`.
 
-        On first access, the argument list is processed from :attr:`raw_data`
-        using :mod:`shlex`.  The lexer is customised to only use ``"`` for
-        argument quoting, allowing ``'`` to be used naturally within arguments.
-
-        If the lexer fails to process the argument list, :meth:`error` is
-        called and :exc:`~exceptions.ValueError` is raised.
+        The parsed argument list is cached on first use so repeatedly accessing
+        elements of this attribute is cheap.  If :attr:`raw_data` couldn't be
+        parsed then accessing this attribute might raise a
+        :exc:`~exceptions.ValueError`.
         """
         if self.data_ is None:
             try:
-                # Create a shlex instance just like shlex.split does
-                lex = shlex.shlex(self.raw_data, posix=True)
-                lex.whitespace_split = True
-                # Don't treat ' as a quote character, so it can be used
-                # naturally in words
-                lex.quotes = '"'
-                self.data_ = list(lex)
+                self.data_ = parse_arguments(self.raw_data)
             except ValueError as e:
                 self.error('Unmatched quotation marks')
                 raise e
