@@ -27,9 +27,10 @@ def proxy(*args, **kwargs):
 
     When the new method is called, the decorated method is called first, as
     normal.  Afterwards an :class:`Event` is created and the arguments are
-    stored in it as attributes.  The :attr:`~Event.event_type` is the name of
-    the method being decorated.  This event is passed to the :class:`.Bot`'s
-    method of the same name and then the hook of the same name.
+    stored in it as attributes.  By default the :attr:`~Event.event_type` is
+    the name of the method being decorated.  This event is passed to
+    :meth:`.Bot.fire_hook`, which is responsible for firing the bot's and
+    plugins' handlers for the event.
 
     If the decorator is used without arguments, the attribute names are defined
     by the parameter names of the decorated method::
@@ -101,10 +102,6 @@ def proxy(*args, **kwargs):
             args = result or args
             # Create an Event
             event = Event(self.bot, self, event_type, dict(zip(attrs, args)))
-            # Fire the Bot's method of the same name
-            method = getattr(self.bot, event_type, None)
-            if method is not None:
-                method(event)
             # Fire the hook of the same name
             self.bot.fire_hook(event_type, event)
 

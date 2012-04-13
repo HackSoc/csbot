@@ -202,8 +202,15 @@ class Bot(object):
         handler(command)
 
     def fire_hook(self, hook, event):
-        """Fire *hook* with *event* on every plugin.
+        """Fire *hook* with *event* by calling the :class:`Bot`'s corresponding
+        method and then firing the hook on every plugin.
+
+        .. note:: The order that different plugins receive an event in is
+                  undefined.
         """
+        method = getattr(self, hook, None)
+        if method is not None:
+            method(event)
         for plugin in self.plugins.itervalues():
             plugin.features.fire_hook(hook, event)
 
