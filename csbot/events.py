@@ -102,8 +102,8 @@ def proxy(*args, **kwargs):
             args = result or args
             # Create an Event
             event = Event(self.bot, self, event_type, dict(zip(attrs, args)))
-            # Fire the hook of the same name
-            self.bot.fire_hook(event_type, event)
+            # Fire hooks for the event
+            self.bot.fire_hooks(event)
 
         # Augment documentation with a note about the event firing
         newf.__doc__ = newf.__doc__ or ''

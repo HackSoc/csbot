@@ -201,18 +201,20 @@ class Bot(object):
         handler = self.commands[command.command]
         handler(command)
 
-    def fire_hook(self, hook, event):
-        """Fire *hook* with *event* by calling the :class:`Bot`'s corresponding
-        method and then firing the hook on every plugin.
+    def fire_hooks(self, event):
+        """Fire hooks associated with ``event.event_type``.
+
+        Firstly the :class:`Bot`'s hook for the event type is fired, followed
+        by each plugin's hooks via :meth:`PluginFeatures.fire_hooks`.
 
         .. note:: The order that different plugins receive an event in is
                   undefined.
         """
-        method = getattr(self, hook, None)
+        method = getattr(self, event.event_type, None)
         if method is not None:
             method(event)
         for plugin in self.plugins.itervalues():
-            plugin.features.fire_hook(hook, event)
+            plugin.features.fire_hooks(event)
 
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
@@ -378,16 +380,15 @@ class PluginFeatures(object):
             return f
         return decorate
 
-    def fire_hook(self, hook, *args, **kwargs):
-        """Run all handlers for *hook*.
+    def fire_hooks(self, event):
+        """Fire plugin hooks associated with ``event.event_type``.
 
-        The handlers are run in the order they were registered for *hook*,
-        which should correspond to the order they were defined in.  All
-        extra arguments are passed through to every handler.
+        Hook handlers are run in the order they were registered, which should
+        correspond to the order they were defined if decorators were used.
         """
-        if hook in self.hooks:
-            for f in self.hooks[hook]:
-                f(*args, **kwargs)
+        hooks = self.hooks.get(event.event_type, list())
+        for h in hooks:
+            h(event)
 
 
 class Plugin(object):
