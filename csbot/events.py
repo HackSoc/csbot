@@ -159,7 +159,9 @@ class CommandEvent(Event):
     user = None
     #: Channel that the command was received on.
     channel = None
-    #: False if the command was triggered by the command prefix, True otherwise.
+    #: Was the bot addressed directly, either by nick or in private chat?
+    #: This will be False if the command was triggered by just the command
+    #: prefix in a public channel.
     direct = False
     #: The rest of the line after the command name.
     raw_data = None
