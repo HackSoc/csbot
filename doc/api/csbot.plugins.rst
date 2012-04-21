@@ -17,10 +17,26 @@ plugins Package
     :undoc-members:
     :show-inheritance:
 
+:mod:`manager` Module
+---------------------
+
+.. automodule:: csbot.plugins.manager
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 :mod:`tell` Module
 ------------------
 
 .. automodule:: csbot.plugins.tell
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`users` Module
+-------------------
+
+.. automodule:: csbot.plugins.users
     :members:
     :undoc-members:
     :show-inheritance:
