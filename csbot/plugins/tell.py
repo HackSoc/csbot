@@ -21,22 +21,28 @@ class Tell(Plugin):
         Stores a message for a user to be delivered when the user is next in
         the channel.
 
-        Usage:
-        !tell <user> <message>
+        Usage::
 
-        Example:
-        > TestUser  [13:37] | !tell Haegin You are awesome.
-        > Bot       [13:37] | TestUser, I'll let Haegin know.
+            !tell <user> <message>
+
+        Example::
+
+            > TestUser  [13:37] | !tell Haegin You are awesome.
+            > Bot       [13:37] | TestUser, I'll let Haegin know.
 
         If Haegin is already in the channel the bot should let the user know.
-        > Bot       [13:37] | TestUser, Haegin is here, you can tell them
-        > yourself!
+        ::
+
+            > Bot       [13:37] | TestUser, Haegin is here, you can tell them
+            >                   | yourself!
 
         When Haegin next connects to the channel the bot will send him a
-        message of the following form:
+        message of the following form::
+
         > Haegin, "You are awesome." - TestUser (at 13:37)
 
         TODO:
+
         - It should be possible to leave a long message (how long is long?).
         - Long messages should be announced in the channel but sent as a PM
         - Implement a private message feature that won't be announced in the
@@ -106,11 +112,13 @@ class Tell(Plugin):
         """
         Notifies a user if they have received any messages recently
 
-        Example Usage:
+        Example Usage::
+
         > TestUser  [13:37] | !messages
         > Bot       [13:37] | You have 2 messages, please check your PM.
 
-        If the user has no messages it will tell them
+        If the user has no messages it will tell them::
+
         > Bot       [13:37] | You have no messages. Sorry.
         """
         # TODO: implement
