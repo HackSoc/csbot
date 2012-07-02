@@ -89,7 +89,7 @@ def proxy(*args, **kwargs):
         # or use the parameter names of the wrapped method.  The "no arguments"
         # version of the decorator uses the latter approach by setting
         # attrs=None
-        if attrs is None:
+        if not attrs:
             attrs = inspect.getargspec(f).args[1:]
 
         # Create new function, copying info from f
