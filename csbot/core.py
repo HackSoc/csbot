@@ -3,6 +3,7 @@ import types
 import ConfigParser
 import sys
 import collections
+import logging
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -265,6 +266,8 @@ class PluginError(Exception):
 
 
 class BotProtocol(irc.IRCClient):
+    log = logging.getLogger('csbot')
+
     def __init__(self, bot):
         self.bot = bot
         # Get IRCClient configuration from the Bot
@@ -285,6 +288,18 @@ class BotProtocol(irc.IRCClient):
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
         print "[Disconnected because {}]".format(reason)
+
+    def sendLine(self, line):
+        """Log outgoing messages before sending them.
+        """
+        self.log.debug(u'<<< ' + repr(line))
+        irc.IRCClient.sendLine(self, line)
+
+    def lineReceived(self, line):
+        """Log incoming messages before processing them.
+        """
+        self.log.debug(u'>>> ' + repr(line))
+        irc.IRCClient.lineReceived(self, line)
 
     @events.proxy
     def signedOn(self):
@@ -529,6 +544,22 @@ class BotFactory(protocol.ClientFactory):
         reactor.stop()
 
 
+class ColorLogFilter(logging.Filter):
+    """Add ``color`` attribute with severity-relevant ANSI color code to log
+    records.
+    """
+    def filter(self, record):
+        formats = {
+            logging.DEBUG: '2',
+            logging.INFO: '',
+            logging.WARNING: '33',
+            logging.ERROR: '31',
+            logging.CRITICAL: '7;31',
+        }
+        record.color = formats.get(record.levelno, '')
+        return record
+
+
 def main(argv):
     import sys
     import argparse
@@ -536,10 +567,25 @@ def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', default='csbot.cfg',
                         help='Configuration file [default: %(default)s]')
+    parser.add_argument('-d', '--debug', dest='loglevel', default=logging.INFO,
+                        action='store_const', const=logging.DEBUG,
+                        help='Debug output [default: off]')
     args = parser.parse_args(argv[1:])
 
-    # Start twisted logging
-    log.startLogging(sys.stdout)
+    # Connect Twisted logging to Python logging
+    observer = log.PythonLoggingObserver('twisted')
+    observer.start()
+
+    # Log to stdout with ANSI color codes to indicate level
+    handler = logging.StreamHandler()
+    handler.setLevel(args.loglevel)
+    handler.addFilter(ColorLogFilter())
+    handler.setFormatter(logging.Formatter(
+        '\x1b[%(color)sm[%(asctime)s] (%(name)s) %(message)s\x1b[0m',
+        '%Y/%m/%d %H:%M:%S'))
+    rootlogger = logging.getLogger('')
+    rootlogger.setLevel(args.loglevel)
+    rootlogger.addHandler(handler)
 
     # Create bot and run setup functions
     bot = Bot(args.config)
