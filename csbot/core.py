@@ -11,6 +11,8 @@ import pymongo
 
 from csbot.plugin import Plugin, PluginFeatures
 import csbot.events as events
+from csbot.events import Event, CommandEvent
+from csbot.util import nick
 
 
 class Bot(object):
@@ -44,7 +46,12 @@ class Bot(object):
     #: The top-level package for all bot plugins
     PLUGIN_PACKAGE = 'csbot.plugins'
 
+    features = PluginFeatures()
+    log = logging.getLogger('csbot.bot')
+
     def __init__(self, configpath):
+        self.features = self.features.instantiate(self)
+
         # Load the configuration file
         self.configpath = configpath
         self.config = ConfigParser.SafeConfigParser(defaults=self.DEFAULTS,
@@ -198,16 +205,6 @@ class Bot(object):
     def post_event(self, event):
         self.events.post_event(event)
 
-    def fire_command(self, command):
-        """Dispatch *command* to its callback.
-        """
-        if command.command not in self.commands:
-            command.error('Command "{0.command}" not found'.format(command))
-            return
-
-        handler = self.commands[command.command]
-        handler(command)
-
     def fire_hooks(self, event):
         """Fire hooks associated with ``event.event_type``.
 
@@ -217,9 +214,8 @@ class Bot(object):
         .. note:: The order that different plugins receive an event in is
                   undefined.
         """
-        method = getattr(self, event.event_type, None)
-        if method is not None:
-            method(event)
+        self.log.debug('firing hooks: ' + event.event_type)
+        self.features.fire_hooks(event)
         for plugin in self.plugins.itervalues():
             plugin.features.fire_hooks(event)
 
@@ -231,17 +227,30 @@ class Bot(object):
         """Convenience wrapper around ``twisted.python.log.err`` for plugins"""
         log.err(err)
 
+    @features.hook('core.self.connected')
     def signedOn(self, event):
         map(event.protocol.join,
             self.config.get('DEFAULT', 'channels').split())
 
+    @features.hook('core.message.privmsg')
     def privmsg(self, event):
-        command = events.CommandEvent.create(event)
+        """Handle commands inside PRIVMSGs."""
+        # See if this is a command
+        command = CommandEvent.parse_command(event,
+                self.config.get('DEFAULT', 'command_prefix'))
         if command is not None:
             self.post_event(command)
 
-    def command(self, command_event):
-        self.fire_command(command_event)
+    @features.hook('core.command')
+    def fire_command(self, event):
+        """Dispatch a command event to its callback.
+        """
+        # Ignore unknown commands
+        if event['command'] not in self.commands:
+            return
+
+        handler = self.commands[event['command']]
+        handler(event)
 
 
 class PluginError(Exception):
@@ -249,7 +258,7 @@ class PluginError(Exception):
 
 
 class BotProtocol(irc.IRCClient):
-    log = logging.getLogger('csbot')
+    log = logging.getLogger('csbot.protocol')
 
     def __init__(self, bot):
         self.bot = bot
@@ -264,67 +273,102 @@ class BotProtocol(irc.IRCClient):
         # RPL_ENDOFNAMES events
         self.names_accumulator = dict()
 
+    def emit_new(self, event_type, data=None):
+        """Shorthand for firing a new event; the new event is returned.
+        """
+        event = Event(self, event_type, data)
+        self.bot.post_event(event)
+        return event
+
+    def emit(self, event):
+        """Shorthand for firing an existing event.
+        """
+        self.bot.post_event(event)
+
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
-        print "[Connected]"
+        self.emit_new('core.raw.connected')
 
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
-        print "[Disconnected because {}]".format(reason)
+        self.emit_new('core.raw.disconnected', {'reason': reason})
 
     def sendLine(self, line):
-        """Log outgoing messages before sending them.
-        """
-        self.log.debug(u'<<< ' + repr(line))
         irc.IRCClient.sendLine(self, line)
+        self.emit_new('core.raw.sent', {'message': line})
 
     def lineReceived(self, line):
-        """Log incoming messages before processing them.
-        """
-        self.log.debug(u'>>> ' + repr(line))
+        self.emit_new('core.raw.received', {'message': line})
         irc.IRCClient.lineReceived(self, line)
 
-    @events.proxy
     def signedOn(self):
-        pass
+        self.emit_new('core.self.connected')
 
-    @events.proxy
-    def privmsg(self, user, channel, message):
-        pass
-
-    @events.proxy
-    def noticed(self, user, channel, message):
-        pass
-
-    @events.proxy
-    def action(self, user, channel, message):
-        pass
-
-    @events.proxy
     def joined(self, channel):
-        pass
+        self.emit_new('core.self.joined', {'channel': channel})
 
-    @events.proxy
     def left(self, channel):
-        pass
+        self.emit_new('core.self.left', {'channel': channel})
 
-    @events.proxy
+    def privmsg(self, user, channel, message):
+        e = self.emit_new('core.message.privmsg', {
+            'channel': channel,
+            'user': user,
+            'message': message,
+            'is_private': channel == self.nickname,
+            'reply_to': nick(user) if channel == self.nickname else channel,
+        })
+
+    def noticed(self, user, channel, message):
+        e = self.emit_new('core.message.notice', {
+            'channel': channel,
+            'user': user,
+            'message': message,
+            'is_private': channel == self.nickname,
+            'reply_to': nick(user) if channel == self.nickname else channel,
+        })
+
+    def action(self, user, channel, message):
+        self.emit_new('core.message.action', {
+            'channel': channel,
+            'user': user,
+            'message': message,
+            'is_private': channel == self.nickname,
+            'reply_to': nick(user) if channel == self.nickname else channel,
+        })
+
     def userJoined(self, user, channel):
-        pass
+        self.emit_new('core.channel.joined', {
+            'channel': channel,
+            'user': user,
+        })
 
-    @events.proxy
     def userLeft(self, user, channel):
-        pass
+        self.emit_new('core.channel.left', {
+            'channel': channel,
+            'user': user,
+        })
 
-    @events.proxy
-    def userQuit(self, user, message):
-        pass
-
-    @events.proxy
     def names(self, channel, names, raw_names):
         """Called when the NAMES list for a channel has been received.
         """
-        pass
+        self.emit_new('core.channel.names', {
+            'channel': channel,
+            'names': names,
+            'raw_names': raw_names,
+        })
+
+    def userQuit(self, user, message):
+        self.emit_new('core.user.quit', {
+            'user': user,
+            'message': message,
+        })
+
+    def userRenamed(self, oldnick, newnick):
+        self.emit_new('core.user.renamed', {
+            'oldnick': oldnick,
+            'newnick': newnick,
+        })
 
     def irc_RPL_NAMREPLY(self, prefix, params):
         channel = params[2]

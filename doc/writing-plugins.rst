@@ -14,21 +14,10 @@ Interaction with the outside world is by registering hooks and commands, using t
 Events
 ------
 
-All hook and command handlers receive a single argument, an :class:`~csbot.events.Event` instance.
-These always have at least the following attributes:
-
-.. autoattribute:: csbot.events.Event.bot
-    :noindex:
-.. autoattribute:: csbot.events.Event.protocol
-    :noindex:
-.. autoattribute:: csbot.events.Event.event_type
-    :noindex:
-.. autoattribute:: csbot.events.Event.datetime
-    :noindex:
-
-Events will usually have more attributes which depend on the type of event that was received.  The
-exact event types and event attributes can be seen in the definition of :class:`~csbot.core.Bot`,
-marked by the use of :func:`csbot.events.proxy`.
+All hooks and commands received a single argument, an 
+:class:`~csbot.events.Event` instance.  Events are generated in response to some 
+external stimulus, or during the handling of another event.  See :doc:`events` 
+for further information and the available event types.
 
 
 Hooks
@@ -41,7 +30,7 @@ Registering hooks allows you to receive basic IRC events.
     class HookExample(Plugin):
         features = PluginFeatures()
 
-        @features.hook('privmsg')
+        @features.hook('core.message.privmsg')
         def handle_privmsg(self, event):
             print event.user, 'says', event.message
 

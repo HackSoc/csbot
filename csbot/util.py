@@ -1,6 +1,14 @@
 import shlex
 
 
+class User(object):
+    def __init__(self, raw):
+        self.raw = raw
+        self.nick = raw.split('!', 1)[0] if '!' in raw else None
+        self.username = raw.rsplit('@', 1)[0].rsplit('~', 1)[1]
+        self.host = raw.rsplit('@', 1)[1]
+
+
 def nick(user):
     """Get nick from user string.
 
