@@ -2,10 +2,44 @@ from datetime import datetime
 import shlex
 import inspect
 from functools import wraps
+from collections import deque
 
 from twisted.words.protocols import irc
 
 from csbot.util import nick, is_channel, parse_arguments
+
+
+class ImmediateEventRunner(object):
+    """A very simple blocking event runner for immediate chains of events.
+
+    This class is only responsible for making sure chains of events get
+    handled before the next root event happens.  The *handle_event* method
+    should be a callable that expects a single argument - it will receive
+    whatever is passed to :meth:`post_event`.
+    """
+    def __init__(self, handle_event):
+        self.events = deque()
+        self.running = False
+        self.handle_event = handle_event
+
+    def post_event(self, event):
+        """Post *event* to be handled soon.
+
+        If this is a root event, i.e. this method hasn't been called while
+        handling another event, then the event queue will run immediately and
+        block until the event and all child events have been handled.
+
+        If this is a child event, i.e. this method has been called from another
+        event handler, then it will be added to the queue and will be processed
+        before the :meth:`post_event` for the root event exits.
+        """
+        self.events.append(event)
+        if not self.running:
+            self.running = True
+            while len(self.events) > 0:
+                e = self.events.popleft()
+                self.handle_event(e)
+            self.running = False
 
 
 PROXY_DOC = """

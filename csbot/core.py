@@ -2,7 +2,6 @@ from functools import wraps
 import types
 import ConfigParser
 import sys
-import collections
 import logging
 
 from twisted.words.protocols import irc
@@ -64,10 +63,8 @@ class Bot(object):
         self.plugins = dict()
         self.commands = dict()
 
-        # Event queue
-        self.events = collections.deque()
-        # Are we currently processing the event queue?
-        self.events_running = False
+        # Event runner
+        self.events = events.ImmediateEventRunner(self.fire_hooks)
 
     def setup(self):
         """Load plugins defined in configuration.
@@ -199,21 +196,7 @@ class Bot(object):
         self.load_plugin(name)
 
     def post_event(self, event):
-        """Post *event* into the bot event queue.
-
-        The event is added to the queue, and if the queue isn't already being
-        run then events start getting processed.  Usually all calls to this
-        method would be done from inside a hook, so the event queue will be
-        running and the newly added event will run shortly after the original
-        event.
-        """
-        self.events.append(event)
-        if not self.events_running:
-            self.events_running = True
-            while len(self.events) > 0:
-                e = self.events.popleft()
-                self.fire_hooks(e)
-            self.events_running = False
+        self.events.post_event(event)
 
     def fire_command(self, command):
         """Dispatch *command* to its callback.
