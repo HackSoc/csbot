@@ -550,7 +550,7 @@ class ColorLogFilter(logging.Filter):
     """
     def filter(self, record):
         formats = {
-            logging.DEBUG: '2',
+            logging.DEBUG: '1;30',
             logging.INFO: '',
             logging.WARNING: '33',
             logging.ERROR: '31',
