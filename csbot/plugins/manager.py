@@ -7,7 +7,7 @@ class PluginManager(Plugin):
     @features.command('plugins.available')
     def available(self, event):
         names = sorted(event.bot.discover_plugins())
-        event.reply(', '.join(names))
+        event.protocol.msg(event['reply_to'], ', '.join(names))
 
     @features.command('plugins.load')
     def load(self, event):
@@ -33,7 +33,7 @@ class PluginManager(Plugin):
         failure = list()
         ignored = list()
 
-        for name in event.data:
+        for name in event.arguments():
             if ignore(name):
                 ignored.append(name)
                 continue
@@ -42,7 +42,8 @@ class PluginManager(Plugin):
                 success.append(name)
             except PluginError as e:
                 failure.append(name)
-                event.error(str(e))
+                event.protocol.msg(event['reply_to'],
+                                   'Error: ' + str(e))
 
         reply = list()
         for group, members in zip((verb, 'failed', 'ignored'),
@@ -52,4 +53,4 @@ class PluginManager(Plugin):
         reply = '; '.join(reply)
 
         if reply:
-            event.reply(reply)
+            event.protocol.msg(event['reply_to'], reply)
