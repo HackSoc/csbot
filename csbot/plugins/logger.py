@@ -34,13 +34,38 @@ class Logger(Plugin):
         self.pretty_log.info('[Joined {0}]'.format(event['channel']))
 
     @features.hook('core.self.left')
-    def joined(self, event):
+    def left(self, event):
         self.pretty_log.info('[Left {0}]'.format(event['channel']))
+
+    @features.hook('core.channel.joined')
+    def user_joined(self, event):
+        self.pretty_log.info('[{channel}] {user} has joined'.format(
+                channel=event['channel'],
+                user=event['user']))
+
+    @features.hook('core.channel.left')
+    def user_left(self, event):
+        self.pretty_log.info('[{channel}] {user} has left'.format(
+                channel=event['channel'],
+                user=event['user']))
+
+    @features.hook('core.channel.names')
+    def names(self, event):
+        self.pretty_log.info('[{channel}] Users: {names}'.format(
+            channel=event['channel'],
+            names=', '.join(event['raw_names'])))
 
     @features.hook('core.message.privmsg')
     def privmsg(self, event):
         self.pretty_log.info(
             '[{channel}] <{nick}> {message}'.format(
+                channel=event['channel'],
+                nick=nick(event['user']),
+                message=event['message']))
+
+    @features.hook('core.message.notice')
+    def notice(self, event):
+        self.pretty_log.info('[{channel}] -{nick}- {message}'.format(
                 channel=event['channel'],
                 nick=nick(event['user']),
                 message=event['message']))
@@ -52,6 +77,14 @@ class Logger(Plugin):
                 channel=event['channel'],
                 nick=nick(event['user']),
                 message=event['message']))
+
+    @features.hook('core.user.quit')
+    def quit(self, event):
+        self.pretty_log.info('{user} has quit'.format(user=event['user']))
+
+    @features.hook('core.user.renamed')
+    def renamed(self, event):
+        self.pretty_log.info('{oldnick} is now {newnick}'.format(*event))
 
     @features.hook('core.command')
     def command(self, event):
