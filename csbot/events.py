@@ -16,11 +16,29 @@ class ImmediateEventRunner(object):
     handled before the next root event happens.  The *handle_event* method
     should be a callable that expects a single argument - it will receive
     whatever is passed to :meth:`post_event`.
+
+    The context manager technique is used to ensure the event runner is left in
+    a usable state if an exception propagates out of it in response to running
+    an event.
     """
     def __init__(self, handle_event):
         self.events = deque()
         self.running = False
         self.handle_event = handle_event
+
+    def __enter__(self):
+        """On entering the context, mark the event queue as running."""
+        self.running = True
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """On exiting the context, reset to an empty non-running queue.
+        
+        When exiting normally this should have no additional effect.  If exiting
+        abnormally, the rest of the event queue will be purged so that the next
+        root event can be handled normally.
+        """
+        self.running = False
+        self.events.clear()
 
     def post_event(self, event):
         """Post *event* to be handled soon.
@@ -35,11 +53,10 @@ class ImmediateEventRunner(object):
         """
         self.events.append(event)
         if not self.running:
-            self.running = True
-            while len(self.events) > 0:
-                e = self.events.popleft()
-                self.handle_event(e)
-            self.running = False
+            with self:
+                while len(self.events) > 0:
+                    e = self.events.popleft()
+                    self.handle_event(e)
 
 
 class Event(dict):
