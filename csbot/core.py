@@ -396,6 +396,13 @@ class BotProtocol(irc.IRCClient):
         # Fire the event
         self.names(channel, names, raw_names)
 
+    def topicUpdated(self, user, channel, newtopic):
+        self.emit_new('core.channel.topic', {
+            'channel': channel,
+            'author': user,     # might be server name or nick
+            'topic': newtopic,
+        })
+
 
 class BotFactory(protocol.ClientFactory):
     def __init__(self, bot):

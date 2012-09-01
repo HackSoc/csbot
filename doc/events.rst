@@ -105,6 +105,12 @@ joining or leaving, the topic changing, etc.
     Received the list of users currently in the channel, in response to a 
     ``NAMES`` command.
 
+.. describe:: cores.channel.topic(channel, author, topic)
+
+    Fired whenever the channel topic is changed, and also immediately after joining a channel.  The 
+    *author* field will usually be the server name when joining a channel (on Freenode, at least), 
+    and the nick of the user setting the topic when the topic has been changed.
+
 
 User events
 -----------

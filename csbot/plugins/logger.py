@@ -55,6 +55,12 @@ class Logger(Plugin):
             channel=event['channel'],
             names=', '.join(event['raw_names'])))
 
+    @features.hook('core.channel.topic')
+    def topic(self, event):
+        self.pretty_log.info('[{channel}] Topic: {topic}'.format(
+            channel=event['channel'],
+            topic=event['topic']))
+
     @features.hook('core.message.privmsg')
     def privmsg(self, event):
         self.pretty_log.info(
@@ -84,7 +90,9 @@ class Logger(Plugin):
 
     @features.hook('core.user.renamed')
     def renamed(self, event):
-        self.pretty_log.info('{oldnick} is now {newnick}'.format(*event))
+        self.pretty_log.info('{oldnick} is now {newnick}'.format(
+            oldnick=event['oldnick'],
+            newnick=event['newnick']))
 
     @features.hook('core.command')
     def command(self, event):
