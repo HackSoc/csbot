@@ -1,4 +1,4 @@
-from functools import wraps
+from functools import wraps, partial
 import ConfigParser
 import sys
 import logging
@@ -9,13 +9,13 @@ from twisted.python import log
 import straight.plugin
 import pymongo
 
-from csbot.plugin import Plugin, PluginFeatures
+from csbot.plugin import Plugin, PluginFeatures, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import nick
 
 
-class Bot(object):
+class Bot(Plugin):
     """The IRC bot.
 
     Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
@@ -67,11 +67,14 @@ class Bot(object):
                 self.config.get('DEFAULT', 'mongodb_host'),
                 self.config.getint('DEFAULT', 'mongodb_port'))
 
-        self.plugins = dict()
+        self.plugins = PluginManager(self.PLUGIN_PACKAGE,
+                                     Plugin, [self], [self])
+
         self.commands = dict()
 
         # Event runner
-        self.events = events.ImmediateEventRunner(self.fire_hooks)
+        self.events = events.ImmediateEventRunner(
+                partial(self.plugins.broadcast, 'fire_hooks'))
 
     def setup(self):
         """Load plugins defined in configuration.
@@ -96,57 +99,12 @@ class Bot(object):
         with open(self.configpath, 'wb') as cfg:
             self.config.write(cfg)
 
-    @classmethod
-    def discover_plugins(cls):
-        """Discover available plugins, returning a dictionary mapping from
-        plugin name to plugin class.
-        """
-        plugins = straight.plugin.load(cls.PLUGIN_PACKAGE, subclasses=Plugin)
-        available = dict()
-
-        # Build dict of available plugins, error if there are multple plugins
-        # with the same name
-        for P in plugins:
-            if P.plugin_name() in available:
-                existing = available[P.plugin_name()]
-                raise PluginError(('Duplicate plugin name: '
-                        '{e.__module__}.{e.__name__} and '
-                        '{n.__module__}.{n.__name__}').format(e=existing, n=P))
-            else:
-                available[P.plugin_name()] = P
-
-        return available
-
-    def has_plugin(self, name):
-        """Check if the bot has the named plugin loaded.
-        """
-        return name in self.plugins
-
     def get_plugin(self, name):
-        """Get a loaded plugin by name.
-        """
-        if name not in self.plugins:
-            raise PluginError('{} not loaded'.format(name))
-
         return self.plugins[name]
 
     def load_plugin(self, name):
-        """Load a named plugin and register all of its commands.
-
-        When a plugin is loaded, it is added to the bot, all of its defined
-        commands are registered, and then its :meth:`~Plugin.setup` is run.
-        """
-        available_plugins = self.discover_plugins()
-
-        if name not in available_plugins:
-            raise PluginError('{} does not exist'.format(name))
-
-        if name in self.plugins:
-            raise PluginError('{} already loaded'.format(name))
-
-        p = available_plugins[name](self)
-        self.plugins[name] = p
-        self.log_msg('Loaded plugin {}'.format(name))
+        self.plugins.load(name)
+        p = self.plugins[name]
 
         for command, handler in p.features.commands.iteritems():
             if command in self.commands:
@@ -156,20 +114,8 @@ class Bot(object):
                 self.log_msg('Registering command {}'.format(command))
                 self.commands[command] = handler
 
-        p.setup()
-
     def unload_plugin(self, name):
-        """Unload a named plugin and unregister all of its commands.
-
-        When a plugin is unloaded, its :meth:'Plugin.teardown' method is run,
-        all of its commands are unregistered, and then the plugin itself is
-        removed from the :class:`Bot`.
-        """
-        if name not in self.plugins:
-            raise PluginError('{} not loaded'.format(name))
-
-        p = self.plugins[name]
-        p.teardown()
+        self.plugins.unload(name)
 
         delcmds = [n for n, h in self.commands.iteritems()
                    if h.im_class.plugin_name() == name]
@@ -177,47 +123,8 @@ class Bot(object):
             self.log_msg('Unregistering command {}'.format(cmd))
             del self.commands[cmd]
 
-        del self.plugins[name]
-        self.log_msg('Unloaded plugin {}'.format(name))
-
-    def reload_plugin(self, name):
-        """Reload a named plugin, re-reading its source file.
-
-        Attempts to :func:`reload` the source file containing the named plugin
-        before unloading it and loading it again.
-        """
-        if name not in self.plugins:
-            raise PluginError('{} not loaded'.format(name))
-
-        # Reload the module this plugin came from, so that the next call to
-        # discover_plugins() will get the newest code
-        p = self.plugins[name]
-        try:
-            reload(sys.modules[p.__module__])
-        except Exception as e:
-            raise PluginError('reload failed', e)
-
-        # Unload the plugin, unregistering all its commands etc.
-        self.unload_plugin(name)
-        # Load the plugin
-        self.load_plugin(name)
-
     def post_event(self, event):
         self.events.post_event(event)
-
-    def fire_hooks(self, event):
-        """Fire hooks associated with ``event.event_type``.
-
-        Firstly the :class:`Bot`'s hook for the event type is fired, followed
-        by each plugin's hooks via :meth:`PluginFeatures.fire_hooks`.
-
-        .. note:: The order that different plugins receive an event in is
-                  undefined.
-        """
-        self.log.debug('firing hooks: ' + event.event_type)
-        self.features.fire_hooks(event)
-        for plugin in self.plugins.itervalues():
-            plugin.features.fire_hooks(event)
 
     def log_msg(self, msg):
         """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""

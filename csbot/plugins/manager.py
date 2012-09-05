@@ -4,29 +4,28 @@ from csbot.core import Plugin, PluginFeatures, PluginError
 class PluginManager(Plugin):
     features = PluginFeatures()
 
+    @features.command('plugins')
+    def plugins(self, event):
+        names = sorted(event.bot.plugins)
+        event.protocol.msg(event['reply_to'], ', '.join(names))
+
     @features.command('plugins.available')
     def available(self, event):
-        names = sorted(event.bot.discover_plugins())
+        names = sorted(event.bot.plugins.discover().keys())
         event.protocol.msg(event['reply_to'], ', '.join(names))
 
     @features.command('plugins.load')
     def load(self, event):
-        available = event.bot.discover_plugins()
+        available = event.bot.plugins.discover()
         self.plugin_loader_helper(event, 'loaded',
-                lambda x: (x not in available) or event.bot.has_plugin(x),
+                lambda x: (x not in available) or x in event.bot.plugins,
                 event.bot.load_plugin)
 
     @features.command('plugins.unload')
     def unload(self, event):
         self.plugin_loader_helper(event, 'unloaded',
-                lambda x: not event.bot.has_plugin(x),
+                lambda x: x not in event.bot.plugins,
                 event.bot.unload_plugin)
-
-    @features.command('plugins.reload')
-    def reload(self, event):
-        self.plugin_loader_helper(event, 'reloaded',
-                lambda x: not event.bot.has_plugin(x),
-                event.bot.reload_plugin)
 
     def plugin_loader_helper(self, event, verb, ignore, operation):
         success = list()

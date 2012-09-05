@@ -1,4 +1,147 @@
 import types
+from itertools import chain
+import collections
+import logging
+
+import straight.plugin
+
+
+class PluginError(Exception):
+    pass
+
+
+class PluginBase(object):
+    """Minimal plugin base class to work with :class:`PluginManager`."""
+    @classmethod
+    def plugin_name(cls):
+        """Get the short name of the plugin, by default the class name in
+        lowercase."""
+        return cls.__name__.lower()
+
+    @classmethod
+    def qualified_plugin_name(cls):
+        """Get the fully qualified class name, most useful when dealing with
+        ambiguous (non-unique) short names.
+        """
+        return '{}.{}'.format(cls.__module__, cls.__name)
+
+    def setup(self):
+        """Called after the plugin is loaded.  This is where a plugin should
+        perform its own setup.
+
+        .. note:: Plugin loading order is unlikely to be consistent, so
+                  interaction with other plugins in this method is discouraged.
+        """
+        pass
+
+    def teardown(self):
+        """Called before the plugin is unloaded.  This is where a plugin should
+        perform its own cleanup.
+
+        .. note:: Plugin unloading order is unlikely to be consistent, so
+                  interaction with other plugins in this method is discouraged.
+        """
+        pass
+
+
+class PluginManager(collections.Mapping):
+    """A generic plugin manager based on :mod:`straight.plugin`.
+
+    The plugin manager will discover and manage plugins under *namespace* that
+    subclass *baseclass*.  When creating a new plugin instance, *args* is
+    passed as arguments to the constructor.
+
+    The :class:`PluginBase` class demonstrates the minimum interface that the
+    plugin manager expects from plugin classes.
+
+    Optionally *static* can be used to supply a list of plugins that are always
+    loaded, and are called by :meth:`broadcast` before any other.  They are not
+    managed by the plugin manager, so :meth:`~PluginBase.setup` and
+    :meth:`~PluginBase.teardown` are not called.
+    """
+
+    #: Plugins that are always loaded.
+    static = []
+    #: Currently loaded plugins.
+    plugins = {}
+
+    def __init__(self, namespace, baseclass, args=None, static=None):
+        self.__namespace = namespace
+        self.__baseclass = baseclass
+        self.__args = args or []
+        self.static = static or []
+        self.plugins = {}
+        self.log = logging.getLogger(__name__)
+
+    def discover(self):
+        """Discover available plugins.
+
+        Return a dict mapping plugin names to plugin classes.  A
+        :exc:`PluginError` is raised if multiple plugins have the same short
+        name.
+        """
+        plugins = straight.plugin.load(self.__namespace,
+                                       subclasses=self.__baseclass)
+        available = {}
+
+        for P in plugins:
+            name = P.plugin_name()
+            if name in available:
+                raise PluginError('name conflict "{}":  {} and {}'.format(
+                        P.plugin_name(),
+                        available[name].qualified_plugin_name(),
+                        P.qualified_plugin_name()))
+            else:
+                available[name] = P
+
+        return available
+
+    def load(self, name):
+        """Load a plugin, returning True if the plugin exists, otherwise
+        returning False.
+        """
+        if name in self.plugins:
+            self.log.warn('plugin already loaded: {}'.format(name))
+            return True
+
+        available = self.discover()
+        if name not in available:
+            self.log.error('plugin not found: {}'.format(name))
+            return False
+
+        p = available[name](*self.__args)
+        self.plugins[name] = p
+        self.log.info('plugin loaded: {}'.format(name))
+        p.setup()
+        return True
+
+    def unload(self, name):
+        """Unload a plugin."""
+        if name not in self.plugins:
+            self.log.warn('plugin not loaded: {}'.format(name))
+
+        p = self.plugins.pop(name)
+        p.teardown()
+        self.log.info('plugin unloaded: {}'.format(name))
+
+    def broadcast(self, method, *args, **kwargs):
+        """Call ``p.method(*args, **kwargs)`` on every plugin."""
+        # Follow "static" plugins with dynamic plugins - using .values() instead
+        # of .itervalues() because plugin loading/unloading would invalidate the
+        # iterator, and these are valid things to happen at any time.
+        for p in chain(self.static, self.plugins.values()):
+            getattr(p, method)(*args, **kwargs)
+
+    # Implement abstract "read-only" Mapping interface
+    
+    def __getitem__(self, key):
+        return self.plugins[key]
+
+    def __len__(self):
+        return len(self.plugins)
+
+    def __iter__(self):
+        return iter(self.plugins)
 
 
 class PluginFeatures(object):
@@ -63,7 +206,7 @@ class PluginFeatures(object):
             h(event)
 
 
-class Plugin(object):
+class Plugin(PluginBase):
     """Bot plugin base class.
     """
 
@@ -73,23 +216,6 @@ class Plugin(object):
         self.bot = bot
         self.features = self.features.instantiate(self)
         self.db_ = None
-
-    @classmethod
-    def plugin_name(cls):
-        """Get the plugin's name.
-
-        A plugin's name is its class name in lowercase.  Duplicate plugin names
-        are not permitted and plugin names should be handled case-insensitively
-        as ``name.lower()``.
-
-        >>> from csbot.plugins.example import EmptyPlugin
-        >>> EmptyPlugin.plugin_name()
-        'emptyplugin'
-        >>> p = EmptyPlugin(None)
-        >>> p.plugin_name()
-        'emptyplugin'
-        """
-        return cls.__name__.lower()
 
     @property
     def db(self):
@@ -136,24 +262,5 @@ class Plugin(object):
 
         self.bot.plugindata.set(plugin, key, value)
 
-    def setup(self):
-        """Run setup actions for the plugin.
-
-        This should be overloaded in plugins to perform actions that need to
-        happen before receiving any events.
-
-        .. note:: Plugin setup order is not guaranteed to be consistent, so do
-                  not rely on it.
-        """
-        pass
-
-    def teardown(self):
-        """Run teardown actions for the plugin.
-
-        This should be overloaded in plugins to perform teardown actions, for
-        example writing stuff to file/database, before the bot is destroyed.
-
-        .. note:: Plugin teardown order is not guaranteed to be consistent, so
-                  do not rely on it.
-        """
-        pass
+    def fire_hooks(self, event):
+        self.features.fire_hooks(event)
