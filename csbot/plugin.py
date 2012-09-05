@@ -1,5 +1,6 @@
 import types
 from itertools import chain
+from functools import partial
 import collections
 import logging
 
@@ -206,16 +207,70 @@ class PluginFeatures(object):
             h(event)
 
 
-class Plugin(PluginBase):
-    """Bot plugin base class.
+class PluginMeta(type):
+    """Metaclass for :class:`Plugin` that collects methods tagged with plugin
+    feature decorators.
     """
+    def __init__(cls, name, bases, dict):
+        super(PluginMeta, cls).__init__(name, bases, dict)
 
-    features = PluginFeatures()
+        # Initialise plugin features
+        cls.plugin_hooks = {}
+        cls.plugin_cmds = []
+
+        # Scan for callables decorated with Plugin.hook, Plugin.command
+        for f in dict.itervalues():
+            for h in getattr(f, 'plugin_hooks', ()):
+                if h in cls.plugin_hooks:
+                    cls.plugin_hooks[h].append(f)
+                else:
+                    cls.plugin_hooks[h] = [f]
+            for cmd in getattr(f, 'plugin_cmds', ()):
+                cls.plugin_cmds.append((cmd, f))
+
+
+class Plugin(PluginBase):
+    """Bot plugin base class."""
+    __metaclass__ = PluginMeta
 
     def __init__(self, bot):
         self.bot = bot
-        self.features = self.features.instantiate(self)
         self.db_ = None
+
+    def fire_hooks(self, event):
+        """Execute all of this plugin's handlers for *event*."""
+        for f in self.plugin_hooks.get(event.event_type, ()):
+            f(self, event)
+
+    def setup(self):
+        for cmd, f in self.plugin_cmds:
+            self.bot.register_command(cmd, partial(f, self), tag=self)
+
+    def teardown(self):
+        self.bot.unregister_commands(tag=self)
+
+    @staticmethod
+    def hook(hook):
+        def decorate(f):
+            if hasattr(f, 'plugin_hooks'):
+                f.plugin_hooks.add(hook)
+            else:
+                f.plugin_hooks = set((hook,))
+            return f
+        return decorate
+
+    @staticmethod
+    def command(cmd):
+        def decorate(f):
+            if hasattr(f, 'plugin_cmds'):
+                f.plugin_cmds.add(cmd)
+            else:
+                f.plugin_cmds = set((cmd,))
+            return f
+        return decorate
+
+    # Methods copied from old Plugin class
+    # TODO: tidy these up
 
     @property
     def db(self):
@@ -261,6 +316,3 @@ class Plugin(PluginBase):
             self.bot.plugindata.add_section(plugin)
 
         self.bot.plugindata.set(plugin, key, value)
-
-    def fire_hooks(self, event):
-        self.features.fire_hooks(event)

@@ -1,4 +1,4 @@
-from csbot.core import Plugin, PluginFeatures
+from csbot.core import Plugin
 from csbot.util import nick
 
 
@@ -7,15 +7,13 @@ class EmptyPlugin(Plugin):
 
 
 class Example(Plugin):
-    features = PluginFeatures()
-
-    @features.command('test')
+    @Plugin.command('test')
     def test_command(self, event):
         event.reply(('test invoked: {0.user}, {0.channel}, '
                      '{0.data}').format(event))
         event.reply('raw data: ' + event.raw_data, is_verbose=True)
 
-    @features.command('cfg')
+    @Plugin.command('cfg')
     def test_cfg(self, event):
         if len(event.data) == 0:
             event.error("You need to tell me what to look for!")
@@ -26,7 +24,7 @@ class Example(Plugin):
             except KeyError:
                 event.error("I don't know a {}".format(event.data[0]))
 
-    @features.command('set')
+    @Plugin.command('set')
     def test_set(self, event):
         try:
             key = event.data[0]
@@ -38,7 +36,7 @@ class Example(Plugin):
         except IndexError:
             event.error("You need to tell me the name and the value to store!")
 
-    @features.command('get')
+    @Plugin.command('get')
     def test_get(self, event):
         key = event.data[0]
 

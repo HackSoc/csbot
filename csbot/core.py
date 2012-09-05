@@ -70,7 +70,7 @@ class Bot(Plugin):
         self.plugins = PluginManager(self.PLUGIN_PACKAGE,
                                      Plugin, [self], [self])
 
-        self.commands = dict()
+        self.commands = {}
 
         # Event runner
         self.events = events.ImmediateEventRunner(
@@ -79,7 +79,7 @@ class Bot(Plugin):
     def setup(self):
         """Load plugins defined in configuration.
         """
-        map(self.load_plugin, self.config.get('DEFAULT', 'plugins').split())
+        map(self.plugins.load, self.config.get('DEFAULT', 'plugins').split())
 
     def teardown(self):
         """Unload plugins and save data.
@@ -88,8 +88,7 @@ class Bot(Plugin):
         self.config.set('DEFAULT', 'plugins', ' '.join(self.plugins))
 
         # Unload plugins
-        for name in self.plugins.keys():
-            self.unload_plugin(name)
+        map(self.plugins.unload, self.plugins.keys())
 
         # Save the plugin data
         with open(self.config.get('DEFAULT', 'keyvalfile'), 'wb') as kvf:
@@ -99,47 +98,44 @@ class Bot(Plugin):
         with open(self.configpath, 'wb') as cfg:
             self.config.write(cfg)
 
-    def get_plugin(self, name):
-        return self.plugins[name]
-
-    def load_plugin(self, name):
-        self.plugins.load(name)
-        p = self.plugins[name]
-
-        for command, handler in p.features.commands.iteritems():
-            if command in self.commands:
-                raise PluginError('{} command already provided by {}'.format(
-                    command, self.commands[command].im_class.plugin_name()))
-            else:
-                self.log_msg('Registering command {}'.format(command))
-                self.commands[command] = handler
-
-    def unload_plugin(self, name):
-        self.plugins.unload(name)
-
-        delcmds = [n for n, h in self.commands.iteritems()
-                   if h.im_class.plugin_name() == name]
-        for cmd in delcmds:
-            self.log_msg('Unregistering command {}'.format(cmd))
-            del self.commands[cmd]
-
     def post_event(self, event):
         self.events.post_event(event)
 
-    def log_msg(self, msg):
-        """Convenience wrapper around ``twisted.python.log.msg`` for plugins"""
-        log.msg(msg)
+    def register_command(self, cmd, f, tag=None):
+        # Bail out if the command already exists
+        if cmd in self.commands:
+            oldf, oldtag = self.commands[cmd]
+            self.log.warn('tried to overwrite command: {}'.format(cmd))
+            return False
 
-    def log_err(self, err):
-        """Convenience wrapper around ``twisted.python.log.err`` for plugins"""
-        log.err(err)
+        self.commands[cmd] = (f, tag)
+        self.log.info('registered command: ({}, {})'.format(cmd, tag))
+        return True
 
-    @features.hook('core.self.connected')
+    def unregister_command(self, cmd, tag=None):
+        if cmd in self.commands:
+            f, t = self.commands[cmd]
+            if t == tag:
+                del self.commands[cmd]
+                self.log.info('unregistered command: ({}, {})'.format(cmd, tag))
+            else:
+                self.log.error(('tried to remove command {} ' +
+                                'with wrong tag {}').format(cmd, tag))
+
+    def unregister_commands(self, tag):
+        delcmds = [cmd for cmd, (f, t) in self.commands.iteritems() if t == tag]
+        for cmd in delcmds:
+            f, tag = self.commands[cmd]
+            del self.commands[cmd]
+            self.log.info('unregistered command: ({}, {})'.format(cmd, tag))
+
+
+    @Plugin.hook('core.self.connected')
     def signedOn(self, event):
         map(event.protocol.join,
             self.config.get('DEFAULT', 'channels').split())
 
-    @features.hook('core.message.privmsg')
+    @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
@@ -148,7 +144,7 @@ class Bot(Plugin):
         if command is not None:
             self.post_event(command)
 
-    @features.hook('core.command')
+    @Plugin.hook('core.command')
     def fire_command(self, event):
         """Dispatch a command event to its callback.
         """
@@ -156,8 +152,8 @@ class Bot(Plugin):
         if event['command'] not in self.commands:
             return
 
-        handler = self.commands[event['command']]
-        handler(event)
+        f, _ = self.commands[event['command']]
+        f(event)
 
 
 class PluginError(Exception):

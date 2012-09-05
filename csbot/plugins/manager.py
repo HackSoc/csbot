@@ -1,31 +1,29 @@
-from csbot.core import Plugin, PluginFeatures, PluginError
+from csbot.core import Plugin, PluginError
 
 
 class PluginManager(Plugin):
-    features = PluginFeatures()
-
-    @features.command('plugins')
+    @Plugin.command('plugins')
     def plugins(self, event):
         names = sorted(event.bot.plugins)
         event.protocol.msg(event['reply_to'], ', '.join(names))
 
-    @features.command('plugins.available')
+    @Plugin.command('plugins.available')
     def available(self, event):
         names = sorted(event.bot.plugins.discover().keys())
         event.protocol.msg(event['reply_to'], ', '.join(names))
 
-    @features.command('plugins.load')
+    @Plugin.command('plugins.load')
     def load(self, event):
         available = event.bot.plugins.discover()
         self.plugin_loader_helper(event, 'loaded',
                 lambda x: (x not in available) or x in event.bot.plugins,
-                event.bot.load_plugin)
+                event.bot.plugins.load)
 
-    @features.command('plugins.unload')
+    @Plugin.command('plugins.unload')
     def unload(self, event):
         self.plugin_loader_helper(event, 'unloaded',
                 lambda x: x not in event.bot.plugins,
-                event.bot.unload_plugin)
+                event.bot.plugins.unload)
 
     def plugin_loader_helper(self, event, verb, ignore, operation):
         success = list()
