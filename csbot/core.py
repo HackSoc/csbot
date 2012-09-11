@@ -9,7 +9,7 @@ from twisted.python import log
 import straight.plugin
 import pymongo
 
-from csbot.plugin import Plugin, PluginFeatures, PluginManager
+from csbot.plugin import Plugin, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import nick
@@ -46,12 +46,9 @@ class Bot(Plugin):
     #: The top-level package for all bot plugins
     PLUGIN_PACKAGE = 'csbot.plugins'
 
-    features = PluginFeatures()
     log = logging.getLogger('csbot.bot')
 
     def __init__(self, configpath):
-        self.features = self.features.instantiate(self)
-
         # Load the configuration file
         self.configpath = configpath
         self.config = ConfigParser.SafeConfigParser(defaults=self.DEFAULTS,

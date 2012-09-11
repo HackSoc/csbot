@@ -127,14 +127,15 @@ class PluginManager(collections.Mapping):
 
     def broadcast(self, method, *args, **kwargs):
         """Call ``p.method(*args, **kwargs)`` on every plugin."""
-        # Follow "static" plugins with dynamic plugins - using .values() instead
-        # of .itervalues() because plugin loading/unloading would invalidate the
-        # iterator, and these are valid things to happen at any time.
+        # Follow "static" plugins with dynamic plugins - using .values()
+        # instead of .itervalues() because plugin loading/unloading would
+        # invalidate the iterator, and these are valid things to happen at any
+        # time.
         for p in chain(self.static, self.plugins.values()):
             getattr(p, method)(*args, **kwargs)
 
     # Implement abstract "read-only" Mapping interface
-    
+
     def __getitem__(self, key):
         return self.plugins[key]
 
@@ -143,68 +144,6 @@ class PluginManager(collections.Mapping):
 
     def __iter__(self):
         return iter(self.plugins)
-
-
-class PluginFeatures(object):
-    """Utility class to simplify defining plugin features.
-
-    Plugins can define hooks and commands.  This class provides a
-    decorator-based approach to creating these features.
-    """
-    def __init__(self):
-        self.commands = dict()
-        self.hooks = dict()
-
-    def instantiate(self, inst):
-        """Create a duplicate :class:`PluginFeatures` bound to *inst*.
-
-        Returns an exact duplicate of this object, but every method that has
-        been registered with a decorator is bound to *inst* so when it's called
-        it acts like a normal method call.
-        """
-        cls = inst.__class__
-        features = PluginFeatures()
-        features.commands = dict((c, types.MethodType(f, inst, cls))
-                                 for c, f in self.commands.iteritems())
-        features.hooks = dict((h, [types.MethodType(f, inst, cls) for f in fs])
-                              for h, fs in self.hooks.iteritems())
-        return features
-
-    def hook(self, hook):
-        """Create a decorator to register a handler for *hook*.
-        """
-        if hook not in self.hooks:
-            self.hooks[hook] = list()
-
-        def decorate(f):
-            self.hooks[hook].append(f)
-            return f
-        return decorate
-
-    def command(self, command, help=None):
-        """Create a decorator to register a handler for *command*.
-
-        Raises a :class:`KeyError` if this class has already registered a
-        handler for *command*.
-        """
-        if command in self.commands:
-            raise KeyError('Duplicate command: {}'.format(command))
-
-        def decorate(f):
-            f.help = help
-            self.commands[command] = f
-            return f
-        return decorate
-
-    def fire_hooks(self, event):
-        """Fire plugin hooks associated with ``event.event_type``.
-
-        Hook handlers are run in the order they were registered, which should
-        correspond to the order they were defined if decorators were used.
-        """
-        hooks = self.hooks.get(event.event_type, list())
-        for h in hooks:
-            h(event)
 
 
 class PluginMeta(type):
