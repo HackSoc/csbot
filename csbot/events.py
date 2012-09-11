@@ -1,12 +1,7 @@
 from datetime import datetime
-import shlex
-import inspect
-from functools import wraps
 from collections import deque
 
-from twisted.words.protocols import irc
-
-from csbot.util import nick, is_channel, parse_arguments
+from csbot.util import parse_arguments
 
 
 class ImmediateEventRunner(object):
@@ -32,10 +27,10 @@ class ImmediateEventRunner(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         """On exiting the context, reset to an empty non-running queue.
-        
-        When exiting normally this should have no additional effect.  If exiting
-        abnormally, the rest of the event queue will be purged so that the next
-        root event can be handled normally.
+
+        When exiting normally this should have no additional effect.  If
+        exiting abnormally, the rest of the event queue will be purged so that
+        the next root event can be handled normally.
         """
         self.running = False
         self.events.clear()
@@ -118,7 +113,8 @@ class CommandEvent(Event):
         A command is signified by *event["message"]* starting with the command
         prefix string followed by one or more non-space characters.
 
-        Returns None if *event['message']* wasn't recognised as being a command.
+        Returns None if *event['message']* wasn't recognised as being a
+        command.
         """
         # Split on the first space to find the "command" part
         parts = event['message'].split(None, 1)

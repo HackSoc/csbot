@@ -1,11 +1,9 @@
-from functools import wraps, partial
-import sys
+from functools import partial
 import logging
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
-import straight.plugin
 import pymongo
 import configparser
 
@@ -113,18 +111,18 @@ class Bot(Plugin):
             f, t = self.commands[cmd]
             if t == tag:
                 del self.commands[cmd]
-                self.log.info('unregistered command: ({}, {})'.format(cmd, tag))
+                self.log.info('unregistered command: ({}, {})'
+                              .format(cmd, tag))
             else:
                 self.log.error(('tried to remove command {} ' +
                                 'with wrong tag {}').format(cmd, tag))
 
     def unregister_commands(self, tag):
-        delcmds = [cmd for cmd, (f, t) in self.commands.iteritems() if t == tag]
+        delcmds = [c for c, (f, t) in self.commands.iteritems() if t == tag]
         for cmd in delcmds:
             f, tag = self.commands[cmd]
             del self.commands[cmd]
             self.log.info('unregistered command: ({}, {})'.format(cmd, tag))
-
 
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
@@ -209,7 +207,7 @@ class BotProtocol(irc.IRCClient):
         self.emit_new('core.self.left', {'channel': channel})
 
     def privmsg(self, user, channel, message):
-        e = self.emit_new('core.message.privmsg', {
+        self.emit_new('core.message.privmsg', {
             'channel': channel,
             'user': user,
             'message': message,
@@ -218,7 +216,7 @@ class BotProtocol(irc.IRCClient):
         })
 
     def noticed(self, user, channel, message):
-        e = self.emit_new('core.message.notice', {
+        self.emit_new('core.message.notice', {
             'channel': channel,
             'user': user,
             'message': message,
@@ -335,7 +333,6 @@ class ColorLogFilter(logging.Filter):
 
 
 def main(argv):
-    import sys
     import argparse
 
     parser = argparse.ArgumentParser()

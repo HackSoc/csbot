@@ -1,4 +1,3 @@
-import types
 from itertools import chain
 from functools import partial
 import collections
@@ -170,7 +169,7 @@ class PluginMeta(type):
 
 class Plugin(PluginBase):
     """Bot plugin base class.
-    
+
     All bot plugins should inherit from this class.  It provides convenience
     methods for hooking events, registering commands, accessing MongoDB and
     manipulating the configuration file.
@@ -235,7 +234,7 @@ class Plugin(PluginBase):
 
         It's common to want to get a configuration value with a fallback to
         some default.  This method simplifies the ugly syntax of
-        
+
             foo = self.config.get(key, self.CONFIG_DEFAULTS[key])
 
         by making the fallback value implied if *key* exists in
