@@ -169,8 +169,15 @@ class PluginMeta(type):
 
 
 class Plugin(PluginBase):
-    """Bot plugin base class."""
+    """Bot plugin base class.
+    
+    All bot plugins should inherit from this class.  It provides convenience
+    methods for hooking events, registering commands, accessing MongoDB and
+    manipulating the configuration file.
+    """
     __metaclass__ = PluginMeta
+
+    CONFIG_DEFAULTS = {}
 
     def __init__(self, bot):
         self.bot = bot
@@ -182,10 +189,14 @@ class Plugin(PluginBase):
             f(self, event)
 
     def setup(self):
+        """Plugin setup; register all commands provided by the plugin.
+        """
         for cmd, f in self.plugin_cmds:
             self.bot.register_command(cmd, partial(f, self), tag=self)
 
     def teardown(self):
+        """Plugin teardown; unregister all commands provided by the plugin.
+        """
         self.bot.unregister_commands(tag=self)
 
     @staticmethod
@@ -208,6 +219,43 @@ class Plugin(PluginBase):
             return f
         return decorate
 
+    @property
+    def config(self):
+        """Get the configuration section for this plugin.
+
+        If the config section doesn't exist yet, it is created empty.
+        """
+        plugin = self.plugin_name()
+        if plugin not in self.bot.config_root:
+            self.bot.config_root[plugin] = {}
+        return self.bot.config_root[plugin]
+
+    def config_get(self, key):
+        """Convenience wrapper proxying ``get()`` on :attr:`config`.
+
+        It's common to want to get a configuration value with a fallback to
+        some default.  This method simplifies the ugly syntax of
+        
+            foo = self.config.get(key, self.CONFIG_DEFAULTS[key])
+
+        by making the fallback value implied if *key* exists in
+        :attr:`CONFIG_DEFAULTS`.  If there is no default for *key* then this
+        method acts just like ``self.config[key]``, and will throw a KeyError
+        if *key* isn't present in the configuration.
+        """
+        if key in self.CONFIG_DEFAULTS:
+            return self.config.get(key, self.CONFIG_DEFAULTS[key])
+        else:
+            return self.config[key]
+
+    def config_getboolean(self, key):
+        """Identical to :meth:`config_get`, but proxying ``getboolean``.
+        """
+        if key in self.CONFIG_DEFAULTS:
+            return self.config.getboolean(key, self.CONFIG_DEFAULTS[key])
+        else:
+            return self.config.getboolean(key)
+
     # Methods copied from old Plugin class
     # TODO: tidy these up
 
@@ -216,42 +264,3 @@ class Plugin(PluginBase):
         if self.db_ is None:
             self.db_ = self.bot.mongodb['csbot__' + self.plugin_name()]
         return self.db_
-
-    def cfg(self, name):
-        plugin = self.plugin_name()
-
-        # Check plugin config
-        if self.bot.config.has_section(plugin):
-            if self.bot.config.has_option(plugin, name):
-                return self.bot.config.get(plugin, name)
-
-        # Check default config
-        if self.bot.config.has_option("DEFAULT", name):
-            return self.bot.config.get("DEFAULT", name)
-
-        # Raise an exception
-        raise KeyError("{} is not a valid option.".format(name))
-
-    def get(self, key):
-        """Get a value from the plugin key/value store by key. If the key
-        is not found, a KeyError is raised.
-        """
-
-        plugin = self.plugin_name()
-
-        if self.bot.plugindata.has_section(plugin):
-            if self.bot.plugindata.has_option(plugin, key):
-                return self.bot.plugindata.get(plugin, key)
-
-        raise KeyError("{} is not defined.".format(key))
-
-    def set(self, key, value):
-        """Set a value in the plugin key/value store by key.
-        """
-
-        plugin = self.plugin_name()
-
-        if not self.bot.plugindata.has_section(plugin):
-            self.bot.plugindata.add_section(plugin)
-
-        self.bot.plugindata.set(plugin, key, value)

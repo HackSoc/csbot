@@ -1,5 +1,4 @@
 from functools import wraps, partial
-import ConfigParser
 import sys
 import logging
 
@@ -8,6 +7,7 @@ from twisted.internet import reactor, protocol
 from twisted.python import log
 import straight.plugin
 import pymongo
+import configparser
 
 from csbot.plugin import Plugin, PluginManager
 import csbot.events as events
@@ -23,13 +23,12 @@ class Bot(Plugin):
     """
 
     #: Default configuration values
-    DEFAULTS = {
+    CONFIG_DEFAULTS = {
             'nickname': 'csyorkbot',
             'username': 'csyorkbot',
             'realname': 'cs-york bot',
             'sourceURL': 'http://github.com/csyork/csbot/',
             'lineRate': '1',
-            'keyvalfile': 'keyval.cfg',
             'irc_host': 'irc.freenode.net',
             'irc_port': '6667',
             'command_prefix': '!',
@@ -49,51 +48,51 @@ class Bot(Plugin):
     log = logging.getLogger('csbot.bot')
 
     def __init__(self, configpath):
-        # Load the configuration file
-        self.configpath = configpath
-        self.config = ConfigParser.SafeConfigParser(defaults=self.DEFAULTS,
-                                                    allow_no_value=True)
-        self.config.read(self.configpath)
+        super(Bot, self).__init__(self)
 
-        # Load plugin "key-value" store
-        self.plugindata = ConfigParser.SafeConfigParser(allow_no_value=True)
-        self.plugindata.read(self.config.get('DEFAULT', 'keyvalfile'))
+        # Load the configuration file
+        self.config_path = configpath
+        self.config_root = configparser.ConfigParser(interpolation=None,
+                                                     allow_no_value=True)
+        with open(self.config_path, 'r') as cfg:
+            self.config_root.read_file(cfg)
 
         # Make mongodb connection
-        self.mongodb = pymongo.Connection(
-                self.config.get('DEFAULT', 'mongodb_host'),
-                self.config.getint('DEFAULT', 'mongodb_port'))
+        self.mongodb = pymongo.Connection(self.config_get('mongodb_host'),
+                                          int(self.config_get('mongodb_port')))
 
+        # Plugin management
         self.plugins = PluginManager(self.PLUGIN_PACKAGE,
                                      Plugin, [self], [self])
-
         self.commands = {}
 
         # Event runner
         self.events = events.ImmediateEventRunner(
                 partial(self.plugins.broadcast, 'fire_hooks'))
 
+    @classmethod
+    def plugin_name(cls):
+        """Special plugin name that can't clash with real plugin classes.
+        """
+        return '@' + super(Bot, cls).plugin_name()
+
     def setup(self):
         """Load plugins defined in configuration.
         """
-        map(self.plugins.load, self.config.get('DEFAULT', 'plugins').split())
+        map(self.plugins.load, self.config_get('plugins').split())
 
     def teardown(self):
         """Unload plugins and save data.
         """
         # Save currently loaded plugins
-        self.config.set('DEFAULT', 'plugins', ' '.join(self.plugins))
+        self.config['plugins'] = ' '.join(self.plugins)
 
         # Unload plugins
         map(self.plugins.unload, self.plugins.keys())
 
-        # Save the plugin data
-        with open(self.config.get('DEFAULT', 'keyvalfile'), 'wb') as kvf:
-            self.plugindata.write(kvf)
-
         # Save configuration
-        with open(self.configpath, 'wb') as cfg:
-            self.config.write(cfg)
+        with open(self.config_path, 'w') as cfg:
+            self.config_root.write(cfg)
 
     def post_event(self, event):
         self.events.post_event(event)
@@ -129,15 +128,14 @@ class Bot(Plugin):
 
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
-        map(event.protocol.join,
-            self.config.get('DEFAULT', 'channels').split())
+        map(event.protocol.join, self.config_get('channels').split())
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
-        command = CommandEvent.parse_command(event,
-                self.config.get('DEFAULT', 'command_prefix'))
+        command = CommandEvent.parse_command(
+                event, self.config_get('command_prefix'))
         if command is not None:
             self.post_event(command)
 
@@ -163,11 +161,11 @@ class BotProtocol(irc.IRCClient):
     def __init__(self, bot):
         self.bot = bot
         # Get IRCClient configuration from the Bot
-        self.nickname = bot.config.get('DEFAULT', 'nickname')
-        self.username = bot.config.get('DEFAULT', 'username')
-        self.realname = bot.config.get('DEFAULT', 'realname')
-        self.sourceURL = bot.config.get('DEFAULT', 'sourceURL')
-        self.lineRate = bot.config.getint('DEFAULT', 'lineRate')
+        self.nickname = bot.config_get('nickname')
+        self.username = bot.config_get('username')
+        self.realname = bot.config_get('realname')
+        self.sourceURL = bot.config_get('sourceURL')
+        self.lineRate = int(bot.config_get('lineRate'))
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -368,8 +366,8 @@ def main(argv):
     bot.setup()
 
     # Connect and enter the reactor loop
-    reactor.connectTCP(bot.config.get('DEFAULT', 'irc_host'),
-                       bot.config.getint('DEFAULT', 'irc_port'),
+    reactor.connectTCP(bot.config_get('irc_host'),
+                       int(bot.config_get('irc_port')),
                        BotFactory(bot))
     reactor.run()
 
