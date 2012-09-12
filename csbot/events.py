@@ -45,6 +45,9 @@ class ImmediateEventRunner(object):
         If this is a child event, i.e. this method has been called from another
         event handler, then it will be added to the queue and will be processed
         before the :meth:`post_event` for the root event exits.
+
+        If a chain of events forms a tree, the handling order is equivalent to
+        a breadth-first traversal of the event tree.
         """
         self.events.append(event)
         if not self.running:
