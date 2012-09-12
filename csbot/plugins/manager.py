@@ -1,39 +1,36 @@
-from csbot.core import Plugin, PluginFeatures, PluginError
+from csbot.core import Plugin, PluginError
 
 
 class PluginManager(Plugin):
-    features = PluginFeatures()
+    @Plugin.command('plugins')
+    def plugins(self, event):
+        names = sorted(event.bot.plugins)
+        event.protocol.msg(event['reply_to'], ', '.join(names))
 
-    @features.command('plugins.available')
+    @Plugin.command('plugins.available')
     def available(self, event):
-        names = sorted(event.bot.discover_plugins())
-        event.reply(', '.join(names))
+        names = sorted(event.bot.plugins.discover().keys())
+        event.protocol.msg(event['reply_to'], ', '.join(names))
 
-    @features.command('plugins.load')
+    @Plugin.command('plugins.load')
     def load(self, event):
-        available = event.bot.discover_plugins()
+        available = event.bot.plugins.discover()
         self.plugin_loader_helper(event, 'loaded',
-                lambda x: (x not in available) or event.bot.has_plugin(x),
-                event.bot.load_plugin)
+                lambda x: (x not in available) or x in event.bot.plugins,
+                event.bot.plugins.load)
 
-    @features.command('plugins.unload')
+    @Plugin.command('plugins.unload')
     def unload(self, event):
         self.plugin_loader_helper(event, 'unloaded',
-                lambda x: not event.bot.has_plugin(x),
-                event.bot.unload_plugin)
-
-    @features.command('plugins.reload')
-    def reload(self, event):
-        self.plugin_loader_helper(event, 'reloaded',
-                lambda x: not event.bot.has_plugin(x),
-                event.bot.reload_plugin)
+                lambda x: x not in event.bot.plugins,
+                event.bot.plugins.unload)
 
     def plugin_loader_helper(self, event, verb, ignore, operation):
         success = list()
         failure = list()
         ignored = list()
 
-        for name in event.data:
+        for name in event.arguments():
             if ignore(name):
                 ignored.append(name)
                 continue
@@ -42,7 +39,8 @@ class PluginManager(Plugin):
                 success.append(name)
             except PluginError as e:
                 failure.append(name)
-                event.error(str(e))
+                event.protocol.msg(event['reply_to'],
+                                   'Error: ' + str(e))
 
         reply = list()
         for group, members in zip((verb, 'failed', 'ignored'),
@@ -52,4 +50,4 @@ class PluginManager(Plugin):
         reply = '; '.join(reply)
 
         if reply:
-            event.reply(reply)
+            event.protocol.msg(event['reply_to'], reply)

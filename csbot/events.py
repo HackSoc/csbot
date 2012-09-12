@@ -1,251 +1,144 @@
 from datetime import datetime
-import shlex
-import inspect
-from functools import wraps
+from collections import deque
 
-from twisted.words.protocols import irc
-
-from csbot.util import nick, is_channel, parse_arguments
+from csbot.util import parse_arguments
 
 
-PROXY_DOC = """
+class ImmediateEventRunner(object):
+    """A very simple blocking event runner for immediate chains of events.
 
-Fires ``{event}`` :class:`.Event` with attributes ``({attrs})``."""
-PROXY_TWISTED_DOC = """
+    This class is only responsible for making sure chains of events get
+    handled before the next root event happens.  The *handle_event* method
+    should be a callable that expects a single argument - it will receive
+    whatever is passed to :meth:`post_event`.
 
-Implements Twisted `IRCClient.{event}`_ callback.
-
-.. _`IRCClient.{event}`: http://twistedmatrix.com/documents/current/api/
-                         twisted.words.protocols.irc.IRCClient.html#{event}"""
-
-
-def proxy(*args, **kwargs):
-    """Here be dragons (and magic).
-
-    This is a decorator for creating methods on :class:`.BotProtocol` that
-    result in events that can be hooked by the bot and plugins.
-
-    When the new method is called, the decorated method is called first, as
-    normal.  Afterwards an :class:`Event` is created and the arguments are
-    stored in it as attributes.  By default the :attr:`~Event.event_type` is
-    the name of the method being decorated.  This event is passed to
-    :meth:`.Bot.fire_hook`, which is responsible for firing the bot's and
-    plugins' handlers for the event.
-
-    If the decorator is used without arguments, the attribute names are defined
-    by the parameter names of the decorated method::
-
-        class BotProtocol(IRCClient):
-            # Creates events with 'user', 'channel' and 'message' attributes
-            @events.proxy
-            def privmsg(self, user, channel, message):
-                pass
-
-    If the decorator has arguments, then these define the attribute names
-    instead::
-
-        class BotProtocol(IRCClient):
-            # Creates events with 'u', 'c' and 'msg' attributes
-            @events.proxy('u', 'c', 'msg')
-            def privmsg(self, user, channel, message):
-                pass
-
-    If the decorator has the *name* keyword argument it's used instead of the
-    method to define :attr:`~Event.event_type`::
-
-        class BotProtocol(IRCClient):
-            # Fires the 'messageReceived' event instead of 'privmsg'
-            @events.proxy(name='messageReceived')
-            def privmsg(self, user, channel, message):
-                pass
-
-    Usually the decorated methods won't return anything, and the original
-    arguments are re-used for the :class:`Event`.  If the method *does* return
-    something, it will be treated as a tuple of arguments that should be used
-    instead of the original arguments::
-
-        class BotProtocol(IRCClient):
-            # Pretend we can't hear Alan
-            @events.proxy
-            def privmsg(self, user, channel, message):
-                if nick(user) == 'Alan':
-                    return (user, channel, '')
-
-            # Make an event with a completely different signature
-            @events.proxy('users')
-            def userJoined(self, user, channel):
-                self.users[channel].add(user)
-                return (self.users[channel],)
-
-    Docstrings on each decorated method are automatically augmented with
-    information about the events generated, and a link to the Twisted
-    documentation if the method implements part of the Twisted
-    :class:`IRCClient` interface.
+    The context manager technique is used to ensure the event runner is left in
+    a usable state if an exception propagates out of it in response to running
+    an event.
     """
-    def decorate(f, attrs=args, name=kwargs.get('name', None)):
-        # The event type is the name of the method being decorated
-        event_type = name or f.__name__
-        # The attribute mapping can either be specified by the decorator
-        # or use the parameter names of the wrapped method.  The "no arguments"
-        # version of the decorator uses the latter approach by setting
-        # attrs=None
-        if attrs is None:
-            attrs = inspect.getargspec(f).args[1:]
+    def __init__(self, handle_event):
+        self.events = deque()
+        self.running = False
+        self.handle_event = handle_event
 
-        # Create new function, copying info from f
-        @wraps(f)
-        def newf(self, *args):
-            # Fire the decorated function
-            result = f(self, *args)
-            # Allow the decorated function to return new arguments, but if it
-            # doesn't return anything keep the same arguments
-            args = result or args
-            # Create an Event
-            event = Event(self.bot, self, event_type, dict(zip(attrs, args)))
-            # Put the event into the queue, probably causing it to run
-            # immediately (see Bot.post_event())
-            self.bot.post_event(event)
+    def __enter__(self):
+        """On entering the context, mark the event queue as running."""
+        self.running = True
 
-        # Augment documentation with a note about the event firing
-        newf.__doc__ = newf.__doc__ or ''
-        newf.__doc__ += PROXY_DOC.format(event=event_type,
-                                          attrs=', '.join(attrs))
-        # If this is a Twisted IRCClient callback, link to the relevant docs
-        if getattr(irc.IRCClient, event_type, None) is not None:
-            newf.__doc__ += PROXY_TWISTED_DOC.format(event=event_type)
-        newf.__doc__ = newf.__doc__.lstrip('\n')
+    def __exit__(self, exc_type, exc_value, traceback):
+        """On exiting the context, reset to an empty non-running queue.
 
-        return newf
+        When exiting normally this should have no additional effect.  If
+        exiting abnormally, the rest of the event queue will be purged so that
+        the next root event can be handled normally.
+        """
+        self.running = False
+        self.events.clear()
 
-    # If decorating without arguments, the first argument to proxy will end up
-    # being the method to decorate.
-    if len(args) == 1 and callable(args[0]):
-        return decorate(args[0], attrs=None, name=None)
-    else:
-        return decorate
+    def post_event(self, event):
+        """Post *event* to be handled soon.
+
+        If this is a root event, i.e. this method hasn't been called while
+        handling another event, then the event queue will run immediately and
+        block until the event and all child events have been handled.
+
+        If this is a child event, i.e. this method has been called from another
+        event handler, then it will be added to the queue and will be processed
+        before the :meth:`post_event` for the root event exits.
+        """
+        self.events.append(event)
+        if not self.running:
+            with self:
+                while len(self.events) > 0:
+                    e = self.events.popleft()
+                    self.handle_event(e)
 
 
-class Event(object):
-    #: The :class:`.Bot` for which the message was received.
-    bot = None
-    #: The :class:`.BotProtocol` which received the message.  This subclasses
-    #: Twisted :class:`IRCClient` and so exposes all of the same methods.
+class Event(dict):
+    """IRC event information.
+
+    Events are dicts of event information, plus some attributes which are
+    applicable for all events.
+    """
+    #: The :class:`.BotProtocol` which triggered the event.
     protocol = None
-    #: The name of the event.  This will usually correspond to a method in
-    #: :class:`.BotProtocol` marked by the :func:`proxy` decorator.
+    #: The name of the event.
     event_type = None
-    #: The value of :meth:`datetime.datetime.now()` when the message was
-    #: first received.
+    #: The value of :meth:`datetime.datetime.now()` when the event was
+    #: triggered.
     datetime = None
 
-    def __init__(self, bot, protocol, event_type, attributes):
-        # Set datetime before attributes so it can be forced
-        self.datetime = datetime.now()
-        # Set attributes from dictionary
-        for attr, value in attributes.iteritems():
-            setattr(self, attr, value)
-        # Set attributes from arguments
-        self.bot = bot
+    def __init__(self, protocol, event_type, data=None):
+        dict.__init__(self, data if data is not None else {})
+
         self.protocol = protocol
         self.event_type = event_type
+        self.datetime = datetime.now()
+
+    @classmethod
+    def extend(cls, event, event_type=None, data=None):
+        """Create a new event by extending an existing event.
+
+        The main purpose of this classmethod is to duplicate an event as a new
+        event type, preserving existing information.  For example:
+        """
+        # Duplicate event information
+        e = cls(event.protocol,
+                event.event_type,
+                event)
+        e.datetime = event.datetime
+
+        # Apply optional updates
+        if event_type is not None:
+            e.event_type = event_type
+        if data is not None:
+            e.update(data)
+
+        return e
+
+    @property
+    def bot(self):
+        """Shortcut to ``self.protocol.bot``."""
+        return self.protocol.bot
 
 
 class CommandEvent(Event):
-    #: The command invoked (minus any trigger characters).
-    command = None
-    #: User string for the source of the command.
-    user = None
-    #: Channel that the command was received on.
-    channel = None
-    #: Was the bot addressed directly, either by nick or in private chat?
-    #: This will be False if the command was triggered by just the command
-    #: prefix in a public channel.
-    direct = False
-    #: The rest of the line after the command name.
-    raw_data = None
-    #: Cached argument list, see :attr:`data`.
-    data_ = None
+    @classmethod
+    def parse_command(cls, event, prefix):
+        """Attempt to create a :class:`CommandEvent` from a
+        ``core.message.privmsg`` event.
 
-    @staticmethod
-    def create(event):
-        """Attempt to create a :class:`CommandEvent` from an :class:`Event`.
+        A command is signified by *event["message"]* starting with the command
+        prefix string followed by one or more non-space characters.
 
-        Returns None if *event* does not contain a command, otherwise returns a
-        :class:`CommandEvent`.
+        Returns None if *event['message']* wasn't recognised as being a
+        command.
         """
-        command_prefix = event.bot.config.get('DEFAULT', 'command_prefix')
-        own_nick = event.protocol.nickname
-        msg = event.message
-        channel = event.channel
-
-        command = None
-        direct = False
-
-        if is_channel(channel):
-            # In channel, must be triggered explicitly
-            if msg.startswith(command_prefix):
-                # Triggered by command prefix: "<prefix><cmd> <args>"
-                command = msg[len(command_prefix):]
-            elif msg.startswith(own_nick):
-                # Addressing the bot by name: "<nick>, <cmd> <args>"
-                msg = msg[len(own_nick):].lstrip()
-                # Check that the bot was specifically addressed, rather than
-                # a similar nick or just talking about the bot
-                if len(msg) > 0 and msg[0] in ',:;.':
-                    command = msg.lstrip(',:;.')
-                    direct = True
-        else:
-            command = msg
-            direct = True
-
-        if command is None or command.strip() == '':
+        # Split on the first space to find the "command" part
+        parts = event['message'].split(None, 1)
+        if len(parts) == 0:
+            # Called with an empty message, nothing to do
             return None
+        elif len(parts) == 1:
+            command, data = parts[0], ''
+        else:
+            command, data = parts
 
-        command = command.split(None, 1)
-        cmd = command[0]
-        data = command[1] if len(command) == 2 else ''
-        return CommandEvent(event.bot, event.protocol, 'command', {
-            'command': command,
-            'datetime': event.datetime,
-            'user': event.user,
-            'channel': event.channel,
-            'command': cmd,
-            'direct': direct,
-            'raw_data': data,
-        })
+        # See if the command part is really a command
+        if len(command) <= len(prefix) or not command.startswith(prefix):
+            # Nothing to do if this doesn't fit the command pattern
+            return None
+        else:
+            # Trim the command prefix from the command name
+            command = command[len(prefix):]
 
-    @property
-    def data(self):
-        """Command data as an argument list, using
-        :func:`.util.parse_arguments`.
+        return cls.extend(event, 'core.command',
+                          {'command': command, 'data': data})
 
-        The parsed argument list is cached on first use so repeatedly accessing
-        elements of this attribute is cheap.  If :attr:`raw_data` couldn't be
-        parsed then accessing this attribute might raise a
-        :exc:`~exceptions.ValueError`.
+    def arguments(self):
+        """Parse *self["data"]* into a list of arguments using
+        :func:`~csbot.util.parse_arguments`.  This might raise a
+        :exc:`~exceptions.ValueError` if the string cannot be parsed, e.g. if
+        there are unmatched quotes.
         """
-        if self.data_ is None:
-            try:
-                self.data_ = parse_arguments(self.raw_data)
-            except ValueError as e:
-                self.error('Unmatched quotation marks')
-                raise e
-        return self.data_
-
-    def reply(self, msg, is_verbose=False):
-        """Send a reply message.
-
-        All plugin responses should be via this method.  The :attr:`user` is
-        addressed by name if the response is in a channel rather than a private
-        chat.  If *is_verbose* is True, the reply is suppressed unless the bot
-        was addressed directly, i.e. in private chat or by name in a channel.
-        """
-        if self.channel == self.protocol.nickname:
-            self.protocol.msg(nick(self.user), msg)
-        elif self.direct or not is_verbose:
-            self.protocol.msg(self.channel,
-                              nick(self.user) + ': ' + msg)
-
-    def error(self, err):
-        """Send an error message."""
-        self.reply('Error: ' + err, is_verbose=True)
+        return parse_arguments(self['data'])
