@@ -12,6 +12,7 @@ Contents:
    :maxdepth: 2
 
    writing-plugins
+   events
    api/modules
 
 

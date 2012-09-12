@@ -25,10 +25,18 @@ plugins Package
     :undoc-members:
     :show-inheritance:
 
-:mod:`tell` Module
-------------------
+:mod:`logger` Module
+--------------------
 
-.. automodule:: csbot.plugins.tell
+.. automodule:: csbot.plugins.logger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`manager` Module
+---------------------
+
+.. automodule:: csbot.plugins.manager
     :members:
     :undoc-members:
     :show-inheritance:
