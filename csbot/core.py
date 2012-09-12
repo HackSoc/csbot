@@ -79,11 +79,13 @@ class Bot(Plugin):
     def setup(self):
         """Load plugins defined in configuration.
         """
+        super(Bot, self).setup()
         map(self.plugins.load, self.config_get('plugins').split())
 
     def teardown(self):
         """Unload plugins and save data.
         """
+        super(Bot, self).teardown()
         # Save currently loaded plugins
         self.config['plugins'] = ' '.join(self.plugins)
 
@@ -149,6 +151,10 @@ class Bot(Plugin):
 
         f, _ = self.commands[event['command']]
         f(event)
+
+    @Plugin.command('help')
+    def show_commands(self, event):
+        event.protocol.msg(event['reply_to'], ', '.join(sorted(self.commands)))
 
 
 class PluginError(Exception):
