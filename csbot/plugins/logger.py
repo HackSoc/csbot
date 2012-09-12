@@ -21,11 +21,11 @@ class Logger(Plugin):
         self.pretty_log.info(u'[Connected]')
 
     @Plugin.hook('core.raw.disconnected')
-    def connected(self, event):
+    def disconnected(self, event):
         self.pretty_log.info(u'[Disconnected: {}]'.format(event['reason']))
 
     @Plugin.hook('core.self.connected')
-    def connected(self, event):
+    def signedon(self, event):
         self.pretty_log.info(u'[Signed on]')
 
     @Plugin.hook('core.self.joined')

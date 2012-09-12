@@ -1,5 +1,4 @@
 from csbot.core import Plugin
-from csbot.util import nick
 
 
 class EmptyPlugin(Plugin):
