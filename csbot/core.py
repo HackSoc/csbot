@@ -190,10 +190,19 @@ class BotProtocol(irc.IRCClient):
         self.emit_new('core.raw.disconnected', {'reason': reason})
 
     def sendLine(self, line):
+        # Encode unicode strings with utf-8
+        if isinstance(line, unicode):
+            line = line.encode('utf-8')
         irc.IRCClient.sendLine(self, line)
         self.emit_new('core.raw.sent', {'message': line})
 
     def lineReceived(self, line):
+        # Attempt to decode incoming strings; if they are neither UTF-8 or
+        # CP1252 they will get mangled as whatever CP1252 thinks they are.
+        try:
+            line = line.decode('utf-8')
+        except UnicodeDecodeError:
+            line = line.decode('cp1252')
         self.emit_new('core.raw.received', {'message': line})
         irc.IRCClient.lineReceived(self, line)
 
