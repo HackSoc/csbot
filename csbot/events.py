@@ -98,9 +98,7 @@ class Event(dict):
 
     @property
     def bot(self):
-        """Shortcut to the :class:`.Bot` instance, instead of storing an extra
-        reference to it.
-        """
+        """Shortcut to ``self.protocol.bot``."""
         return self.protocol.bot
 
 

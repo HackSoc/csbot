@@ -45,7 +45,7 @@ class PluginBase(object):
 
 
 class PluginManager(collections.Mapping):
-    """A generic plugin manager based on :mod:`straight.plugin`.
+    """A generic plugin manager based on `straight.plugin`_.
 
     The plugin manager will discover and manage plugins under *namespace* that
     subclass *baseclass*.  When creating a new plugin instance, *args* is
@@ -58,6 +58,8 @@ class PluginManager(collections.Mapping):
     loaded, and are called by :meth:`broadcast` before any other.  They are not
     managed by the plugin manager, so :meth:`~PluginBase.setup` and
     :meth:`~PluginBase.teardown` are not called.
+
+    .. _straight.plugin: https://github.com/ironfroggy/straight.plugin
     """
 
     #: Plugins that are always loaded.
@@ -173,6 +175,7 @@ class Plugin(PluginBase):
     """
     __metaclass__ = PluginMeta
 
+    #: Default configuration values, used automatically by :meth:`config_get`.
     CONFIG_DEFAULTS = {}
 
     def __init__(self, bot):
@@ -220,6 +223,8 @@ class Plugin(PluginBase):
         """Get the configuration section for this plugin.
 
         If the config section doesn't exist yet, it is created empty.
+
+        .. seealso:: :mod:`py3k:configparser`
         """
         plugin = self.plugin_name()
         if plugin not in self.bot.config_root:
@@ -230,7 +235,7 @@ class Plugin(PluginBase):
         """Convenience wrapper proxying ``get()`` on :attr:`config`.
 
         It's common to want to get a configuration value with a fallback to
-        some default.  This method simplifies the ugly syntax of
+        some default.  This method simplifies the ugly syntax of::
 
             foo = self.config.get(key, self.CONFIG_DEFAULTS[key])
 

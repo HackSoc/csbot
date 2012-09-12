@@ -243,6 +243,10 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'http://docs.python.org/': None}
+intersphinx_mapping = {
+    'python': ('http://docs.python.org/', None),
+    'py3k': ('http://docs.python.org/py3k/', None),
+    'pymongo': ('http://api.mongodb.org/python/current/', None),
+}
 
 autodoc_member_order = 'bysource'

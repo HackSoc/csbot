@@ -4,10 +4,6 @@ csbot Package
 :mod:`csbot` Package
 --------------------
 
-.. automodule:: csbot.__init__
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 :mod:`core` Module
 ------------------
@@ -21,6 +17,14 @@ csbot Package
 --------------------
 
 .. automodule:: csbot.events
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`plugin` Module
+--------------------
+
+.. automodule:: csbot.plugin
     :members:
     :undoc-members:
     :show-inheritance:
