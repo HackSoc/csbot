@@ -1,5 +1,6 @@
 from functools import partial
 import logging
+import collections
 
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
@@ -167,7 +168,7 @@ class BotProtocol(irc.IRCClient):
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
-        self.names_accumulator = dict()
+        self.names_accumulator = collections.defaultdict(list)
 
     def emit_new(self, event_type, data=None):
         """Shorthand for firing a new event; the new event is returned.
@@ -277,14 +278,12 @@ class BotProtocol(irc.IRCClient):
 
     def irc_RPL_NAMREPLY(self, prefix, params):
         channel = params[2]
-        names = self.names_accumulator.get(channel, list())
-        names.extend(params[3].split())
-        self.names_accumulator[channel] = names
+        self.names_accumulator[channel].extend(params[3].split())
 
     def irc_RPL_ENDOFNAMES(self, prefix, params):
         # Get channel and raw names list
         channel = params[1]
-        raw_names = self.names_accumulator.pop(channel, list())
+        raw_names = self.names_accumulator.pop(channel, [])
 
         # Get a mapping from status characters to mode flags
         prefixes = self.supported.getFeature('PREFIX')

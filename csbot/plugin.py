@@ -153,16 +153,13 @@ class PluginMeta(type):
         super(PluginMeta, cls).__init__(name, bases, dict)
 
         # Initialise plugin features
-        cls.plugin_hooks = {}
+        cls.plugin_hooks = collections.defaultdict(list)
         cls.plugin_cmds = []
 
         # Scan for callables decorated with Plugin.hook, Plugin.command
         for f in dict.itervalues():
             for h in getattr(f, 'plugin_hooks', ()):
-                if h in cls.plugin_hooks:
-                    cls.plugin_hooks[h].append(f)
-                else:
-                    cls.plugin_hooks[h] = [f]
+                cls.plugin_hooks[h].append(f)
             for cmd in getattr(f, 'plugin_cmds', ()):
                 cls.plugin_cmds.append((cmd, f))
 
