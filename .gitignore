@@ -43,6 +43,7 @@ pip-log.txt
 .coverage
 .tox
 nosetests.xml
+_trial_temp/
 
 #Translations
 *.mo
