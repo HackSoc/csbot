@@ -252,11 +252,10 @@ class Plugin(PluginBase):
         else:
             return self.config.getboolean(key)
 
-    # Methods copied from old Plugin class
-    # TODO: tidy these up
-
     @property
     def db(self):
+        """Get a MongoDB database for the plugin, based on the plugin name."""
         if self.db_ is None:
-            self.db_ = self.bot.mongodb['csbot__' + self.plugin_name()]
+            self.db_ = self.bot.mongodb[self.bot.config_get('mongodb_prefix') +
+                                        self.plugin_name()]
         return self.db_

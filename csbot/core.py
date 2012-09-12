@@ -39,6 +39,7 @@ class Bot(Plugin):
             ]),
             'mongodb_host': 'localhost',
             'mongodb_port': '27017',
+            'mongodb_prefix': 'csbot__',
     }
 
     #: The top-level package for all bot plugins
