@@ -136,7 +136,7 @@ class CommandEvent(Event):
             command = command[len(prefix):]
 
         return cls.extend(event, 'core.command',
-                          {'command': command, 'data': data})
+                          {'command': command, 'data': data.strip()})
 
     def arguments(self):
         """Parse *self["data"]* into a list of arguments using

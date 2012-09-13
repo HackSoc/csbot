@@ -180,3 +180,59 @@ class TestEvent(unittest.TestCase):
             self.assertEqual(e4[k], data2[k])
         # Check that everything else stayed the same
         self._assert_events_equal(e1, e4, event_type=False, data=False)
+
+
+class TestCommandEvent(unittest.TestCase):
+    def _check_valid_command(self, message, prefix, command, data):
+        e = csbot.events.Event(None, 'test.event', {'message': message})
+        c = csbot.events.CommandEvent.parse_command(e, prefix)
+        self.assertEqual(c['command'], command)
+        self.assertEqual(c['data'], data)
+        return c
+
+    def _check_invalid_command(self, message, prefix):
+        e = csbot.events.Event(None, 'test.event', {'message': message})
+        c = csbot.events.CommandEvent.parse_command(e, prefix)
+        self.assertIs(c, None)
+        return c
+
+    def test_parse_command(self):
+        # Test variations on command and data text with no prefix involvement
+        ## Just a command
+        self._check_valid_command('testcommand', '',
+                                  'testcommand', '')
+        ## Command and data
+        self._check_valid_command('test command data', '',
+                                  'test', 'command data')
+        ## Leading/trailing spaces are ignored
+        self._check_valid_command('    test command', '', 'test', 'command')
+        self._check_valid_command('test command    ', '', 'test', 'command')
+        self._check_valid_command('  test   command  ', '', 'test', 'command')
+        ## Non-alphanumeric commands
+        self._check_valid_command('!#?$ you !', '', '!#?$', 'you !')
+
+        # Test what happens with a command prefix
+        ## Not a command
+        self._check_invalid_command('just somebody talking', '!')
+        ## A simple command
+        self._check_valid_command('!hello', '!', 'hello', '')
+        ## ... with data
+        self._check_valid_command('!hello there', '!', 'hello', 'there')
+        ## ... and repeated prefix
+        self._check_valid_command('!hello !there everybody', '!',
+                                  'hello', '!there everybody')
+        ## Leading spaces
+        self._check_valid_command('   !hello', '!', 'hello', '')
+        ## Spaces separating the prefix from the command shouldn't trigger it
+        self._check_invalid_command('!  hello', '!')
+        ## The prefix can be part of the command if repeated
+        self._check_valid_command('!!hello', '!', '!hello', '')
+        self._check_valid_command('!!', '!', '!', '')
+
+        # Test a longer prefix
+        ## As long as it is a prefix of the first "part", should be fine
+        self._check_valid_command('dosomething now', 'do', 'something', 'now')
+        ## ... but if there's a space in between it's not a command any more
+        self._check_invalid_command('do something now', 'do')
+
+    # TODO: .arguments()
