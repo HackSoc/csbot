@@ -184,6 +184,8 @@ class TestEvent(unittest.TestCase):
 
 class TestCommandEvent(unittest.TestCase):
     def _check_valid_command(self, message, prefix, command, data):
+        """Test helper for checking the result of parsing a command from a
+        message."""
         e = csbot.events.Event(None, 'test.event', {'message': message})
         c = csbot.events.CommandEvent.parse_command(e, prefix)
         self.assertEqual(c['command'], command)
@@ -191,6 +193,8 @@ class TestCommandEvent(unittest.TestCase):
         return c
 
     def _check_invalid_command(self, message, prefix):
+        """Test helper for verifying that an invalid command is not
+        interpreted as a valid command."""
         e = csbot.events.Event(None, 'test.event', {'message': message})
         c = csbot.events.CommandEvent.parse_command(e, prefix)
         self.assertIs(c, None)
@@ -235,4 +239,42 @@ class TestCommandEvent(unittest.TestCase):
         ## ... but if there's a space in between it's not a command any more
         self._check_invalid_command('do something now', 'do')
 
-    # TODO: .arguments()
+        # Test unicode
+        ## Unicode prefix
+        self._check_valid_command(u'\u0CA0test', u'\u0CA0', 'test', '')
+        ## Shouldn't match part of a UTF8 multibyte sequence: \u0CA0 = \xC2\xA3
+        self._check_invalid_command(u'\u0CA0test', u'\xC2')
+        ## Unicode command
+        self._check_valid_command(u'!\u0CA0_\u0CA0', '!', u'\u0CA0_\u0CA0', '')
+
+    def test_arguments(self):
+        """Test argument grouping/parsing.  These tests are pretty much just
+        testing :func:`csbot.util.parse_arguments`, which should have its own
+        tests."""
+        # No arguments
+        c = self._check_valid_command('!foo', '!', 'foo', '')
+        self.assertEqual(c.arguments(), [])
+        # Some simple arguments
+        c = self._check_valid_command('!foo bar baz', '!', 'foo', 'bar baz')
+        self.assertEqual(c.arguments(), ['bar', 'baz'])
+        # ... with extra spaces
+        c = self._check_valid_command('!foo    bar   baz   ', '!',
+                                      'foo', 'bar   baz')
+        self.assertEqual(c.arguments(), ['bar', 'baz'])
+        # Forced argument grouping with quotes
+        c = self._check_valid_command('!foo "bar baz"', '!',
+                                      'foo', '"bar baz"')
+        self.assertEqual(c.arguments(), ['bar baz'])
+        # ... with extra spaces
+        c = self._check_valid_command('!foo    "bar   baz "  ', '!',
+                                      'foo', '"bar   baz "')
+        self.assertEqual(c.arguments(), ['bar   baz '])
+        # Escaped quote preserved
+        c = self._check_valid_command(r'!foo ba\"r', '!', 'foo', r'ba\"r')
+        self.assertEqual(c.arguments(), ['ba"r'])
+        # Unmatched quotes break
+        c = self._check_valid_command('!foo ba"r', '!', 'foo', 'ba"r')
+        self.assertRaises(ValueError, c.arguments)
+        # No mangling in the command part
+        c = self._check_valid_command('!"foo bar', '!', '"foo', 'bar')
+        c = self._check_valid_command('"foo bar', '"', 'foo', 'bar')
