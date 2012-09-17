@@ -41,6 +41,11 @@ class Bot(Plugin):
             'mongodb_prefix': 'csbot__',
     }
 
+    #: Environment variable fallbacks
+    CONFIG_ENVVARS = {
+            'mongodb_uri': ['MONGODB_URI'],
+    }
+
     #: The top-level package for all bot plugins
     PLUGIN_PACKAGE = 'csbot.plugins'
 

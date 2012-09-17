@@ -2,6 +2,7 @@ from itertools import chain
 from functools import partial
 import collections
 import logging
+import os
 
 import straight.plugin
 
@@ -177,6 +178,9 @@ class Plugin(PluginBase):
 
     #: Default configuration values, used automatically by :meth:`config_get`.
     CONFIG_DEFAULTS = {}
+    #: Configuration environment variables, used automatically by
+    #: :meth:`config_get`.
+    CONFIG_ENVVARS = {}
 
     def __init__(self, bot):
         self.bot = bot
@@ -234,20 +238,24 @@ class Plugin(PluginBase):
     def config_get(self, key):
         """Convenience wrapper proxying ``get()`` on :attr:`config`.
 
-        It's common to want to get a configuration value with a fallback to
-        some default.  This method simplifies the ugly syntax of::
+        Given a key, this method tries the following in order::
 
-            foo = self.config.get(key, self.CONFIG_DEFAULTS[key])
+            self.config[key]
+            for v in self.CONFIG_ENVVARS[key]:
+                os.environ[v]
+            self.CONFIG_DEFAULTS[key]
 
-        by making the fallback value implied if *key* exists in
-        :attr:`CONFIG_DEFAULTS`.  If there is no default for *key* then this
-        method acts just like ``self.config[key]``, and will throw a KeyError
-        if *key* isn't present in the configuration.
+        :exc:`KeyError` is raised if none of the methods succeed.
         """
-        if key in self.CONFIG_DEFAULTS:
-            return self.config.get(key, self.CONFIG_DEFAULTS[key])
-        else:
+        if key in self.config:
             return self.config[key]
+
+        for envvar in self.CONFIG_ENVVARS.get(key, []):
+            if envvar in os.environ:
+                return os.environ[envvar]
+
+        # Fallback which will raise KeyError if they key wasn't found anywhere
+        return self.CONFIG_DEFAULTS[key]
 
     def config_getboolean(self, key):
         """Identical to :meth:`config_get`, but proxying ``getboolean``.
