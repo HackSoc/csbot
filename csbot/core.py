@@ -24,6 +24,7 @@ class Bot(Plugin):
     #: Default configuration values
     CONFIG_DEFAULTS = {
             'nickname': 'csyorkbot',
+            'password': None,
             'username': 'csyorkbot',
             'realname': 'cs-york bot',
             'sourceURL': 'http://github.com/csyork/csbot/',
@@ -43,6 +44,7 @@ class Bot(Plugin):
 
     #: Environment variable fallbacks
     CONFIG_ENVVARS = {
+            'password': ['IRC_PASS'],
             'mongodb_uri': ['MONGODB_URI'],
     }
 
@@ -173,6 +175,7 @@ class BotProtocol(irc.IRCClient):
         self.bot = bot
         # Get IRCClient configuration from the Bot
         self.nickname = bot.config_get('nickname')
+        self.password = bot.config_get('password')
         self.username = bot.config_get('username')
         self.realname = bot.config_get('realname')
         self.sourceURL = bot.config_get('sourceURL')
