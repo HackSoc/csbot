@@ -37,8 +37,7 @@ class Bot(Plugin):
             'plugins': ' '.join([
                 'example',
             ]),
-            'mongodb_host': 'localhost',
-            'mongodb_port': '27017',
+            'mongodb_uri': 'mongodb://localhost:27017',
             'mongodb_prefix': 'csbot__',
     }
 
@@ -58,8 +57,9 @@ class Bot(Plugin):
             self.config_root.read_file(cfg)
 
         # Make mongodb connection
-        self.mongodb = pymongo.Connection(self.config_get('mongodb_host'),
-                                          int(self.config_get('mongodb_port')))
+        self.log.info('connecting to mongodb: ' +
+                      self.config_get('mongodb_uri'))
+        self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
 
         # Plugin management
         self.plugins = PluginManager(self.PLUGIN_PACKAGE,
