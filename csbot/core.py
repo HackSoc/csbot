@@ -45,7 +45,7 @@ class Bot(Plugin):
     #: Environment variable fallbacks
     CONFIG_ENVVARS = {
             'password': ['IRC_PASS'],
-            'mongodb_uri': ['MONGODB_URI'],
+            'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
     }
 
     #: The top-level package for all bot plugins
