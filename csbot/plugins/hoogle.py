@@ -1,7 +1,6 @@
 import json
 import logging
 import requests
-import urllib
 
 from csbot.plugin import Plugin
 
