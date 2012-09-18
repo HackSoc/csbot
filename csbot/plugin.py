@@ -156,7 +156,7 @@ class Plugin(PluginBase):
     def __init__(self, bot):
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
-        self.db_ = None
+        self._db = None
 
     def fire_hooks(self, event):
         """Execute all of this plugin's handlers for *event*."""
@@ -240,7 +240,7 @@ class Plugin(PluginBase):
     @property
     def db(self):
         """Get a MongoDB database for the plugin, based on the plugin name."""
-        if self.db_ is None:
-            self.db_ = self.bot.mongodb[self.bot.config_get('mongodb_prefix') +
+        if self._db is None:
+            self._db = self.bot.mongodb[self.bot.config_get('mongodb_prefix') +
                                         self.plugin_name()]
-        return self.db_
+        return self._db
