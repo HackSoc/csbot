@@ -161,6 +161,11 @@ class Bot(Plugin):
     def show_commands(self, event):
         event.protocol.msg(event['reply_to'], ', '.join(sorted(self.commands)))
 
+    @Plugin.command('plugins')
+    def show_plugins(self, event):
+        event.protocol.msg(event['reply_to'],
+                           'loaded plugins: ' + ', '.join(self.plugins))
+
 
 class PluginError(Exception):
     pass
