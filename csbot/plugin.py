@@ -9,6 +9,9 @@ import straight.plugin
 
 class PluginBase(object):
     """Minimal plugin base class to work with :class:`PluginManager`."""
+    #: Plugins which *must* be loaded before this plugin.
+    PLUGIN_DEPENDS = []
+
     @classmethod
     def plugin_name(cls):
         """Get the name of the plugin, by default the class name in lowercase.
@@ -24,6 +27,10 @@ class PluginBase(object):
 
 
 class PluginDuplicate(Exception):
+    pass
+
+
+class PluginDependencyUnmet(Exception):
     pass
 
 
@@ -63,7 +70,13 @@ class PluginManager(collections.Mapping):
             elif p not in available:
                 self.log.error('plugin not found: ' + p)
             else:
-                self.plugins[p] = available[p](*args)
+                P = available[p]
+                for dep in P.PLUGIN_DEPENDS:
+                    if dep not in self.plugins:
+                        raise PluginDependencyUnmet(
+                            "{} depends on {}, which isn't loaded yet"
+                            .format(p, dep))
+                self.plugins[p] = P(*args)
                 self.log.info('plugin loaded: ' + p)
 
     @staticmethod
