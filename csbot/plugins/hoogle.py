@@ -1,4 +1,3 @@
-import json
 import logging
 import requests
 import urllib
@@ -50,23 +49,24 @@ class Hoogle(Plugin):
         except ValueError:
             self.log.warn(u'"results" is not an integer!')
 
-        try:
-            allresults = json.loads(hresp.text)[u'results']
-            totalresults = len(allresults)
-            results = allresults[0:maxresults]
-            niceresults = []
-
-            for result in results:
-                niceresults.append(result[u'self'])
-
-            encqry = urllib.quote(query.encode('utf-8'))
-            fullurl = 'http://www.haskell.org/hoogle/?hoogle=' + encqry
-
-            e.protocol.msg(
-                e['reply_to'], u'Showing {} of {} results: {} ({})'.format(
-                    maxresults if maxresults < totalresults else totalresults,
-                    totalresults,
-                    '; '.join(niceresults),
-                    fullurl))
-        except ValueError:
+        if hresp.json is None:
             self.log.warn(u'invalid JSON received from Hoogle')
+            return
+
+        allresults = hresp.json[u'results']
+        totalresults = len(allresults)
+        results = allresults[0:maxresults]
+        niceresults = []
+
+        for result in results:
+            niceresults.append(result[u'self'])
+
+        encqry = urllib.quote(query.encode('utf-8'))
+        fullurl = 'http://www.haskell.org/hoogle/?hoogle=' + encqry
+
+        e.protocol.msg(
+            e['reply_to'], u'Showing {} of {} results: {} ({})'.format(
+                maxresults if maxresults < totalresults else totalresults,
+                totalresults,
+                '; '.join(niceresults),
+                fullurl))
