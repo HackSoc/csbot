@@ -48,6 +48,7 @@ class Hoogle(Plugin):
             maxresults = int(self.config_get('results'))
         except ValueError:
             self.log.warn(u'"results" is not an integer!')
+            maxresults = self.CONFIG_DEFAULTS['results']
 
         if hresp.json is None:
             self.log.warn(u'invalid JSON received from Hoogle')
