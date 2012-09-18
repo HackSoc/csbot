@@ -1,6 +1,7 @@
 import json
 import logging
 import requests
+import urllib
 
 from csbot.plugin import Plugin
 
@@ -22,11 +23,11 @@ class Hoogle(Plugin):
         """
 
         query = e['data']
-        hoogleurl = 'http://www.haskell.org/hoogle/?mode=json&hoogle=' + query
-        hoogleresp = requests.get(hoogleurl)
+        hurl = 'http://www.haskell.org/hoogle/?mode=json&hoogle=' + query
+        hresp = requests.get(hurl)
 
-        if hoogleresp.status_code != requests.codes.ok:
-            self.log.warn(u'request failed for ' + hoogleurl)
+        if hresp.status_code != requests.codes.ok:
+            self.log.warn(u'request failed for ' + hurl)
             return
 
         # The Hoogle response JSON is of the following format:
@@ -50,7 +51,7 @@ class Hoogle(Plugin):
             self.log.warn(u'"results" is not an integer!')
 
         try:
-            allresults = json.loads(hoogleresp.text)[u'results']
+            allresults = json.loads(hresp.text)[u'results']
             totalresults = len(allresults)
             results = allresults[0:maxresults]
             niceresults = []
@@ -58,10 +59,14 @@ class Hoogle(Plugin):
             for result in results:
                 niceresults.append(result[u'self'])
 
+            encqry = urllib.quote(query.encode('utf-8'))
+            fullurl = 'http://www.haskell.org/hoogle/?hoogle=' + encqry
+
             e.protocol.msg(
-                e['reply_to'], u'Showing {} of {} results: {}'.format(
+                e['reply_to'], u'Showing {} of {} results: {} ({})'.format(
                     maxresults if maxresults < totalresults else totalresults,
                     totalresults,
-                    '; '.join(niceresults)))
+                    '; '.join(niceresults),
+                    fullurl))
         except ValueError:
             self.log.warn(u'invalid JSON received from Hoogle')
