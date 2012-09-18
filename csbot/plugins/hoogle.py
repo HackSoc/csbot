@@ -6,6 +6,10 @@ from csbot.plugin import Plugin
 
 
 class Hoogle(Plugin):
+    CONFIG_DEFAULTS = {
+        'results': 5,
+    }
+    
     log = logging.getLogger(__name__)
 
     def setup(self):
@@ -38,12 +42,10 @@ class Hoogle(Plugin):
         #  ]
         # }
 
-        maxresults = 5
+        maxresults = 0
 
         try:
             maxresults = int(self.config_get('results'))
-        except KeyError:
-            self.log.debug(u'number of results not specified, using 5')
         except ValueError:
             self.log.warn(u'"results" is not an integer!')
 
