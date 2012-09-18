@@ -1,4 +1,3 @@
-from functools import partial
 import logging
 import collections
 
@@ -67,13 +66,14 @@ class Bot(Plugin):
         self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
 
         # Plugin management
-        self.plugins = PluginManager(self.PLUGIN_PACKAGE,
-                                     Plugin, [self], [self])
+        self.plugins = PluginManager(self.PLUGIN_PACKAGE, Plugin,
+                                     self.config_get('plugins').split(),
+                                     [self], [self])
         self.commands = {}
 
         # Event runner
         self.events = events.ImmediateEventRunner(
-                partial(self.plugins.broadcast, 'fire_hooks'))
+            lambda e: self.plugins.broadcast('fire_hooks', (e,)))
 
     @classmethod
     def plugin_name(cls):
@@ -85,17 +85,13 @@ class Bot(Plugin):
         """Load plugins defined in configuration.
         """
         super(Bot, self).setup()
-        map(self.plugins.load, self.config_get('plugins').split())
+        self.plugins.broadcast('setup', static=False)
 
     def teardown(self):
         """Unload plugins and save data.
         """
         super(Bot, self).teardown()
-        # Save currently loaded plugins
-        self.config['plugins'] = ' '.join(self.plugins)
-
-        # Unload plugins
-        map(self.plugins.unload, self.plugins.keys())
+        self.plugins.broadcast('teardown', static=False)
 
         # Save configuration
         with open(self.config_path, 'w') as cfg:

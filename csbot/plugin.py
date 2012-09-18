@@ -7,134 +7,101 @@ import os
 import straight.plugin
 
 
-class PluginError(Exception):
-    pass
-
-
 class PluginBase(object):
     """Minimal plugin base class to work with :class:`PluginManager`."""
     @classmethod
     def plugin_name(cls):
-        """Get the short name of the plugin, by default the class name in
-        lowercase."""
+        """Get the name of the plugin, by default the class name in lowercase.
+        """
         return cls.__name__.lower()
 
     @classmethod
-    def qualified_plugin_name(cls):
-        """Get the fully qualified class name, most useful when dealing with
-        ambiguous (non-unique) short names.
+    def qualified_name(cls):
+        """Get the fully qualified class name, most useful when complaining
+        about duplicate plugins names.
         """
-        return '{}.{}'.format(cls.__module__, cls.__name)
+        return '{}.{}'.format(cls.__module__, cls.__name__)
 
-    def setup(self):
-        """Called after the plugin is loaded.  This is where a plugin should
-        perform its own setup.
 
-        .. note:: Plugin loading order is unlikely to be consistent, so
-                  interaction with other plugins in this method is discouraged.
-        """
-        pass
-
-    def teardown(self):
-        """Called before the plugin is unloaded.  This is where a plugin should
-        perform its own cleanup.
-
-        .. note:: Plugin unloading order is unlikely to be consistent, so
-                  interaction with other plugins in this method is discouraged.
-        """
-        pass
+class PluginDuplicate(Exception):
+    pass
 
 
 class PluginManager(collections.Mapping):
-    """A generic plugin manager based on `straight.plugin`_.
+    """A simple plugin manager based on `straight.plugin`_.
 
-    The plugin manager will discover and manage plugins under *namespace* that
-    subclass *baseclass*.  When creating a new plugin instance, *args* is
-    passed as arguments to the constructor.
+    The plugin manager will discover plugins under *namespace* that subclass
+    *baseclass*.  Each of *plugins* will be loaded by name, passing *args* as
+    arguments to the constructor.
 
-    The :class:`PluginBase` class demonstrates the minimum interface that the
-    plugin manager expects from plugin classes.
+    Optionally, *static* can be used to supply a list of plugins that have
+    already been loaded.  These do not have to subclass *baseclass*, but are
+    still assumed to follow the same interface.  The :class:`PluginBase` class
+    demonstrates the minimum interface that :class:`PluginManager` requires.
 
-    Optionally *static* can be used to supply a list of plugins that are always
-    loaded, and are called by :meth:`broadcast` before any other.  They are not
-    managed by the plugin manager, so :meth:`~PluginBase.setup` and
-    :meth:`~PluginBase.teardown` are not called.
+    Methods are invoked across all plugins by using :meth:`broadcast`.
 
     .. _straight.plugin: https://github.com/ironfroggy/straight.plugin
     """
 
-    #: Plugins that are always loaded.
+    #: Plugins loaded outside of the plugin manager.
     static = []
-    #: Currently loaded plugins.
+    #: Plugins loaded by the plugin manager
     plugins = {}
 
-    def __init__(self, namespace, baseclass, args=None, static=None):
-        self.__namespace = namespace
-        self.__baseclass = baseclass
-        self.__args = args or []
-        self.static = static or []
-        self.plugins = {}
+    def __init__(self, namespace, baseclass, plugins, static=None, args=None):
         self.log = logging.getLogger(__name__)
+        self.static = static or []
+        self.plugins = collections.OrderedDict()
 
-    def discover(self):
-        """Discover available plugins.
+        args = args or []
+        available = self.discover(namespace, baseclass)
+
+        for p in plugins:
+            if p in self.plugins:
+                self.log.warn('not loading duplicate plugin:  ' + p)
+            elif p not in available:
+                self.log.error('plugin not found: ' + p)
+            else:
+                self.plugins[p] = available[p](*args)
+                self.log.info('plugin loaded: ' + p)
+
+    @staticmethod
+    def discover(namespace, baseclass):
+        """Discover plugins under *namespace* subclassing *baseclass*.
 
         Return a dict mapping plugin names to plugin classes.  A
-        :exc:`PluginError` is raised if multiple plugins have the same short
+        :exc:`PluginDuplicate` is raised if multiple plugins have the same
         name.
         """
-        plugins = straight.plugin.load(self.__namespace,
-                                       subclasses=self.__baseclass)
-        available = {}
+        # Use straight.plugin to discover classes
+        plugins = straight.plugin.load(namespace,
+                                       subclasses=baseclass)
 
+        # Build available plugins dict, checking for duplicates
+        available = {}
         for P in plugins:
             name = P.plugin_name()
             if name in available:
-                raise PluginError('name conflict "{}":  {} and {}'.format(
-                        P.plugin_name(),
-                        available[name].qualified_plugin_name(),
-                        P.qualified_plugin_name()))
+                raise PluginDuplicate(name, P.qualified_name(),
+                                      available[name].qualified_name())
             else:
                 available[name] = P
-
         return available
 
-    def load(self, name):
-        """Load a plugin, returning True if the plugin exists, otherwise
-        returning False.
+    def broadcast(self, method, args=(), static=True):
+        """Call ``p.method(*args)`` on every plugin.
+
+        Plugins are always called in the order they were loaded.  If *static*
+        is True then all static plugins are called before loaded plugins.
         """
-        if name in self.plugins:
-            self.log.warn('plugin already loaded: {}'.format(name))
-            return True
+        if static:
+            plugins = chain(self.static, self.plugins.itervalues())
+        else:
+            plugins = self.plugins.itervalues()
 
-        available = self.discover()
-        if name not in available:
-            self.log.error('plugin not found: {}'.format(name))
-            return False
-
-        p = available[name](*self.__args)
-        self.plugins[name] = p
-        self.log.info('plugin loaded: {}'.format(name))
-        p.setup()
-        return True
-
-    def unload(self, name):
-        """Unload a plugin."""
-        if name not in self.plugins:
-            self.log.warn('plugin not loaded: {}'.format(name))
-
-        p = self.plugins.pop(name)
-        p.teardown()
-        self.log.info('plugin unloaded: {}'.format(name))
-
-    def broadcast(self, method, *args, **kwargs):
-        """Call ``p.method(*args, **kwargs)`` on every plugin."""
-        # Follow "static" plugins with dynamic plugins - using .values()
-        # instead of .itervalues() because plugin loading/unloading would
-        # invalidate the iterator, and these are valid things to happen at any
-        # time.
-        for p in chain(self.static, self.plugins.values()):
-            getattr(p, method)(*args, **kwargs)
+        for p in plugins:
+            getattr(p, method)(*args)
 
     # Implement abstract "read-only" Mapping interface
 
