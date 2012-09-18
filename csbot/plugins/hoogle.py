@@ -9,7 +9,7 @@ class Hoogle(Plugin):
     CONFIG_DEFAULTS = {
         'results': 5,
     }
-    
+
     log = logging.getLogger(__name__)
 
     def setup(self):
@@ -53,12 +53,15 @@ class Hoogle(Plugin):
             allresults = json.loads(hoogleresp.text)[u'results']
             totalresults = len(allresults)
             results = allresults[0:maxresults]
-
-            e.protocol.msg(e['reply_to'], u'Showing {} of {} results:'.format(
-                maxresults if maxresults < totalresults else totalresults,
-                totalresults))
+            niceresults = []
 
             for result in results:
-                e.protocol.msg(e['reply_to'], result[u'self'])
+                niceresults.append(result[u'self'])
+
+            e.protocol.msg(
+                e['reply_to'], u'Showing {} of {} results: {}'.format(
+                    maxresults if maxresults < totalresults else totalresults,
+                    totalresults,
+                    '; '.join(niceresults)))
         except ValueError:
             self.log.warn(u'invalid JSON received from Hoogle')
