@@ -1,4 +1,3 @@
-import logging
 import requests
 import urllib
 
@@ -9,8 +8,6 @@ class Hoogle(Plugin):
     CONFIG_DEFAULTS = {
         'results': 5,
     }
-
-    log = logging.getLogger(__name__)
 
     def setup(self):
         super(Hoogle, self).setup()
