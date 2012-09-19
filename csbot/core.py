@@ -51,8 +51,6 @@ class Bot(Plugin):
     #: The top-level package for all bot plugins
     PLUGIN_PACKAGE = 'csbot.plugins'
 
-    log = logging.getLogger('csbot.bot')
-
     def __init__(self, configpath):
         super(Bot, self).__init__(self)
 
