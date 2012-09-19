@@ -1,4 +1,3 @@
-import logging
 import re
 from urlparse import urlparse
 
@@ -9,8 +8,6 @@ from csbot.plugin import Plugin
 
 
 class LinkInfo(Plugin):
-    log = logging.getLogger(__name__)
-
     def setup(self):
         """Create exclusion and handler filters.
         """

@@ -182,7 +182,12 @@ class Plugin(PluginBase):
     #: :meth:`config_get`.
     CONFIG_ENVVARS = {}
 
+    #: The plugin's logger, created by default using the plugin class'
+    #: containing module name as the logger name.
+    log = None
+
     def __init__(self, bot):
+        self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
         self.db_ = None
 
