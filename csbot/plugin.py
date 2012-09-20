@@ -34,6 +34,10 @@ class PluginDependencyUnmet(Exception):
     pass
 
 
+class PluginFeatureError(Exception):
+    pass
+
+
 class PluginManager(collections.Mapping):
     """A simple plugin manager based on `straight.plugin`_.
 
@@ -138,13 +142,16 @@ class PluginMeta(type):
         # Initialise plugin features
         cls.plugin_hooks = collections.defaultdict(list)
         cls.plugin_cmds = []
+        cls.plugin_integrations = []
 
-        # Scan for callables decorated with Plugin.hook, Plugin.command
+        # Scan for decorated methods
         for f in dict.itervalues():
             for h in getattr(f, 'plugin_hooks', ()):
                 cls.plugin_hooks[h].append(f)
             for cmd in getattr(f, 'plugin_cmds', ()):
                 cls.plugin_cmds.append((cmd, f))
+            if len(getattr(f, 'plugin_integrate_with', [])) > 0:
+                cls.plugin_integrations.append((f.plugin_integrate_with, f))
 
 
 class Plugin(PluginBase):
@@ -177,13 +184,25 @@ class Plugin(PluginBase):
             f(self, event)
 
     def setup(self):
-        """Plugin setup; register all commands provided by the plugin.
+        """Plugin setup.
+
+        * Fire all plugin integration methods.
+        * Register all commands provided by the plugin.
         """
+        for plugin_names, f in self.plugin_integrations:
+            plugins = [self.bot.plugins[p] for p in plugin_names
+                       if p in self.bot.plugins]
+            # Only fire integration method if all named plugins were loaded
+            if len(plugins) == len(plugin_names):
+                f(self, *plugins)
+
         for cmd, f in self.plugin_cmds:
             self.bot.register_command(cmd, partial(f, self), tag=self)
 
     def teardown(self):
-        """Plugin teardown; unregister all commands provided by the plugin.
+        """Plugin teardown.
+
+        * Unregister all commands provided by the plugin.
         """
         self.bot.unregister_commands(tag=self)
 
@@ -204,6 +223,27 @@ class Plugin(PluginBase):
                 f.plugin_cmds.add(cmd)
             else:
                 f.plugin_cmds = set((cmd,))
+            return f
+        return decorate
+
+    @staticmethod
+    def integrate_with(*otherplugins):
+        """Tag a method as providing integration with *otherplugins*.
+
+        During :meth:`.setup`, all methods tagged with this decorator will be
+        run if all of the named plugins are loaded.  The actual plugin
+        objects will be passed as arguments to the method in the same order.
+
+        .. note:: The order that integration methods are called in cannot be
+                  guaranteed, because attribute order is not preserved during
+                  class creation.
+        """
+        if len(otherplugins) == 0:
+            raise PluginFeatureError('no plugins specified in Plugin'
+                                     '.integrate_with()')
+
+        def decorate(f):
+            f.plugin_integrate_with = otherplugins
             return f
         return decorate
 
