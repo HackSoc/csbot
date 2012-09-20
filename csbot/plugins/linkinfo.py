@@ -108,8 +108,10 @@ class LinkInfo(Plugin):
         title = html.find('.//title')
 
         if title is not None:
+            # Normalise title whitespace
+            title = ' '.join(title.text.strip().split())
             return ('Title', url.netloc.endswith('.xxx'),
-                    u'"{}"'.format(title.text))
+                    u'"{}"'.format(title))
         else:
             self.log.debug(u'failed to find <title>: ' + url)
             return None
