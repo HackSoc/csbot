@@ -138,7 +138,7 @@ class CommandEvent(Event):
         return cls.extend(event, 'core.command',
                           {'command': command, 'data': data.strip()})
 
-    def reply(message)
+    def reply(message):
         event.protocol.msg(e['reply_to'], message)
 
     def arguments(self):
