@@ -80,8 +80,14 @@ def format_date(bot, date):
 def format_time(bot, date):
     return date.strftime(bot.config_get('time_format'))
 
-def sensible_time(bot, datetime):
+def sensible_time(bot, datetime, prefix=False):
     if datetime.day == datetime.today().day:
-        return format_time(bot, datetime)
+        if prefix:
+            return 'at ' + format_time(bot, datetime)
+        else:
+            return format_time(bot, datetime)
     else:
-        return format_date(bot, datetime)
+        if prefix:
+            return 'on ' + format_date(bot, datetime)
+        else:
+            return format_date(bot, datetime)
