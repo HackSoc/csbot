@@ -75,4 +75,4 @@ def parse_arguments(raw):
     return list(lex)
 
 def format_date(bot, date):
-    date.strftime(bot.config_get('date_format'))
+    date.strftime('%d/%m/%Y')
