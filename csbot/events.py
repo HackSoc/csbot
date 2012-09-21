@@ -139,7 +139,7 @@ class CommandEvent(Event):
                           {'command': command, 'data': data.strip()})
 
     def reply(self, message):
-        event.protocol.msg(e['reply_to'], message)
+        self.protocol.msg(e['reply_to'], message)
 
     def arguments(self):
         """Parse *self["data"]* into a list of arguments using
