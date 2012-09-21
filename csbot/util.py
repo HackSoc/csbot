@@ -76,3 +76,12 @@ def parse_arguments(raw):
 
 def format_date(bot, date):
     return date.strftime(bot.config_get('date_format'))
+
+def format_time(bot, date):
+    return date.strftime(bot.config_get('time_format'))
+
+def sensible_time(bot, time):
+    if date.day == date.today().day:
+        return format_time(bot, time)
+    else:
+        return format_date(bot, time)
