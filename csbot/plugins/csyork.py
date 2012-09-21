@@ -1,10 +1,8 @@
 from csbot.plugin import Plugin
 
 class CSYork(Plugin):
-
-    def __init__(self, *args, **kwargs):
-        pass
-
+	"""Amusing replacements for various #cs-york members"""
+	
     @Plugin.hook('core.message.privmsg')
     def respond(self, e):
     
