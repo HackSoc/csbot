@@ -117,6 +117,7 @@ class Users(Plugin):
     def privmsg(self, event):
         self.bot.log.info('Called privmsg')
         usr = self.db.online_users.find_one({'user': event['user']})
+        self.bot.log.info('event: ' + str(event))
         if usr:
             self.bot.log.info('Found a user')
             usr['last_said'] = event['message']
