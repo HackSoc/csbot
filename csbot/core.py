@@ -40,6 +40,7 @@ class Bot(Plugin):
             'mongodb_uri': 'mongodb://localhost:27017',
             'mongodb_prefix': 'csbot__',
             'date_format': '%d/%m/%Y',
+            'time_format': '%H:%M',
     }
 
     #: Environment variable fallbacks

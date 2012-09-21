@@ -76,6 +76,7 @@ def parse_arguments(raw):
 
 def format_date(bot, date):
     return date.strftime(bot.config_get('date_format'))
+
 def format_time(bot, date):
     return date.strftime(bot.config_get('time_format'))
 
