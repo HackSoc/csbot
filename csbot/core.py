@@ -93,10 +93,6 @@ class Bot(Plugin):
         super(Bot, self).teardown()
         self.plugins.broadcast('teardown', static=False)
 
-        # Save configuration
-        with open(self.config_path, 'w') as cfg:
-            self.config_root.write(cfg)
-
     def post_event(self, event):
         self.events.post_event(event)
 
