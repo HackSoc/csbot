@@ -115,12 +115,15 @@ class Users(Plugin):
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
+        self.bot.log.info('Called privmsg')
         usr = self.db.online_users.find_one({'user': event['user']})
         if usr:
+            self.bot.log.info('Found a user')
             usr['last_said'] = event['message']
             usr['time_last_spoke'] = event.datetime
             self.db.online_users.update({'_id': usr['_id']}, usr)
-#        else:
+        else:
+            self.bot.log.info('Didn\'t find a user')
 #            usr = {'user': event.user,
 #                    'time_last_spoke': event.datetime,
 #                    'join_time': event.datetime}
