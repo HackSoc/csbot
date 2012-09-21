@@ -1,5 +1,4 @@
 import shlex
-import datetime.datetime
 
 
 class User(object):
