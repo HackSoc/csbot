@@ -73,3 +73,14 @@ def parse_arguments(raw):
     lex.quotes = '"'
     # Parse the string
     return list(lex)
+
+def format_date(bot, date):
+    return date.strftime(bot.config_get('date_format'))
+def format_time(bot, date):
+    return date.strftime(bot.config_get('time_format'))
+
+def sensible_time(bot, datetime):
+    if datetime.day == datetime.today().day:
+        return format_time(bot, datetime)
+    else:
+        return format_date(bot, datetime)
