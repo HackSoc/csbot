@@ -138,6 +138,9 @@ class CommandEvent(Event):
         return cls.extend(event, 'core.command',
                           {'command': command, 'data': data.strip()})
 
+    def reply(message)
+        event.protocol.msg(e['reply_to'], message)
+
     def arguments(self):
         """Parse *self["data"]* into a list of arguments using
         :func:`~csbot.util.parse_arguments`.  This might raise a
