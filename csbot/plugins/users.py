@@ -51,7 +51,7 @@ class Users(Plugin):
         if usr:
             if 'time_last_spoke' in usr:
                 event.reply("{} last said something {}".format(
-                    usr['user'], format_date(usr['time_last_spoke'])))
+                    usr['user'], format_date(self.bot, usr['time_last_spoke'])))
             else:
                 event.reply("I don't remember {} saying anything.".format(
                     usr['user']))
@@ -68,7 +68,7 @@ class Users(Plugin):
         usr = self.db.offline_users.find_one({'user': data[0]})
         if usr:
             event.reply("{} was last seen at {}".format(usr['user'],
-                format_date(usr['time'])))
+                format_date(self.bot, usr['time'])))
         else:
             usr = self.db.online_users.find_one({'user': data[0]})
             if usr:
