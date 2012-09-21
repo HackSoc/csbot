@@ -45,7 +45,8 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         spoke.
         """
-        usr = self.db.online_users.find_one({'user': event['data'][0]})
+        data = event.arguments()
+        usr = self.db.online_users.find_one({'user': data[0]})
         if usr:
             if 'time_last_spoke' in usr:
                 event.reply("{} last said something {}".format(
@@ -54,7 +55,7 @@ class Users(Plugin):
                 event.reply("I don't remember {} saying anything.".format(
                     usr['user']))
         else:
-            event.reply("I've never even heard of {}".format(event['data'][0]))
+            event.reply("I've never even heard of {}".format(data[0]))
 
     @Plugin.command('seen')
     def seen(self, event):
@@ -62,16 +63,17 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         was online.
         """
-        usr = self.db.offline_users.find_one({'user': event['data'][0]})
+        data = event.arguments()
+        usr = self.db.offline_users.find_one({'user': data[0]})
         if usr:
             event.reply("{} was last seen at {}".format(usr['user'],
                 usr['time']))
         else:
-            usr = self.db.online_users.find_one({'user': event['data'][0]})
+            usr = self.db.online_users.find_one({'user': data[0]})
             if usr:
                 event.reply("{} is here.".format(usr['user']))
             else:
-                event.reply("I haven't seen {}".format(event['data'][0]))
+                event.reply("I haven't seen {}".format(data[0]))
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
@@ -90,7 +92,7 @@ class Users(Plugin):
         elif records.count == 1:
             usr = records.next()
             usr['join_time'] = event.datetime
-            self.db.online_users.save(usr)
+            self.db.online_users.update({'_id': usr['_id']}, usr)
         else:
             # if there is no record create a new one
             usr_matcher['join_time'] = event.datetime
@@ -117,7 +119,7 @@ class Users(Plugin):
         if usr:
             usr['last_said'] = event['message']
             usr['time_last_spoke'] = event.datetime
-            usr.save()
+            self.db.online_users.update({'_id': usr['_id']}, usr)
 #        else:
 #            usr = {'user': event.user,
 #                    'time_last_spoke': event.datetime,
@@ -135,7 +137,7 @@ class Users(Plugin):
         else:
             usr = usrs.next()
             usrs['user'] = event['newnick']
-            self.db.online_users.save(usr)
+            self.db.online_users.update({'_id': usr['_id']}, usr)
 
     def userOffline(self, event):
         # Remove any record of being online or offline
