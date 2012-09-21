@@ -1,4 +1,5 @@
 import shlex
+import datetime.datetime
 
 
 class User(object):
@@ -73,3 +74,6 @@ def parse_arguments(raw):
     lex.quotes = '"'
     # Parse the string
     return list(lex)
+
+def format_date(bot, date):
+    date.strftime(bot.config_get('date_format'))
