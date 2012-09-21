@@ -1,4 +1,5 @@
 from csbot.core import Plugin
+from csbot.util import nick
 from datetime import datetime
 
 
@@ -115,12 +116,13 @@ class Users(Plugin):
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
-        usr = self.db.online_users.find_one({'user': event['user']})
+        usr = self.db.online_users.find_one({'user': nick(event['user'])})
         if usr:
             usr['last_said'] = event['message']
             usr['time_last_spoke'] = event.datetime
             self.db.online_users.update({'_id': usr['_id']}, usr)
-#        else:
+        else:
+            self.bot.log.info('Didn\'t find a user')
 #            usr = {'user': event.user,
 #                    'time_last_spoke': event.datetime,
 #                    'join_time': event.datetime}
