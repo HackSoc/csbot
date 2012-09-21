@@ -1,5 +1,5 @@
 from csbot.core import Plugin
-from csbot.util import nick
+from csbot.util import nick, format_date
 from datetime import datetime
 
 
@@ -51,7 +51,7 @@ class Users(Plugin):
         if usr:
             if 'time_last_spoke' in usr:
                 event.reply("{} last said something {}".format(
-                    usr['user'], usr['time_last_spoke']))
+                    usr['user'], format_date(usr['time_last_spoke'])))
             else:
                 event.reply("I don't remember {} saying anything.".format(
                     usr['user']))
@@ -68,7 +68,7 @@ class Users(Plugin):
         usr = self.db.offline_users.find_one({'user': data[0]})
         if usr:
             event.reply("{} was last seen at {}".format(usr['user'],
-                usr['time']))
+                format_date(usr['time'])))
         else:
             usr = self.db.online_users.find_one({'user': data[0]})
             if usr:
