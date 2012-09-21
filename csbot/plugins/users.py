@@ -75,7 +75,7 @@ class Users(Plugin):
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
-        usr_matcher = {'user': event.user}
+        usr_matcher = {'user': event['user']}
         # Delete any records of them being offline
         self.db.offline_users.remove(usr_matcher)
         # Update any existing records.
@@ -105,7 +105,7 @@ class Users(Plugin):
         # Remove everyone in the db
         self.db.online_users.remove()
         self.db.offline_users.remove()
-        for nick, mode in event.names:
+        for nick, mode in event['names']:
             self.db.online_users.insert({
                 'user': nick,
                 'join_time': event.datetime,
@@ -113,9 +113,9 @@ class Users(Plugin):
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
-        usr = self.db.online_users.find_one({'user': event.user})
+        usr = self.db.online_users.find_one({'user': event['user']})
         if usr:
-            usr['last_said'] = event.message
+            usr['last_said'] = event['message']
             usr['time_last_spoke'] = event.datetime
             usr.save()
 #        else:
@@ -126,24 +126,24 @@ class Users(Plugin):
 
     @Plugin.hook('core.user.renamed')
     def userRenamed(self, event):
-        usrs = self.db.online_users.find({'user': event.oldnick})
+        usrs = self.db.online_users.find({'user': event['oldnick']})
         if usrs.count() > 1:
-            self.db.online_users.remove({'user': event.oldnick})
+            self.db.online_users.remove({'user': event['oldnick']})
         elif usrs.count() < 1:
-            usr = {'user': event.newnick, 'join_time': event.datetime}
+            usr = {'user': event['newnick'], 'join_time': event.datetime}
             self.db.online_users.insert(usr)
         else:
             usr = usrs.next()
-            usrs['user'] = event.newnick
+            usrs['user'] = event['newnick']
             self.db.online_users.save(usr)
 
     def userOffline(self, event):
         # Remove any record of being online or offline
-        self.db.online_users.remove({'user': event.user})
-        self.db.offline_users.remove({'user': event.user})
+        self.db.online_users.remove({'user': event['user']})
+        self.db.offline_users.remove({'user': event['user']})
         # Be offline
         self.db.offline_users.insert({
-            'user': event.user,
+            'user': event['user'],
             'time': datetime.now()
             })
 
