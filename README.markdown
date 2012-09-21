@@ -24,5 +24,7 @@ Unit testing is done with [Trial](http://twistedmatrix.com/documents/current/cor
 Twisted's extension of Python's unittest module.  If structured correctly, tests should be runnable 
 with `trial csbot`.
 
+[![Build Status](https://secure.travis-ci.org/csyork/csbot.png)](http://travis-ci.org/csyork/csbot)
+
 ## Further Reading ##
 Please read the [Procedures page](https://github.com/csyork/csbot/wiki/Procedure) for more information. The wiki will be updated more often than this Read Me file and so should be taken as the first point of reference.
