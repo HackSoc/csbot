@@ -17,7 +17,12 @@ class Imgur(Plugin):
                                           url.params,
                                           url.query,
                                           url.fragment)
-            return linkinfo.scrape_html_title(newurl)
+            reply = linkinfo.scrape_html_title(newurl)
+            # Don't say anything if the title was never set on the image
+            if reply is not None and \
+                    reply[2] == '"imgur: the simple image sharer"':
+                return None
+            return reply
 
         linkinfo.register_handler(
             lambda url: url.netloc == 'i.imgur.com',
