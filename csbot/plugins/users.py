@@ -1,10 +1,8 @@
-from csbot.core import Plugin, PluginFeatures
+from csbot.core import Plugin
 from datetime import datetime
 
 
 class Users(Plugin):
-    features = PluginFeatures()
-
     """
     This class provides various utility functions for other plugins to use when
     keeping track of users and nicks.
@@ -20,6 +18,7 @@ class Users(Plugin):
         # trusted any more
         self.db.offline_users.remove()
         self.db.online_users.remove()
+        super(Users, self).setup()
 
     def is_online(self, user):
         """
@@ -40,7 +39,7 @@ class Users(Plugin):
         """
         return [u['user'] for u in self.db.online_users.find()]
 
-    @features.command('spoke')
+    @Plugin.command('spoke')
     def spoke(self, event):
         """
         Tells the user who asked when the last time the user they asked about
@@ -57,7 +56,7 @@ class Users(Plugin):
         else:
             event.reply("I've never even heard of {}".format(event.data[0]))
 
-    @features.command('seen')
+    @Plugin.command('seen')
     def seen(self, event):
         """
         Tells the user who asked when the last time the user they asked about
@@ -74,7 +73,7 @@ class Users(Plugin):
             else:
                 event.reply("I haven't seen {}".format(event.data[0]))
 
-    @features.hook('userJoined')
+    @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
         usr_matcher = {'user': event.user}
         # Delete any records of them being offline
@@ -97,7 +96,7 @@ class Users(Plugin):
             usr_matcher['join_time'] = event.datetime
             self.db.online_users.insert(usr_matcher)
 
-    @features.hook('names')
+    @Plugin.hook('core.channel.names')
     def names(self, event):
         """
         When we connect to a channel we get a list of the names. This handles
@@ -112,11 +111,11 @@ class Users(Plugin):
                 'join_time': event.datetime,
                 })
 
-    @features.hook('privmsg')
+    @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         usr = self.db.online_users.find_one({'user': event.user})
         if usr:
-            usr['last_said'] = event.msg
+            usr['last_said'] = event.message
             usr['time_last_spoke'] = event.datetime
             usr.save()
 #        else:
@@ -125,17 +124,17 @@ class Users(Plugin):
 #                    'join_time': event.datetime}
 #            self.db.online_users.insert(usr)
 
-    @features.hook('userRenamed')
+    @Plugin.hook('core.user.renamed')
     def userRenamed(self, event):
-        usrs = self.db.online_users.find({'user': event.oldname})
+        usrs = self.db.online_users.find({'user': event.oldnick})
         if usrs.count() > 1:
-            self.db.online_users.remove({'user': event.oldname})
+            self.db.online_users.remove({'user': event.oldnick})
         elif usrs.count() < 1:
-            usr = {'user': event.newname, 'join_time': event.datetime}
+            usr = {'user': event.newnick, 'join_time': event.datetime}
             self.db.online_users.insert(usr)
         else:
             usr = usrs.next()
-            usrs['user'] = event.newname
+            usrs['user'] = event.newnick
             self.db.online_users.save(usr)
 
     def userOffline(self, event):
@@ -148,14 +147,14 @@ class Users(Plugin):
             'time': datetime.now()
             })
 
-    @features.hook('userLeft')
+    @Plugin.hook('core.channel.left')
     def userLeft(self, event):
         self.userOffline(event)
 
-    @features.hook('userQuit')
+    @Plugin.hook('core.channel.quit')
     def userQuit(self, event):
         self.userOffline(event)
 
-    @features.hook('userKicked')
+    @Plugin.hook('core.user.quit')
     def userKicked(self, event):
         self.userOffline(event)
