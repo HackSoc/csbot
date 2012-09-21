@@ -110,17 +110,13 @@ dictionary in addition to supporting its own API.
 
 An example of using plugin configuration::
 
-    class Bomb(Plugin):
-        """A bomb which remembers if it was armed or not, even across bot restarts."""
-        @Plugin.command('explode')
-        def explode(self, e):
-            if self.config.getboolean('armed', False):
-                print('Boom!')
-                self.config['armed'] = False
-
-        @Plugin.command('arm')
-        def arm(self, e):
-            self.config['armed'] = True
+    class Say(Plugin):
+        @Plugin.command('say')
+        def say(self, e):
+            if self.config.getboolean('shout', False):
+                e.protocol.msg(e['reply_to'], e['data'].upper() + '!')
+            else:
+                e.protocol.msg(e['reply_to'], e['data'])
 
 For even more convenience, automatic fallback values are supported through the 
 :attr:`~.Plugin.CONFIG_DEFAULTS` attribute when using the :meth:`~.Plugin.config_get` or 
@@ -129,21 +125,27 @@ For even more convenience, automatic fallback values are supported through the
 supports and what the default values are by looking at just one part of the plugin source code.  The 
 above example would look like this::
 
-    class Bomb(Plugin):
+    class Say(Plugin):
         CONFIG_DEFAULTS = {
-            'armed': False,
+            'shout': False,
         }
 
-        @Plugin.command('explode')
-        def explode(self, e):
-            if self.config_getboolean('armed'):
-                print('Boom!')
-                self.config['armed'] = False
+        @Plugin.command('say')
+        def say(self, e):
+            if self.config_getboolean('shout'):
+                e.protocol.msg(e['reply_to'], e['data'].upper() + '!')
+            else:
+                e.protocol.msg(e['reply_to'], e['data'])
 
-        @Plugin.command('arm')
-        def arm(self, e):
-            self.config['armed'] = True
+Configuration can be changed at runtime, but won't be saved.  This allows for temporary state 
+changes, whilst ensuring the startup state of the bot reflects the configuration file.  For example, 
+the above plugin could be modified with a toggle for the "shout" mode::
 
+    class Say(Plugin):
+        # ...
+        @Plugin.command('toggle')
+        def toggle(self, e):
+            self.config['shout'] = not self.config_get('shout')
 
 Database
 --------
