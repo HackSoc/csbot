@@ -45,7 +45,7 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         spoke.
         """
-        data = event.arguments
+        data = event.arguments()
         usr = self.db.online_users.find_one({'user': data[0]})
         if usr:
             if 'time_last_spoke' in usr:
@@ -63,7 +63,7 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         was online.
         """
-        data = event.arguments
+        data = event.arguments()
         usr = self.db.offline_users.find_one({'user': data[0]})
         if usr:
             event.reply("{} was last seen at {}".format(usr['user'],
