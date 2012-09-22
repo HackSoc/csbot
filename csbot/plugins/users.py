@@ -1,10 +1,9 @@
-from csbot.core import Plugin, PluginFeatures
+from csbot.core import Plugin
+from csbot.util import nick, sensible_time
 from datetime import datetime
 
 
 class Users(Plugin):
-    features = PluginFeatures()
-
     """
     This class provides various utility functions for other plugins to use when
     keeping track of users and nicks.
@@ -20,6 +19,7 @@ class Users(Plugin):
         # trusted any more
         self.db.offline_users.remove()
         self.db.online_users.remove()
+        super(Users, self).setup()
 
     def is_online(self, user):
         """
@@ -40,43 +40,45 @@ class Users(Plugin):
         """
         return [u['user'] for u in self.db.online_users.find()]
 
-    @features.command('spoke')
+    @Plugin.command('spoke')
     def spoke(self, event):
         """
         Tells the user who asked when the last time the user they asked about
         spoke.
         """
-        usr = self.db.online_users.find_one({'user': event.data[0]})
+        data = event.arguments()
+        usr = self.db.online_users.find_one({'user': data[0]})
         if usr:
             if 'time_last_spoke' in usr:
                 event.reply("{} last said something {}".format(
-                    usr['user'], usr['time_last_spoke']))
+                    usr['user'], sensible_time(self.bot, usr['time_last_spoke'], True)))
             else:
                 event.reply("I don't remember {} saying anything.".format(
                     usr['user']))
         else:
-            event.reply("I've never even heard of {}".format(event.data[0]))
+            event.reply("I've never even heard of {}".format(data[0]))
 
-    @features.command('seen')
+    @Plugin.command('seen')
     def seen(self, event):
         """
         Tells the user who asked when the last time the user they asked about
         was online.
         """
-        usr = self.db.offline_users.find_one({'user': event.data[0]})
+        data = event.arguments()
+        usr = self.db.offline_users.find_one({'user': data[0]})
         if usr:
             event.reply("{} was last seen at {}".format(usr['user'],
-                usr['time']))
+                sensible_time(self.bot, usr['time'], True)))
         else:
-            usr = self.db.online_users.find_one({'user': event.data[0]})
+            usr = self.db.online_users.find_one({'user': data[0]})
             if usr:
                 event.reply("{} is here.".format(usr['user']))
             else:
-                event.reply("I haven't seen {}".format(event.data[0]))
+                event.reply("I haven't seen {}".format(data[0]))
 
-    @features.hook('userJoined')
+    @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
-        usr_matcher = {'user': event.user}
+        usr_matcher = {'user': event['user']}
         # Delete any records of them being offline
         self.db.offline_users.remove(usr_matcher)
         # Update any existing records.
@@ -91,13 +93,13 @@ class Users(Plugin):
         elif records.count == 1:
             usr = records.next()
             usr['join_time'] = event.datetime
-            self.db.online_users.save(usr)
+            self.db.online_users.update({'_id': usr['_id']}, usr)
         else:
             # if there is no record create a new one
             usr_matcher['join_time'] = event.datetime
             self.db.online_users.insert(usr_matcher)
 
-    @features.hook('names')
+    @Plugin.hook('core.channel.names')
     def names(self, event):
         """
         When we connect to a channel we get a list of the names. This handles
@@ -106,56 +108,57 @@ class Users(Plugin):
         # Remove everyone in the db
         self.db.online_users.remove()
         self.db.offline_users.remove()
-        for nick, mode in event.names:
+        for nick, mode in event['names']:
             self.db.online_users.insert({
                 'user': nick,
                 'join_time': event.datetime,
                 })
 
-    @features.hook('privmsg')
+    @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
-        usr = self.db.online_users.find_one({'user': event.user})
+        usr = self.db.online_users.find_one({'user': nick(event['user'])})
         if usr:
-            usr['last_said'] = event.msg
+            usr['last_said'] = event['message']
             usr['time_last_spoke'] = event.datetime
-            usr.save()
-#        else:
+            self.db.online_users.update({'_id': usr['_id']}, usr)
+        else:
+            self.bot.log.info('Didn\'t find a user')
 #            usr = {'user': event.user,
 #                    'time_last_spoke': event.datetime,
 #                    'join_time': event.datetime}
 #            self.db.online_users.insert(usr)
 
-    @features.hook('userRenamed')
+    @Plugin.hook('core.user.renamed')
     def userRenamed(self, event):
-        usrs = self.db.online_users.find({'user': event.oldname})
+        usrs = self.db.online_users.find({'user': event['oldnick']})
         if usrs.count() > 1:
-            self.db.online_users.remove({'user': event.oldname})
+            self.db.online_users.remove({'user': event['oldnick']})
         elif usrs.count() < 1:
-            usr = {'user': event.newname, 'join_time': event.datetime}
+            usr = {'user': event['newnick'], 'join_time': event.datetime}
             self.db.online_users.insert(usr)
         else:
             usr = usrs.next()
-            usrs['user'] = event.newname
-            self.db.online_users.save(usr)
+            usrs['user'] = event['newnick']
+            self.db.online_users.update({'_id': usr['_id']}, usr)
 
     def userOffline(self, event):
         # Remove any record of being online or offline
-        self.db.online_users.remove({'user': event.user})
-        self.db.offline_users.remove({'user': event.user})
+        self.db.online_users.remove({'user': event['user']})
+        self.db.offline_users.remove({'user': event['user']})
         # Be offline
         self.db.offline_users.insert({
-            'user': event.user,
+            'user': event['user'],
             'time': datetime.now()
             })
 
-    @features.hook('userLeft')
+    @Plugin.hook('core.channel.left')
     def userLeft(self, event):
         self.userOffline(event)
 
-    @features.hook('userQuit')
+    @Plugin.hook('core.channel.quit')
     def userQuit(self, event):
         self.userOffline(event)
 
-    @features.hook('userKicked')
+    @Plugin.hook('core.user.quit')
     def userKicked(self, event):
         self.userOffline(event)
