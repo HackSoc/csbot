@@ -24,12 +24,13 @@ class Users(Plugin):
     def is_online(self, user):
         """
         This checks to see if a user is known to be online.
-
-        If they have not done anything since the bot joined it will return a
-        false negative.  This is a known limitation that will be overcome when
-        it becomes possible to query the list of users in the channel.
         """
         return self.db.online_users.find({'user': user}).count() > 0
+
+    def is_op(self, user):
+        """
+        This checks to see if the given user has operator privilages.
+        """
 
     def get_online_users(self):
         """
@@ -162,3 +163,7 @@ class Users(Plugin):
     @Plugin.hook('core.user.quit')
     def userKicked(self, event):
         self.userOffline(event)
+
+    @Plugin.hook('core.channel.modeChanged')
+    def modeChanged(self, event):
+        self.bot.log.info("user: {}, channel: {}, set: {}, mode(s): {}".format(event['user'], event['channel'], event['set'], event['mode']))

@@ -241,6 +241,22 @@ class BotProtocol(irc.IRCClient):
             'reply_to': nick(user) if channel == self.nickname else channel,
         })
 
+    def modeChanged(self, user, channel, set, mode, args):
+        """
+        user	The user and hostmask which instigated this change. (type: str )
+        channel	The channel where the modes are changed. If args is empty the channel for which the modes are changing. If the changes are at server level it could be equal to user. (type: str )
+        set	True if the mode(s) is being added, False if it is being removed. If some modes are added and others removed at the same time this function will be called twice, the first time with all the added modes, the second with the removed ones. (To change this behaviour override the irc_MODE method) (type: bool or int )
+        modes	The mode or modes which are being changed. (type: str )
+        args	Any additional information required for the mode change. (type: tuple )
+        """
+        self.emit_new('core.channel.modeChanged', {
+            'channel': channel,
+            'user': user,
+            'set': set,
+            'mode': mode,
+            'args': args,
+        })
+
     def noticed(self, user, channel, message):
         self.emit_new('core.message.notice', {
             'channel': channel,
