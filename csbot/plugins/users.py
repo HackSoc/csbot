@@ -31,7 +31,7 @@ class Users(Plugin):
         """
         This checks to see if the given nick has operator privilages.
         """
-        user = get_user_by_nick(nick)
+        user = self.get_user_by_nick(nick)
         return user['op'] == True
 
     def get_online_users(self):
@@ -64,6 +64,17 @@ class Users(Plugin):
         """
         self.db.online_users.update({'_id': user['_id']}, user, True)
 
+    @Plugin.command('ops')
+    def ops(self, event):
+        """
+        Lists the current channel ops
+        """
+        ops = []
+        for user in self.db.online_users.find():
+            if 'op' in user and user['op'] == True:
+                ops.append(user['user'])
+        event.reply("Current ops: {}".format(", ".join(ops)))
+
     @Plugin.command('spoke')
     def spoke(self, event):
         """
@@ -71,7 +82,7 @@ class Users(Plugin):
         spoke.
         """
         data = event.arguments()
-        usr = get_user_by_nick(data[0])
+        usr = self.get_user_by_nick(data[0])
         if usr:
             if 'time_last_spoke' in usr:
                 event.reply("{} last said something {}".format(
@@ -194,13 +205,13 @@ class Users(Plugin):
         if event['mode'] == 'o':
             if event['set']:
                 for nick in event['args']:
-                    user = get_user_by_nick(nick)
+                    user = self.get_user_by_nick(nick)
                     user['op'] = True
-                    save_user(user)
-            else
+                    self.save_user(user)
+            else:
                 for nick in event['args']:
-                    user = get_user_by_nick(nick)
+                    user = self.get_user_by_nick(nick)
                     del user['op']
-                    save_user(user)
+                    self.save_user(user)
         self.bot.log.info("Mode change event fired: {}".format(event))
 
