@@ -27,10 +27,12 @@ class Users(Plugin):
         """
         return self.db.online_users.find({'user': user}).count() > 0
 
-    def is_op(self, user):
+    def is_op(self, nick):
         """
-        This checks to see if the given user has operator privilages.
+        This checks to see if the given nick has operator privilages.
         """
+        user = get_user_by_nick(nick)
+        return user['op'] == True
 
     def get_online_users(self):
         """
@@ -41,6 +43,27 @@ class Users(Plugin):
         """
         return [u['user'] for u in self.db.online_users.find()]
 
+    def get_user_by_nick(self, nick):
+        """
+        This finds a user in the database with the given nick. Only one
+        result will be returned.
+        """
+        return self.db.online_users.find_one({'user': nick})
+
+    def save_user(self, user):
+        """
+        This takes a user that has been modified and saves it to the database.
+        If the user doesn't already exist in the db it should fail.
+        """
+        self.db.online_users.update({'_id': user['_id']}, user)
+
+    def save_or_update_user(self, user):
+        """
+        This takes a user that has been modified and saves it to the database.
+        If the user doesn't already exist in the db it will be created.
+        """
+        self.db.online_users.update({'_id': user['_id']}, user, True)
+
     @Plugin.command('spoke')
     def spoke(self, event):
         """
@@ -48,7 +71,7 @@ class Users(Plugin):
         spoke.
         """
         data = event.arguments()
-        usr = self.db.online_users.find_one({'user': data[0]})
+        usr = get_user_by_nick(data[0])
         if usr:
             if 'time_last_spoke' in usr:
                 event.reply("{} last said something {}".format(
@@ -131,6 +154,7 @@ class Users(Plugin):
 
     @Plugin.hook('core.user.renamed')
     def userRenamed(self, event):
+        # TODO: can this actually happen or will there only ever be one user with a nick?
         usrs = self.db.online_users.find({'user': event['oldnick']})
         if usrs.count() > 1:
             self.db.online_users.remove({'user': event['oldnick']})
@@ -166,5 +190,17 @@ class Users(Plugin):
 
     @Plugin.hook('core.channel.modeChanged')
     def modeChanged(self, event):
-      self.bot.log.info("Mode change event fired: {}".format(event))
-      self.bot.log.info("user: {}, channel: {}, set: {}, mode(s): {}".format(event['user'], event['channel'], event['set'], event['mode']))
+        # all users in the args tuple have been affected
+        if event['mode'] == 'o':
+            if event['set']:
+                for nick in event['args']:
+                    user = get_user_by_nick(nick)
+                    user['op'] = True
+                    save_user(user)
+            else
+                for nick in event['args']:
+                    user = get_user_by_nick(nick)
+                    del user['op']
+                    save_user(user)
+        self.bot.log.info("Mode change event fired: {}".format(event))
+
