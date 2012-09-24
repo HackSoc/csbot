@@ -96,20 +96,19 @@ class Bot(Plugin):
     def post_event(self, event):
         self.events.post_event(event)
 
-    def register_command(self, cmd, f, tag=None):
+    def register_command(self, cmd, metadata, f, tag=None):
         # Bail out if the command already exists
         if cmd in self.commands:
-            oldf, oldtag = self.commands[cmd]
             self.log.warn('tried to overwrite command: {}'.format(cmd))
             return False
 
-        self.commands[cmd] = (f, tag)
+        self.commands[cmd] = (f, metadata, tag)
         self.log.info('registered command: ({}, {})'.format(cmd, tag))
         return True
 
     def unregister_command(self, cmd, tag=None):
         if cmd in self.commands:
-            f, t = self.commands[cmd]
+            f, m, t = self.commands[cmd]
             if t == tag:
                 del self.commands[cmd]
                 self.log.info('unregistered command: ({}, {})'
@@ -119,9 +118,9 @@ class Bot(Plugin):
                                 'with wrong tag {}').format(cmd, tag))
 
     def unregister_commands(self, tag):
-        delcmds = [c for c, (f, t) in self.commands.iteritems() if t == tag]
+        delcmds = [c for c, (_, _, t) in self.commands.iteritems() if t == tag]
         for cmd in delcmds:
-            f, tag = self.commands[cmd]
+            f, _, tag = self.commands[cmd]
             del self.commands[cmd]
             self.log.info('unregistered command: ({}, {})'.format(cmd, tag))
 
@@ -146,12 +145,23 @@ class Bot(Plugin):
         if event['command'] not in self.commands:
             return
 
-        f, _ = self.commands[event['command']]
+        f, _, _ = self.commands[event['command']]
         f(event)
 
-    @Plugin.command('help')
-    def show_commands(self, event):
-        event.protocol.msg(event['reply_to'], ', '.join(sorted(self.commands)))
+    @Plugin.command('help', help=('help [command]: show help for command, or '
+                                  'show available commands'))
+    def show_commands(self, e):
+        args = e.arguments()
+        if len(args) > 0:
+            cmd = args[0]
+            if cmd in self.commands:
+                f, meta, tag = self.commands[cmd]
+                e.protocol.msg(e['reply_to'],
+                               meta.get('help', cmd + ': no help string'))
+            else:
+                e.protocol.msg(e['reply_to'], cmd + ': no such command')
+        else:
+            e.protocol.msg(e['reply_to'], ', '.join(sorted(self.commands)))
 
     @Plugin.command('plugins')
     def show_plugins(self, event):
