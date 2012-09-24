@@ -64,6 +64,17 @@ class Users(Plugin):
         """
         self.db.online_users.update({'_id': user['_id']}, user, True)
 
+    @Plugin.command('ops')
+    def ops(self, event):
+        """
+        Lists the current channel ops
+        """
+        ops = []
+        for user in self.db.online_users:
+            if user['op'] == True
+                ops.append[user['nick']]
+        event.reply("Current ops: {}".format(ops.join(", "))
+
     @Plugin.command('spoke')
     def spoke(self, event):
         """
