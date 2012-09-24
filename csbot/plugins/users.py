@@ -71,7 +71,7 @@ class Users(Plugin):
         """
         ops = []
         for user in self.db.online_users:
-            if user['op'] == True
+            if user['op'] == True:
                 ops.append[user['nick']]
         event.reply("Current ops: {}".format(ops.join(", "))
 
