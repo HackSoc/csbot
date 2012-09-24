@@ -1,5 +1,7 @@
 import re
 from urlparse import urlparse
+import collections
+import datetime
 
 import requests
 import lxml.html
@@ -13,6 +15,10 @@ class LinkInfo(Plugin):
         'scan_limit': 1,
         # Minimum slug length in "title in URL" filter
         'minimum_slug_length': 10,
+        # Number of seconds for rolling rate limiting period
+        'rate_limit_time': 60,
+        # Maximum rate of URL responses over rate limiting period
+        'rate_limit_count': 5,
     }
 
     def __init__(self, *args, **kwargs):
@@ -27,6 +33,9 @@ class LinkInfo(Plugin):
             lambda url: re.search(r'\.(png|jpg|jpeg|gif|mp3|mp4|wav|avi|mkv'
                                   r'|mov)$', url.path, re.I),
         ]
+
+        # Timestamps of recently handled URLs for cooldown timer
+        self.rate_limit_list = collections.deque()
 
     def register_handler(self, filter, handler):
         """Add a URL handler.
@@ -96,7 +105,7 @@ class LinkInfo(Plugin):
                 # See if "NSFW" appears anywhere else in the message
                 nsfw = 'nsfw' in ''.join(parts[:i] + parts[i + 1:]).lower()
                 reply = self.get_link_info(part)
-                if reply is not None:
+                if reply is not None and not self._rate_limited():
                     prefix, link_nsfw, message = reply
                     self._respond(e, prefix, nsfw or link_nsfw, message)
                     break
@@ -208,3 +217,27 @@ class LinkInfo(Plugin):
         e.protocol.msg(e['reply_to'], u'{}: {}{}'.format(
             prefix, '[NSFW] ' if nsfw else '', message,
         ))
+
+    def _rate_limited(self):
+        """Find out if the current call is subject to rate limiting.
+
+        Somewhat self-policing, this function returns True if it's being
+        called too often.  "Too often" is defined as more than
+        ``rate_limit_count`` calls in a ``rate_limit_time`` second period.
+        """
+        now = datetime.datetime.now()
+        delta = datetime.timedelta(
+            seconds=int(self.config_get('rate_limit_time')))
+        count = int(self.config_get('rate_limit_count'))
+
+        if len(self.rate_limit_list) < count:
+            self.rate_limit_list.append(now)
+            return False
+
+        if self.rate_limit_list[0] + delta < now:
+            self.rate_limit_list.popleft()
+            self.rate_limit_list.append(now)
+            return False
+
+        self.log.debug('rate limiting URL responses')
+        return True
