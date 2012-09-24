@@ -166,5 +166,5 @@ class Users(Plugin):
 
     @Plugin.hook('core.channel.modeChanged')
     def modeChanged(self, event):
-        self.bot.log.info("Mode change event fired")
-        self.bot.log.info("user: {}, channel: {}, set: {}, mode(s): {}".format(event['user'], event['channel'], event['set'], event['mode']))
+      self.bot.log.info("Mode change event fired: {}".format(event))
+      self.bot.log.info("user: {}, channel: {}, set: {}, mode(s): {}".format(event['user'], event['channel'], event['set'], event['mode']))
