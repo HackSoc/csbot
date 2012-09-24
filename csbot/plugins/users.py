@@ -139,7 +139,7 @@ class Users(Plugin):
             self.db.online_users.insert(usr)
         else:
             usr = usrs.next()
-            usrs['user'] = event['newnick']
+            usr['user'] = event['newnick']
             self.db.online_users.update({'_id': usr['_id']}, usr)
 
     def userOffline(self, event):
@@ -166,4 +166,5 @@ class Users(Plugin):
 
     @Plugin.hook('core.channel.modeChanged')
     def modeChanged(self, event):
+        self.bot.log.info("Mode change event fired")
         self.bot.log.info("user: {}, channel: {}, set: {}, mode(s): {}".format(event['user'], event['channel'], event['set'], event['mode']))
