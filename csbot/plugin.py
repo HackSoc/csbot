@@ -148,8 +148,8 @@ class PluginMeta(type):
         for f in dict.itervalues():
             for h in getattr(f, 'plugin_hooks', ()):
                 cls.plugin_hooks[h].append(f)
-            for cmd in getattr(f, 'plugin_cmds', ()):
-                cls.plugin_cmds.append((cmd, f))
+            for cmd, metadata in getattr(f, 'plugin_cmds', ()):
+                cls.plugin_cmds.append((cmd, metadata, f))
             if len(getattr(f, 'plugin_integrate_with', [])) > 0:
                 cls.plugin_integrations.append((f.plugin_integrate_with, f))
 
@@ -196,8 +196,8 @@ class Plugin(PluginBase):
             if len(plugins) == len(plugin_names):
                 f(self, *plugins)
 
-        for cmd, f in self.plugin_cmds:
-            self.bot.register_command(cmd, partial(f, self), tag=self)
+        for cmd, meta, f in self.plugin_cmds:
+            self.bot.register_command(cmd, meta, partial(f, self), tag=self)
 
     def teardown(self):
         """Plugin teardown.
@@ -217,12 +217,22 @@ class Plugin(PluginBase):
         return decorate
 
     @staticmethod
-    def command(cmd):
+    def command(cmd, **metadata):
+        """Tag a command to be registered by :meth:`setup`.
+
+        Additional keyword arguments are added to a metadata dictionary that
+        gets stored with the command.  This is a good place to put, for
+        example, the help string for the command::
+
+            @Plugin.command('foo', help='foo: does something amazing')
+            def foo_command(self, e):
+                pass
+        """
         def decorate(f):
             if hasattr(f, 'plugin_cmds'):
-                f.plugin_cmds.add(cmd)
+                f.plugin_cmds.append((cmd, metadata))
             else:
-                f.plugin_cmds = set((cmd,))
+                f.plugin_cmds = [(cmd, metadata)]
             return f
         return decorate
 
