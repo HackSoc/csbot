@@ -88,6 +88,6 @@ def sensible_time(bot, datetime, prefix=False):
             return format_time(bot, datetime)
     else:
         if prefix:
-            return 'at ' + format_date(bot, datetime)
+            return 'on ' + format_date(bot, datetime)
         else:
             return format_date(bot, datetime)
