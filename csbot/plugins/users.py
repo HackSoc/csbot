@@ -213,5 +213,4 @@ class Users(Plugin):
                     user = self.get_user_by_nick(nick)
                     del user['op']
                     self.save_user(user)
-        self.bot.log.info("Mode change event fired: {}".format(event))
 
