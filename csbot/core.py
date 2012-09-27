@@ -18,6 +18,9 @@ class Bot(Plugin):
 
     Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
     losing and regaining connection.
+
+    *config* is an optional file-like object to read configuration from, which
+    is parsed with :mod:`configparser`.
     """
 
     #: Default configuration values
@@ -50,15 +53,14 @@ class Bot(Plugin):
     #: The top-level package for all bot plugins
     PLUGIN_PACKAGE = 'csbot.plugins'
 
-    def __init__(self, configpath):
+    def __init__(self, config=None):
         super(Bot, self).__init__(self)
 
-        # Load the configuration file
-        self.config_path = configpath
+        # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
                                                      allow_no_value=True)
-        with open(self.config_path, 'r') as cfg:
-            self.config_root.read_file(cfg)
+        if config is not None:
+            self.config_root.read_file(config)
 
         # Make mongodb connection
         self.log.info('connecting to mongodb: ' +
@@ -388,7 +390,16 @@ def main(argv):
     rootlogger.addHandler(handler)
 
     # Create bot and run setup functions
-    bot = Bot(args.config)
+    try:
+        config = open(args.config, 'r')
+    except IOError:
+        config = None
+
+    bot = Bot(config)
+
+    if config is not None:
+        config.close()
+
     bot.setup()
 
     # Connect and enter the reactor loop
