@@ -1,5 +1,7 @@
 import re
 from urlparse import urlparse
+import collections
+import datetime
 
 import requests
 import lxml.html
@@ -11,6 +13,12 @@ class LinkInfo(Plugin):
     CONFIG_DEFAULTS = {
         # Maximum number of parts of a PRIVMSG to scan for URLs.
         'scan_limit': 1,
+        # Minimum slug length in "title in URL" filter
+        'minimum_slug_length': 10,
+        # Number of seconds for rolling rate limiting period
+        'rate_limit_time': 60,
+        # Maximum rate of URL responses over rate limiting period
+        'rate_limit_count': 5,
     }
 
     def __init__(self, *args, **kwargs):
@@ -25,6 +33,9 @@ class LinkInfo(Plugin):
             lambda url: re.search(r'\.(png|jpg|jpeg|gif|mp3|mp4|wav|avi|mkv'
                                   r'|mov)$', url.path, re.I),
         ]
+
+        # Timestamps of recently handled URLs for cooldown timer
+        self.rate_limit_list = collections.deque()
 
     def register_handler(self, filter, handler):
         """Add a URL handler.
@@ -94,7 +105,7 @@ class LinkInfo(Plugin):
                 # See if "NSFW" appears anywhere else in the message
                 nsfw = 'nsfw' in ''.join(parts[:i] + parts[i + 1:]).lower()
                 reply = self.get_link_info(part)
-                if reply is not None:
+                if reply is not None and not self._rate_limited():
                     prefix, link_nsfw, message = reply
                     self._respond(e, prefix, nsfw or link_nsfw, message)
                     break
@@ -149,14 +160,55 @@ class LinkInfo(Plugin):
         html = lxml.html.document_fromstring(r.text)
         title = html.find('.//title')
 
-        if title is not None:
-            # Normalise title whitespace
-            title = ' '.join(title.text.strip().split())
-            return ('Title', url.netloc.endswith('.xxx'),
-                    u'"{}"'.format(title))
-        else:
+        if title is None:
             self.log.debug(u'failed to find <title>: ' + url)
             return None
+
+        # Normalise title whitespace
+        title = ' '.join(title.text.strip().split())
+        nsfw = url.netloc.endswith('.xxx')
+
+        # See if the title is in the URL
+        if self._filter_title_in_url(url, title):
+            return None
+
+        # Return the scraped title
+        return 'Title', nsfw, u'"{}"'.format(title)
+
+    def _filter_title_in_url(self, url, title):
+        """See if *title* is represented in *url*.
+        """
+        # Only match based on the path
+        path = url.path
+        # Ignore case
+        path = path.lower()
+        title = title.lower()
+        # Strip characters that are unlikely to end up in a slugified URL
+        strip_pattern = r'[^a-z/]'
+        path = re.sub(strip_pattern, '', path)
+        title = re.sub(strip_pattern, '', title)
+
+        # Attempt 0: is the title actually just the domain name?
+        if title in url.netloc.lower():
+            self.log.debug(u'title "{}" matches domain name "{}"'.format(
+                title, url.netloc))
+            return True
+
+        # Attempt 1: is the slugified title entirely within the URL path?
+        if title in path:
+            self.log.debug(u'title "{}" in "{}"'.format(title, path))
+            return True
+
+        # Attempt 2: is some part of the URL path the start of the title?
+        slug_length = int(self.config_get('minimum_slug_length'))
+        for part in path.split('/'):
+            if len(part) >= slug_length and title.startswith(part):
+                self.log.debug(u'path part "{}" matches title "{}"'.format(
+                    part, title))
+                return True
+
+        # Didn't match
+        return False
 
     def _respond(self, e, prefix, nsfw, message):
         """A helper function for responding to link information requests in a
@@ -165,3 +217,27 @@ class LinkInfo(Plugin):
         e.protocol.msg(e['reply_to'], u'{}: {}{}'.format(
             prefix, '[NSFW] ' if nsfw else '', message,
         ))
+
+    def _rate_limited(self):
+        """Find out if the current call is subject to rate limiting.
+
+        Somewhat self-policing, this function returns True if it's being
+        called too often.  "Too often" is defined as more than
+        ``rate_limit_count`` calls in a ``rate_limit_time`` second period.
+        """
+        now = datetime.datetime.now()
+        delta = datetime.timedelta(
+            seconds=int(self.config_get('rate_limit_time')))
+        count = int(self.config_get('rate_limit_count'))
+
+        if len(self.rate_limit_list) < count:
+            self.rate_limit_list.append(now)
+            return False
+
+        if self.rate_limit_list[0] + delta < now:
+            self.rate_limit_list.popleft()
+            self.rate_limit_list.append(now)
+            return False
+
+        self.log.debug('rate limiting URL responses')
+        return True
