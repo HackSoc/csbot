@@ -1,0 +1,4 @@
+# Additional requirements for development (e.g. documentation, linting)
+-r requirements.txt
+Sphinx
+flake8
