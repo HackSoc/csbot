@@ -161,7 +161,7 @@ class LinkInfo(Plugin):
         title = html.find('.//title')
 
         if title is None:
-            self.log.debug(u'failed to find <title>: ' + url)
+            self.log.debug(u'failed to find <title>: ' + url.geturl())
             return None
 
         # Normalise title whitespace
