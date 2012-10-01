@@ -7,25 +7,6 @@ import os
 import straight.plugin
 
 
-class PluginBase(object):
-    """Minimal plugin base class to work with :class:`PluginManager`."""
-    #: Plugins which *must* be loaded before this plugin.
-    PLUGIN_DEPENDS = []
-
-    @classmethod
-    def plugin_name(cls):
-        """Get the name of the plugin, by default the class name in lowercase.
-        """
-        return cls.__name__.lower()
-
-    @classmethod
-    def qualified_name(cls):
-        """Get the fully qualified class name, most useful when complaining
-        about duplicate plugins names.
-        """
-        return '{}.{}'.format(cls.__module__, cls.__name__)
-
-
 class PluginDuplicate(Exception):
     pass
 
@@ -75,11 +56,11 @@ class PluginManager(collections.Mapping):
                 self.log.error('plugin not found: ' + p)
             else:
                 P = available[p]
-                for dep in P.PLUGIN_DEPENDS:
-                    if dep not in self.plugins:
-                        raise PluginDependencyUnmet(
-                            "{} depends on {}, which isn't loaded yet"
-                            .format(p, dep))
+                missing = P.missing_dependencies(self.plugins)
+                if len(missing) > 0:
+                    raise PluginDependencyUnmet(
+                        "{} has unmet dependencies: {}".format(
+                            p, ', '.join(missing)))
                 self.plugins[p] = P(*args)
                 self.log.info('plugin loaded: ' + p)
 
@@ -149,7 +130,7 @@ class PluginMeta(type):
                 cls.plugin_integrations.append((f.plugin_integrate_with, f))
 
 
-class Plugin(PluginBase):
+class Plugin(object):
     """Bot plugin base class.
 
     All bot plugins should inherit from this class.  It provides convenience
@@ -163,43 +144,43 @@ class Plugin(PluginBase):
     #: Configuration environment variables, used automatically by
     #: :meth:`config_get`.
     CONFIG_ENVVARS = {}
+    #: Plugins that :meth:`missing_dependencies` should check for.
+    PLUGIN_DEPENDS = []
 
     #: The plugin's logger, created by default using the plugin class'
     #: containing module name as the logger name.
     log = None
 
     def __init__(self, bot):
+        # Get the logger for the module the actual plugin is defined in, not
+        # this base class; using __name__ would make every plugin log to
+        # 'csbot.plugin' instead.
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
         self._db = None
 
-    def fire_hooks(self, event):
-        """Execute all of this plugin's handlers for *event*."""
-        for f in self.plugin_hooks.get(event.event_type, ()):
-            f(self, event)
-
-    def setup(self):
-        """Plugin setup.
-
-        * Fire all plugin integration methods.
-        * Register all commands provided by the plugin.
+    @classmethod
+    def plugin_name(cls):
+        """Get the name of the plugin, by default the class name in lowercase.
         """
-        for plugin_names, f in self.plugin_integrations:
-            plugins = [self.bot.plugins[p] for p in plugin_names
-                       if p in self.bot.plugins]
-            # Only fire integration method if all named plugins were loaded
-            if len(plugins) == len(plugin_names):
-                f(self, *plugins)
+        return cls.__name__.lower()
 
-        for cmd, meta, f in self.plugin_cmds:
-            self.bot.register_command(cmd, meta, partial(f, self), tag=self)
-
-    def teardown(self):
-        """Plugin teardown.
-
-        * Unregister all commands provided by the plugin.
+    @classmethod
+    def qualified_name(cls):
+        """Get the fully qualified class name, most useful when complaining
+        about duplicate plugins names.
         """
-        self.bot.unregister_commands(tag=self)
+        return '{}.{}'.format(cls.__module__, cls.__name__)
+
+    @classmethod
+    def missing_dependencies(cls, plugins):
+        """Return elements from :attr:`PLUGIN_DEPENDS` that are not in the
+        container *plugins*.
+
+        This should be used with some container of already loaded plugin names
+        (e.g. a dictionary or set) to find out which dependencies are missing.
+        """
+        return [p for p in cls.PLUGIN_DEPENDS if p not in plugins]
 
     @staticmethod
     def hook(hook):
@@ -251,6 +232,34 @@ class Plugin(PluginBase):
             f.plugin_integrate_with = otherplugins
             return f
         return decorate
+
+    def fire_hooks(self, event):
+        """Execute all of this plugin's handlers for *event*."""
+        for f in self.plugin_hooks.get(event.event_type, ()):
+            f(self, event)
+
+    def setup(self):
+        """Plugin setup.
+
+        * Fire all plugin integration methods.
+        * Register all commands provided by the plugin.
+        """
+        for plugin_names, f in self.plugin_integrations:
+            plugins = [self.bot.plugins[p] for p in plugin_names
+                       if p in self.bot.plugins]
+            # Only fire integration method if all named plugins were loaded
+            if len(plugins) == len(plugin_names):
+                f(self, *plugins)
+
+        for cmd, meta, f in self.plugin_cmds:
+            self.bot.register_command(cmd, meta, partial(f, self), tag=self)
+
+    def teardown(self):
+        """Plugin teardown.
+
+        * Unregister all commands provided by the plugin.
+        """
+        self.bot.unregister_commands(tag=self)
 
     @property
     def config(self):
