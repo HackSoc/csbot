@@ -71,14 +71,13 @@ class Bot(Plugin):
         self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
 
         # Plugin management
-        self.plugins = PluginManager(self.available_plugins,
+        self.plugins = PluginManager([self], self.available_plugins,
                                      self.config_get('plugins').split(),
-                                     [self], [self])
+                                     [self])
         self.commands = {}
 
         # Event runner
-        self.events = events.ImmediateEventRunner(
-            lambda e: self.plugins.broadcast('fire_hooks', (e,)))
+        self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
 
     @classmethod
     def plugin_name(cls):
@@ -89,12 +88,12 @@ class Bot(Plugin):
     def bot_setup(self):
         """Load plugins defined in configuration and run setup methods.
         """
-        self.plugins.broadcast('setup')
+        self.plugins.setup()
 
     def bot_teardown(self):
         """Run plugin teardown methods.
         """
-        self.plugins.broadcast('teardown')
+        self.plugins.teardown()
 
     def post_event(self, event):
         self.events.post_event(event)

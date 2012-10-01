@@ -1,4 +1,3 @@
-from itertools import chain
 from functools import partial
 import collections
 import logging
@@ -36,27 +35,36 @@ class PluginFeatureError(Exception):
 class PluginManager(collections.Mapping):
     """A simple plugin manager and proxy.
 
-    The plugin manager will load each of *plugins* by name using *available* as
-    a dictionary of available plugins, and passing *args* to the constructors.
+    The plugin manager is responsible for loading plugins and proxying method
+    calls to all plugins.  In addition to accepting *loaded*, a list of
+    existing plugin objects, it will attempt to load each of *plugins* from
+    *available* (a mapping of plugin name to plugin class), passing *args* to
+    the constructors.
 
-    Optionally, *static* can be used to supply a list of plugins that have
-    already been loaded.
+    Attempting to load missing or duplicate plugins will log errors and
+    warnings respectively, but will not result in an exception or any change of
+    state.  A plugin class' dependencies are checked before loading and a
+    :exc:`PluginDependencyUnmet` is raised if any are missing.
 
-    Methods are invoked across all plugins by using :meth:`broadcast`.
+    The :class:`~collections.Mapping` interface is implemented to provide easy
+    querying and access to the loaded plugins.  All attributes that do not
+    start with a ``_`` are treated as methods that will be proxied through to
+    every plugin in the order they were loaded (*loaded* before *plugins*) with
+    the same arguments.
     """
 
-    #: Plugins loaded outside of the plugin manager.
-    static = []
-    #: Plugins loaded by the plugin manager
+    #: Loaded plugins.
     plugins = {}
 
-    def __init__(self, available, plugins, static=None, args=None):
+    def __init__(self, loaded, available, plugins, args):
         self.log = logging.getLogger(__name__)
-        self.static = static or []
         self.plugins = collections.OrderedDict()
 
-        args = args or []
+        # Register already-loaded plugins
+        for p in loaded:
+            self.plugins[p.plugin_name()] = p
 
+        # Attempt to load other plugins
         for p in plugins:
             if p in self.plugins:
                 self.log.warn('not loading duplicate plugin:  ' + p)
@@ -72,14 +80,20 @@ class PluginManager(collections.Mapping):
                 self.plugins[p] = P(*args)
                 self.log.info('plugin loaded: ' + p)
 
-    def broadcast(self, method, args=()):
-        """Call ``p.method(*args)`` on every plugin.
+    def __getattr__(self, name):
+        """Treat all undefined public attributes as proxy methods.
 
-        Plugins are always called in the order they were loaded, with static
-        plugins being called before loaded plugins.
+        It is assumed that the invoked method exists on all plugins, so this
+        should probably only be used when the method call is part of the
+        :class:`Plugin` base class.
         """
-        for p in chain(self.static, self.plugins.itervalues()):
-            getattr(p, method)(*args)
+        if name.startswith('_'):
+            raise AttributeError
+
+        def f(*args):
+            for p in self.plugins.itervalues():
+                getattr(p, name)(*args)
+        return f
 
     # Implement abstract "read-only" Mapping interface
 
