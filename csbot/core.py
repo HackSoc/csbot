@@ -83,17 +83,15 @@ class Bot(Plugin):
         """
         return '@' + super(Bot, cls).plugin_name()
 
-    def setup(self):
-        """Load plugins defined in configuration.
+    def bot_setup(self):
+        """Load plugins defined in configuration and run setup methods.
         """
-        super(Bot, self).setup()
-        self.plugins.broadcast('setup', static=False)
+        self.plugins.broadcast('setup')
 
-    def teardown(self):
-        """Unload plugins and save data.
+    def bot_teardown(self):
+        """Run plugin teardown methods.
         """
-        super(Bot, self).teardown()
-        self.plugins.broadcast('teardown', static=False)
+        self.plugins.broadcast('teardown')
 
     def post_event(self, event):
         self.events.post_event(event)
@@ -400,7 +398,7 @@ def main(argv):
     if config is not None:
         config.close()
 
-    bot.setup()
+    bot.bot_setup()
 
     # Connect and enter the reactor loop
     reactor.connectTCP(bot.config_get('irc_host'),
@@ -409,4 +407,4 @@ def main(argv):
     reactor.run()
 
     # Run teardown functions before exiting
-    bot.teardown()
+    bot.bot_teardown()

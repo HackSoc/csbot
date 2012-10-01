@@ -106,18 +106,13 @@ class PluginManager(collections.Mapping):
                 available[name] = P
         return available
 
-    def broadcast(self, method, args=(), static=True):
+    def broadcast(self, method, args=()):
         """Call ``p.method(*args)`` on every plugin.
 
-        Plugins are always called in the order they were loaded.  If *static*
-        is True then all static plugins are called before loaded plugins.
+        Plugins are always called in the order they were loaded, with static
+        plugins being called before loaded plugins.
         """
-        if static:
-            plugins = chain(self.static, self.plugins.itervalues())
-        else:
-            plugins = self.plugins.itervalues()
-
-        for p in plugins:
+        for p in chain(self.static, self.plugins.itervalues()):
             getattr(p, method)(*args)
 
     # Implement abstract "read-only" Mapping interface
