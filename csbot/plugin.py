@@ -4,7 +4,21 @@ import collections
 import logging
 import os
 
-import straight.plugin
+
+def build_plugin_dict(plugins):
+    """Build a dictionary mapping the value of :meth:`~Plugin.plugin_name` to
+    each plugin class in *plugins*.  :exc:`PluginDuplicate` is raised if more
+    than one plugin has the same name.
+    """
+    mapping = {}
+    for P in plugins:
+        name = P.plugin_name()
+        if name in mapping:
+            raise PluginDuplicate(name, P.qualified_name(),
+                                  mapping[name].qualified_name())
+        else:
+            mapping[name] = P
+    return mapping
 
 
 class PluginDuplicate(Exception):
@@ -20,20 +34,15 @@ class PluginFeatureError(Exception):
 
 
 class PluginManager(collections.Mapping):
-    """A simple plugin manager based on `straight.plugin`_.
+    """A simple plugin manager and proxy.
 
-    The plugin manager will discover plugins under *namespace* that subclass
-    *baseclass*.  Each of *plugins* will be loaded by name, passing *args* as
-    arguments to the constructor.
+    The plugin manager will load each of *plugins* by name using *available* as
+    a dictionary of available plugins, and passing *args* to the constructors.
 
     Optionally, *static* can be used to supply a list of plugins that have
-    already been loaded.  These do not have to subclass *baseclass*, but are
-    still assumed to follow the same interface.  The :class:`PluginBase` class
-    demonstrates the minimum interface that :class:`PluginManager` requires.
+    already been loaded.
 
     Methods are invoked across all plugins by using :meth:`broadcast`.
-
-    .. _straight.plugin: https://github.com/ironfroggy/straight.plugin
     """
 
     #: Plugins loaded outside of the plugin manager.
@@ -41,13 +50,12 @@ class PluginManager(collections.Mapping):
     #: Plugins loaded by the plugin manager
     plugins = {}
 
-    def __init__(self, namespace, baseclass, plugins, static=None, args=None):
+    def __init__(self, available, plugins, static=None, args=None):
         self.log = logging.getLogger(__name__)
         self.static = static or []
         self.plugins = collections.OrderedDict()
 
         args = args or []
-        available = self.discover(namespace, baseclass)
 
         for p in plugins:
             if p in self.plugins:
@@ -63,29 +71,6 @@ class PluginManager(collections.Mapping):
                             p, ', '.join(missing)))
                 self.plugins[p] = P(*args)
                 self.log.info('plugin loaded: ' + p)
-
-    @staticmethod
-    def discover(namespace, baseclass):
-        """Discover plugins under *namespace* subclassing *baseclass*.
-
-        Return a dict mapping plugin names to plugin classes.  A
-        :exc:`PluginDuplicate` is raised if multiple plugins have the same
-        name.
-        """
-        # Use straight.plugin to discover classes
-        plugins = straight.plugin.load(namespace,
-                                       subclasses=baseclass)
-
-        # Build available plugins dict, checking for duplicates
-        available = {}
-        for P in plugins:
-            name = P.plugin_name()
-            if name in available:
-                raise PluginDuplicate(name, P.qualified_name(),
-                                      available[name].qualified_name())
-            else:
-                available[name] = P
-        return available
 
     def broadcast(self, method, args=()):
         """Call ``p.method(*args)`` on every plugin.

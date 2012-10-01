@@ -6,8 +6,9 @@ from twisted.internet import reactor, protocol
 from twisted.python import log
 import pymongo
 import configparser
+import straight.plugin
 
-from csbot.plugin import Plugin, PluginManager
+from csbot.plugin import Plugin, build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import nick
@@ -50,8 +51,10 @@ class Bot(Plugin):
         'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
     }
 
-    #: The top-level package for all bot plugins
-    PLUGIN_PACKAGE = 'csbot.plugins'
+    #: Dictionary containing available plugins for loading, using
+    #: straight.plugin to discover plugin classes under a namespace.
+    available_plugins = build_plugin_dict(straight.plugin.load(
+        'csbot.plugins', subclasses=Plugin))
 
     def __init__(self, config=None):
         super(Bot, self).__init__(self)
@@ -68,7 +71,7 @@ class Bot(Plugin):
         self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
 
         # Plugin management
-        self.plugins = PluginManager(self.PLUGIN_PACKAGE, Plugin,
+        self.plugins = PluginManager(self.available_plugins,
                                      self.config_get('plugins').split(),
                                      [self], [self])
         self.commands = {}
