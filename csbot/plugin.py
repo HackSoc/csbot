@@ -310,3 +310,16 @@ class Plugin(object):
             self._db = self.bot.mongodb[self.bot.config_get('mongodb_prefix') +
                                         self.plugin_name()]
         return self._db
+
+
+class SpecialPlugin(Plugin):
+    """A special plugin with a special name that expects to be handled
+    specially.  Probably shouldn't have too many of these or they won't feel
+    special anymore.
+    """
+    @classmethod
+    def plugin_name(cls):
+        """Change the plugin name to something that can't possibly result from
+        a class name by prepending a ``@``.
+        """
+        return '@' + super(SpecialPlugin, cls).plugin_name()

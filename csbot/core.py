@@ -8,13 +8,14 @@ import pymongo
 import configparser
 import straight.plugin
 
-from csbot.plugin import Plugin, build_plugin_dict, PluginManager
+from csbot.plugin import Plugin, SpecialPlugin
+from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import nick
 
 
-class Bot(Plugin):
+class Bot(SpecialPlugin):
     """The IRC bot.
 
     Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
@@ -78,12 +79,6 @@ class Bot(Plugin):
 
         # Event runner
         self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
-
-    @classmethod
-    def plugin_name(cls):
-        """Special plugin name that can't clash with real plugin classes.
-        """
-        return '@' + super(Bot, cls).plugin_name()
 
     def bot_setup(self):
         """Load plugins defined in configuration and run setup methods.
