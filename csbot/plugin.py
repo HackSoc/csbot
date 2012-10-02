@@ -303,14 +303,6 @@ class Plugin(object):
         else:
             return self.config.getboolean(key)
 
-    @property
-    def db(self):
-        """Get a MongoDB database for the plugin, based on the plugin name."""
-        if self._db is None:
-            self._db = self.bot.mongodb[self.bot.config_get('mongodb_prefix') +
-                                        self.plugin_name()]
-        return self._db
-
 
 class SpecialPlugin(Plugin):
     """A special plugin with a special name that expects to be handled
