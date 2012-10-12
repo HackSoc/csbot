@@ -98,6 +98,21 @@ class Users(Plugin):
                 usr[tag] = True
             self.save_user(usr)
 
+    @Plugin.command('unregister')
+    def unregister(self, event):
+        """
+        Allows users to unregister themselves from a tag.
+        """
+        tags = event.arguments()
+        usr = self.get_user_by_nick(nick(event['user']))
+        if usr:
+            modified = False
+            for tag in tags:
+                if usr[tag]:
+                    usr[tag] = False
+                    modified = True
+            self.save_user(usr)
+
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
         try:
