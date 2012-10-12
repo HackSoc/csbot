@@ -64,6 +64,9 @@ class Users(Plugin):
         """
         self.db.online_users.update({'_id': user['_id']}, user, True)
 
+    def get_users_by_tag(self, tag):
+        return self.db.online_users.find({tag: True})
+
     @Plugin.command('ops')
     def ops(self, event):
         """
@@ -110,6 +113,19 @@ class Users(Plugin):
                 event.reply("{} is here.".format(usr['user']))
             else:
                 event.reply("I haven't seen {}".format(data[0]))
+
+    @Plugin.command('register')
+    def register(self, event):
+        """
+        Allows users to register themselves against a tag. Other plugins can then
+        use this tag to retrieve users.
+        """
+        tags = event.arguments()
+        usr = self.get_user_by_nick(nick(event['user']))
+        if usr:
+            for tag in tags:
+                usr[tag] = True
+            self.save_user(usr)
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
