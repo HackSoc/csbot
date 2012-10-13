@@ -1,6 +1,6 @@
 from csbot.core import Plugin
-from csbot.util import nick, sensible_time
-from datetime import datetime
+from csbot.util import sensible_time
+from csbot.plugins.user.user import User
 
 
 class Users(Plugin):
@@ -15,54 +15,10 @@ class Users(Plugin):
     """
 
     def setup(self):
-        # Clear out any previous records as the may be out of date and can't be
-        # trusted any more
-        self.db.offline_users.remove()
-        self.db.online_users.remove()
+        # Mark any previous records as untrustworth as the may be out of date
+        for user in User.all_users():
+            user.set_offline()
         super(Users, self).setup()
-
-    def is_online(self, user):
-        """
-        This checks to see if a user is known to be online.
-        """
-        return self.db.online_users.find({'user': user}).count() > 0
-
-    def is_op(self, nick):
-        """
-        This checks to see if the given nick has operator privilages.
-        """
-        user = self.get_user_by_nick(nick)
-        return user['op'] == True
-
-    def get_online_users(self):
-        """
-        This returns a list of all the users currently known to be online.
-
-        This is known to be incomplete at the moment as we can not currently
-        get the list of users in the channel.
-        """
-        return [u['user'] for u in self.db.online_users.find()]
-
-    def get_user_by_nick(self, nick):
-        """
-        This finds a user in the database with the given nick. Only one
-        result will be returned.
-        """
-        return self.db.online_users.find_one({'user': nick})
-
-    def save_user(self, user):
-        """
-        This takes a user that has been modified and saves it to the database.
-        If the user doesn't already exist in the db it should fail.
-        """
-        self.db.online_users.update({'_id': user['_id']}, user)
-
-    def save_or_update_user(self, user):
-        """
-        This takes a user that has been modified and saves it to the database.
-        If the user doesn't already exist in the db it will be created.
-        """
-        self.db.online_users.update({'_id': user['_id']}, user, True)
 
     @Plugin.command('ops')
     def ops(self, event):
@@ -70,8 +26,8 @@ class Users(Plugin):
         Lists the current channel ops
         """
         ops = []
-        for user in self.db.online_users.find():
-            if 'op' in user and user['op'] == True:
+        for user in User.online_users():
+            if 'op' in user and user['op']:
                 ops.append(user['user'])
         event.reply("Current ops: {}".format(", ".join(ops)))
 
@@ -81,17 +37,17 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         spoke.
         """
-        data = event.arguments()
-        usr = self.get_user_by_nick(data[0])
-        if usr:
-            if 'time_last_spoke' in usr:
-                event.reply("{} last said something {}".format(
-                    usr['user'], sensible_time(self.bot, usr['time_last_spoke'], True)))
+        nck = event.arguments()[0]
+        try:
+            usr = User.find_user_by_nick(nck)
+            if 'last_spoke' in usr:
+                event.reply("{} last said something at {}".format(
+                    usr.nick, sensible_time(self.bot, usr.last_spoke, True)))
             else:
                 event.reply("I don't remember {} saying anything.".format(
-                    usr['user']))
-        else:
-            event.reply("I've never even heard of {}".format(data[0]))
+                    usr.nick))
+        except User.NotFound:
+            event.reply("I've never even heard of {}".format(nck))
 
     @Plugin.command('seen')
     def seen(self, event):
@@ -99,40 +55,32 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         was online.
         """
-        data = event.arguments()
-        usr = self.db.offline_users.find_one({'user': data[0]})
-        if usr:
-            event.reply("{} was last seen at {}".format(usr['user'],
-                sensible_time(self.bot, usr['time'], True)))
-        else:
-            usr = self.db.online_users.find_one({'user': data[0]})
-            if usr:
-                event.reply("{} is here.".format(usr['user']))
+        nck = event.arguments()[0]
+        try:
+            usr = User.find_user_by_nick(nck)
+            if usr.is_offline:
+                if 'is_connected' in usr:
+                    time = sensible_time(self.bot,
+                                         usr.disconnection_time, True)
+                    event.reply("{} was last seen at {}".format(usr.nick,
+                                                                time))
+                else:
+                    event.reply("{} left when I wasn't \
+                            around to see, sorry.".format(usr.nick))
             else:
-                event.reply("I haven't seen {}".format(data[0]))
+                event.reply("{} is here.".format(usr.nick))
+        except User.NotFound:
+            event.reply("I don't know {}".format(nck))
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
-        usr_matcher = {'user': event['user']}
-        # Delete any records of them being offline
-        self.db.offline_users.remove(usr_matcher)
-        # Update any existing records.
-        records = self.db.online_users.find(usr_matcher)
-        if records.count > 1:
-            # if there is more than one record, remove them and re-add them to
-            # be sure we only have one record of it
-            self.db.online_users.remove(usr_matcher)
-            usr_matcher['join_time'] = event.datetime
-            self.db.online_users.insert(usr_matcher)
-            # if there is one record update it
-        elif records.count == 1:
-            usr = records.next()
-            usr['join_time'] = event.datetime
-            self.db.online_users.update({'_id': usr['_id']}, usr)
-        else:
-            # if there is no record create a new one
-            usr_matcher['join_time'] = event.datetime
-            self.db.online_users.insert(usr_matcher)
+        user = User.find_user_by_nick(event['user'])
+        try:
+            user.load_from_database()
+        except User.NotFound:
+            pass
+            # User hasn't been seen before
+        user.set_connected(event.datetime)
 
     @Plugin.hook('core.channel.names')
     def names(self, event):
@@ -140,52 +88,32 @@ class Users(Plugin):
         When we connect to a channel we get a list of the names. This handles
         that list and updates the lists of users.
         """
-        # Remove everyone in the db
-        self.db.online_users.remove()
-        self.db.offline_users.remove()
-        for nick, mode in event['names']:
-            self.db.online_users.insert({
-                'user': nick,
-                'join_time': event.datetime,
-                })
+        for nck, mode in event['names']:
+            try:
+                usr = User.find_user_by_nick(nck)
+                usr.set_online()
+            except User.NotFound:
+                pass
+                # FIXME: fire off a whois
+            # if they exist, yay, if not, fire off a whois and set up
+            # a handler to register the user and host information etc.
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
-        usr = self.db.online_users.find_one({'user': nick(event['user'])})
-        if usr:
-            usr['last_said'] = event['message']
-            usr['time_last_spoke'] = event.datetime
-            self.db.online_users.update({'_id': usr['_id']}, usr)
-        else:
+        try:
+            usr = User.find_user_by_nick(event['user'])
+            usr.said(event['message'], event.datetime)
+        except User.NotFound:
             self.bot.log.info('Didn\'t find a user')
-#            usr = {'user': event.user,
-#                    'time_last_spoke': event.datetime,
-#                    'join_time': event.datetime}
-#            self.db.online_users.insert(usr)
 
     @Plugin.hook('core.user.renamed')
     def userRenamed(self, event):
-        # TODO: can this actually happen or will there only ever be one user with a nick?
-        usrs = self.db.online_users.find({'user': event['oldnick']})
-        if usrs.count() > 1:
-            self.db.online_users.remove({'user': event['oldnick']})
-        elif usrs.count() < 1:
-            usr = {'user': event['newnick'], 'join_time': event.datetime}
-            self.db.online_users.insert(usr)
-        else:
-            usr = usrs.next()
-            usr['user'] = event['newnick']
-            self.db.online_users.update({'_id': usr['_id']}, usr)
+        usr = User.find_user_by_nick(event['oldnick'])
+        usr.set_nick(event['newnick'])
 
     def userOffline(self, event):
-        # Remove any record of being online or offline
-        self.db.online_users.remove({'user': event['user']})
-        self.db.offline_users.remove({'user': event['user']})
-        # Be offline
-        self.db.offline_users.insert({
-            'user': event['user'],
-            'time': datetime.now()
-            })
+        usr = User.find_user_by_nick(event['nick'])
+        usr.set_disconnected()
 
     @Plugin.hook('core.channel.left')
     def userLeft(self, event):
@@ -204,13 +132,10 @@ class Users(Plugin):
         # all users in the args tuple have been affected
         if event['mode'] == 'o':
             if event['set']:
-                for nick in event['args']:
-                    user = self.get_user_by_nick(nick)
-                    user['op'] = True
-                    self.save_user(user)
+                for nck in event['args']:
+                    user = User.find_user_by_nick(nck)
+                    user.set_op(True)
             else:
-                for nick in event['args']:
-                    user = self.get_user_by_nick(nick)
-                    del user['op']
-                    self.save_user(user)
-
+                for nck in event['args']:
+                    user = User.find_user_by_nick(nck)
+                    user.set_op(False)
