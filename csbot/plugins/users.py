@@ -3,9 +3,9 @@ from csbot.util import nick, sensible_time
 from datetime import datetime
 
 def needs_db(fn):
-    def decorator():
+    def decorator(*args, **kwargs):
         if hasattr(User, 'db'):
-            fn()
+            return fn(*args, **kwargs)
         else:
             raise DatabaseNotSet("You need to set up the database before calling {}".format(fn.__name__))
     return decorator
@@ -28,7 +28,6 @@ class Users(Plugin):
         User.set_database(self.db)
         # Mark any previous records as untrustworth as the may be out of date
         users = User.all_users()
-        print "Users in setup: {}".format(users)
         for user in users:
             user.set_offline()
 
@@ -52,13 +51,13 @@ class Users(Plugin):
         nck = event.arguments()[0]
         try:
             usr = User.find_user_by_nick(nck)
-            if 'last_spoke' in usr:
+            if hasattr(usr, 'last_spoke'):
                 event.reply("{} last said something at {}".format(
                     usr.nick, sensible_time(self.bot, usr.last_spoke, True)))
             else:
                 event.reply("I don't remember {} saying anything.".format(
                     usr.nick))
-        except User.NotFound:
+        except UserNotFound:
             event.reply("I've never even heard of {}".format(nck))
 
     @Plugin.command('seen')
@@ -70,18 +69,17 @@ class Users(Plugin):
         nck = event.arguments()[0]
         try:
             usr = User.find_user_by_nick(nck)
-            if usr.is_offline:
-                if 'is_connected' in usr:
+            if usr.is_offline():
+                if hasattr(usr, 'disconnection_time'):
                     time = sensible_time(self.bot,
                                          usr.disconnection_time, True)
                     event.reply("{} was last seen at {}".format(usr.nick,
                                                                 time))
                 else:
-                    event.reply("{} left when I wasn't \
-                            around to see, sorry.".format(usr.nick))
+                    event.reply("{} left when I wasn't around to see, sorry.".format(usr.nick))
             else:
                 event.reply("{} is here.".format(usr.nick))
-        except User.NotFound:
+        except UserNotFound:
             event.reply("I don't know {}".format(nck))
 
     @Plugin.hook('core.channel.joined')
@@ -89,7 +87,7 @@ class Users(Plugin):
         user = User.find_user_by_nick(event['user'])
         try:
             user.load_from_database()
-        except User.NotFound:
+        except UserNotFound:
             pass
             # User hasn't been seen before
         user.set_connected(event.datetime)
@@ -104,18 +102,21 @@ class Users(Plugin):
             try:
                 usr = User.find_user_by_nick(nck)
                 usr.set_online()
-            except User.NotFound:
-                pass
-                # FIXME: fire off a whois
-            # if they exist, yay, if not, fire off a whois and set up
-            # a handler to register the user and host information etc.
+            except UserNotFound:
+                event.protocol.whois(nck)
+
+    @Plugin.hook('core.user.whois')
+    def whois(self, event):
+        user = User(event['nick'], event['user'], event['host'])
+        user.save_or_create()
+        user.set_online()
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         try:
             usr = User.find_user_by_nick(event['user'])
             usr.said(event['message'], event.datetime)
-        except User.NotFound:
+        except UserNotFound:
             self.bot.log.info('Didn\'t find a user')
 
     @Plugin.hook('core.user.renamed')
@@ -173,16 +174,16 @@ class User(object):
     OFFLINE = 'offline'
     UNKNOWN = 'unknown'
 
-    def __init__(self, irc_user):
-        """
-        This relies on the irc_user being passed in being a full username
-        including nick, user and host information. If it isn't an exception
-        will be raised.
-        """
-        if is_full_username(irc_user):
-            self.nick, self.user, self.host = split_username(irc_user)
-        else:
-            raise UserInformationMissing("A username must have a nick, user and a host")
+    # def __init__(self, irc_user):
+    #     """
+    #     This relies on the irc_user being passed in being a full username
+    #     including nick, user and host information. If it isn't an exception
+    #     will be raised.
+    #     """
+    #     if self.is_full_username(irc_user):
+    #         self.nick, self.user, self.host = User.split_username(irc_user)
+    #     else:
+    #         raise UserInformationMissing("A username must have a nick, user and a host")
 
     def __init__(self, nick, user, host):
         """
@@ -214,17 +215,17 @@ class User(object):
         This checks to see if the user has operator privilages.
         """
         self.op = is_op
-        self.save
+        self.save()
 
     @needs_db
     def set_tag(self, tag):
         self.tag = True
-        self.save
+        self.save()
 
     @needs_db
     def unset_tag(self, tag):
         self.tag = False
-        self.save
+        self.save()
 
     @needs_db
     def save(self):
@@ -232,7 +233,7 @@ class User(object):
         This saves the current user to the database.
         If the user doesn't already exist in the db it should fail.
         """
-        User.db.users.update({'_id': self._id}, self.to_db_dict)
+        User.db.users.update({'_id': self._id}, self.to_db_dict())
 
     @needs_db
     def save_or_create(self):
@@ -240,43 +241,46 @@ class User(object):
         This saves the current user to the database.
         If the user doesn't already exist in the db it should create it.
         """
-        User.db.users.update({'_id': self._id}, self.to_db_dict, True)
+        try:
+            User.db.users.update({'_id': self._id}, self.to_db_dict(), True)
+        except AttributeError: # because the _id is not set
+            User.db.users.insert(self.to_db_dict())
 
     @needs_db
-    def set_online(self, time = datetime.now()):
+    def set_online(self):
         self.connection_status = User.ONLINE
-        self.save
+        self.save()
 
     @needs_db
-    def set_offline(self, time = datetime.now()):
+    def set_offline(self):
         self.connection_status = User.OFFLINE
-        self.save
+        self.save()
 
     @needs_db
     def set_connected(self, time = datetime.now()):
         self.connection_status = User.ONLINE
         self.connected_time = time
-        self.save
+        self.save()
 
     @needs_db
     def set_disconnected(self, time = datetime.now()):
         self.connection_status = User.OFFLINE
         self.disconnected_time = time
-        self.save
+        self.save()
 
     @needs_db
     def said(self, message, time=datetime.now()):
         self.last_spoke = time
         self.last_utterance = message
-        self.save
+        self.save()
 
     @needs_db
     def set_nick(self, newnick):
         self.nick = newnick
-        self.save
+        self.save()
 
     def to_db_dict(self):
-        return __dict__
+        return self.__dict__
 
     @staticmethod
     @needs_db
@@ -284,13 +288,13 @@ class User(object):
         """
         This finds a user in the database with the given nick.
         """
-        if is_full_username(nick):
-            nick, _, _ = split_username(nick)
-        db_user = User.db.users.find({'nick': nick})
+        if User.is_full_username(nick):
+            nick, _, _ = User.split_username(nick)
+        db_user = User.db.users.find_one({'nick': nick})
         if db_user:
-            return from_database(db_user)
+            return User.from_database(db_user)
         else:
-            raise NotFound("Sorry, {} could not be found in the database".format(nick))
+            raise UserNotFound("Sorry, {} could not be found in the database".format(nick))
 
     @staticmethod
     @needs_db
@@ -317,9 +321,7 @@ class User(object):
         """
         This returns a list of all the users currently in the database.
         """
-        users = [User.from_database(usr) for usr in User.db.users.find()]
-        print "Users in all_users: {}".format(users)
-        return users
+        return [User.from_database(usr) for usr in User.db.users.find()]
 
     @staticmethod
     def from_database(db_user):
@@ -336,12 +338,11 @@ class User(object):
 
     @needs_db
     def load_from_database(self):
-        db_user = User.db.users.find({'nick': nick})
+        db_user = User.db.users.find({'nick': self.nick})
         if db_user:
-            for k, v in db_user.iteritems():
-                setattr(user, k, v)
+            return self.from_database(db_user)
         else:
-            raise NotFound("Sorry, {} could not be found in the database".format(self.nick))
+            raise UserNotFound("Sorry, {} could not be found in the database".format(self.nick))
 
     @classmethod
     def set_database(cls, db):
@@ -368,15 +369,15 @@ class User(object):
         Splits a username into a 3 tuple of nick, user and host.
         Parts that aren't available are replaced with None.
         """
-        host, user = None
-        if username_has_host(username):
+        host, user = None, None
+        if User.username_has_host(username):
             username, host = username.split("@")
-        if username_has_user(username):
+        if User.username_has_user(username):
             username, user = username.split("!")
         return (username, user, host)
 
 
-class InformationMissing(Exception):
+class UserInformationMissing(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
@@ -390,7 +391,7 @@ class DatabaseNotSet(Exception):
         return repr(self.value)
 
 
-class NotFound(Exception):
+class UserNotFound(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
