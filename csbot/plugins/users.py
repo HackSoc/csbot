@@ -23,12 +23,14 @@ class Users(Plugin):
     """
 
     def setup(self):
+        super(Users, self).setup()
         # Setup the db
         User.set_database(self.db)
         # Mark any previous records as untrustworth as the may be out of date
-        for user in User.all_users():
+        users = User.all_users()
+        print "Users in setup: {}".format(users)
+        for user in users:
             user.set_offline()
-        super(Users, self).setup()
 
     @Plugin.command('ops')
     def ops(self, event):
@@ -151,7 +153,7 @@ class Users(Plugin):
                     user.set_op(False)
 
 
-class User:
+class User(object):
     """
     This class represents a user in the channel. It is backed by the mongo database.
 
@@ -171,7 +173,7 @@ class User:
     OFFLINE = 'offline'
     UNKNOWN = 'unknown'
 
-    def setup(self, irc_user):
+    def __init__(self, irc_user):
         """
         This relies on the irc_user being passed in being a full username
         including nick, user and host information. If it isn't an exception
@@ -182,7 +184,7 @@ class User:
         else:
             raise UserInformationMissing("A username must have a nick, user and a host")
 
-    def setup(self, nick, user, host):
+    def __init__(self, nick, user, host):
         """
         Creates a new user object by passing nick, user and host separately to skip
         any validation.
@@ -315,7 +317,9 @@ class User:
         """
         This returns a list of all the users currently in the database.
         """
-        return [User.from_database(usr) for usr in User.db.users.find()]
+        users = [User.from_database(usr) for usr in User.db.users.find()]
+        print "Users in all_users: {}".format(users)
+        return users
 
     @staticmethod
     def from_database(db_user):
@@ -330,13 +334,14 @@ class User:
             setattr(user, k, v)
         return user
 
+    @needs_db
     def load_from_database(self):
         db_user = User.db.users.find({'nick': nick})
         if db_user:
             for k, v in db_user.iteritems():
                 setattr(user, k, v)
         else:
-            raise NotFound("Sorry, {} could not be fonud in the database".format(self.nick))
+            raise NotFound("Sorry, {} could not be found in the database".format(self.nick))
 
     @classmethod
     def set_database(cls, db):
