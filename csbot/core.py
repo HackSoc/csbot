@@ -293,6 +293,14 @@ class BotProtocol(irc.IRCClient):
             'user': user,
         })
 
+    def userKicked(self, kickee, channel, kicker, message):
+        self.emit_new('core.channel.kicked', {
+            'channel': channel,
+            'kickee': kickee,
+            'kicker': kicker,
+            'message': message,
+        })
+
     def names(self, channel, names, raw_names):
         """Called when the NAMES list for a channel has been received.
         """
