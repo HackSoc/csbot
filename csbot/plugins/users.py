@@ -98,6 +98,7 @@ class Users(Plugin):
         When we connect to a channel we get a list of the names. This handles
         that list and updates the lists of users.
         """
+        # mode is an array of mode characters, e.g. [u'o']
         for nck, mode in event['names']:
             try:
                 usr = self.userdb.find_user_by_nick(nck)
@@ -242,6 +243,9 @@ class User(object):
         """
         self.dbdict['op'] = is_op
         self.save()
+
+    def has_tag(self, tag):
+        return (tag in self.dbdict['tags'])
 
     def add_tag(self, tag):
         """
