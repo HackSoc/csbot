@@ -157,7 +157,14 @@ class LinkInfo(Plugin):
             return None
 
         # Attempt to scrape the HTML for a <title>
-        html = lxml.html.document_fromstring(r.text)
+        html = None
+        try:
+            html = lxml.html.document_fromstring(r.text)
+        except ValueError:
+            # ValueError is usually "Unicode strings with encoding declaration
+            # are not supported", so let's try again without decoding the
+            # content ourselves.
+            html = lxml.html.document_fromstring(r.content)
         title = html.find('.//title')
 
         if title is None:
