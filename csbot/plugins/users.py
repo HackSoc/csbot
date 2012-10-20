@@ -115,11 +115,11 @@ class Users(Plugin):
         use this tag to retrieve users.
         """
         tags = event.arguments()
-        usr = self.get_user_by_nick(nick(event['user']))
+        usr = self.userdb.find_user_by_nick(event['user'])
         if usr:
             for tag in tags:
-                usr[tag] = True
-            self.save_user(usr)
+                usr.add_tag(tag)
+            usr.save()
 
     @Plugin.command('unregister')
     def unregister(self, event):
@@ -127,14 +127,11 @@ class Users(Plugin):
         Allows users to unregister themselves from a tag.
         """
         tags = event.arguments()
-        usr = self.get_user_by_nick(nick(event['user']))
+        usr = self.userdb.find_user_by_nick(event['user'])
         if usr:
-            modified = False
             for tag in tags:
-                if usr[tag]:
-                    usr[tag] = False
-                    modified = True
-            self.save_user(usr)
+                usr.remove_tag(tag)
+            usr.save()
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
@@ -142,9 +139,11 @@ class Users(Plugin):
             user = self.userdb.find_user_by_nick(event['user'])
             user.set_connected(event.datetime)
         except UserNotFound:
-            pass
-            # FIXME: what to do here?
-            # User hasn't been seen before
+            nick, user, host = User.split_username(event['user'])
+            usr = User(self.userdb, nick, user, host)
+            if (user is None or host is None):
+                event.protocol.whois(nick)
+            usr.set_connected(event.datetime)
 
     @Plugin.hook('core.channel.names')
     def names(self, event):
@@ -261,6 +260,7 @@ class User(object):
         self.dbdict['nick'] = nick
         self.dbdict['user'] = user
         self.dbdict['host'] = host
+        self.save_or_create()
 
     def __str__(self):
         return self.dbdict['nick']
