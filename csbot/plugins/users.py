@@ -31,9 +31,6 @@ class Users(Plugin):
         for user in users:
             user.set_offline()
 
-    def get_users_by_tag(self, tag):
-        return self.db.online_users.find({tag: True})
-
     @Plugin.command('ops')
     def ops(self, event):
         """
@@ -92,11 +89,10 @@ class Users(Plugin):
         use this tag to retrieve users.
         """
         tags = event.arguments()
-        usr = self.get_user_by_nick(nick(event['user']))
-        if usr:
-            for tag in tags:
-                usr[tag] = True
-            self.save_user(usr)
+        usr = self.userdb.find_user_by_nick(event['user'])
+        for tag in tags:
+            usr.add_tag(tag)
+        usr.save()
 
     @Plugin.command('unregister')
     def unregister(self, event):
@@ -104,14 +100,10 @@ class Users(Plugin):
         Allows users to unregister themselves from a tag.
         """
         tags = event.arguments()
-        usr = self.get_user_by_nick(nick(event['user']))
-        if usr:
-            modified = False
-            for tag in tags:
-                if usr[tag]:
-                    usr[tag] = False
-                    modified = True
-            self.save_user(usr)
+        usr = self.userdb.find_user_by_nick(event['user'])
+        for tag in tags:
+            usr.remove_tag(tag)
+        usr.save()
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
@@ -192,6 +184,9 @@ class Users(Plugin):
                 for nck in event['args']:
                     user = self.userdb.find_user_by_nick(nck)
                     user.set_op(False)
+
+    def find_users_by_tag(self, tag):
+        return self.userdb.find_users_by_tag(tag)
 
 
 class User(object):
@@ -276,13 +271,17 @@ class User(object):
         self.save()
 
     def has_tag(self, tag):
-        return (tag in self.dbdict['tags'])
+        return 'tags' in self.dbdict and tag in self.dbdict['tags']
 
     def add_tag(self, tag):
         """
         Adds a tag to the user that can be used for a variety of purposes.
         """
-        self.dbdict['tags'].append(tag)
+        if 'tags' in self.dbdict:
+            if tag not in self.dbdict['tags']:
+                self.dbdict['tags'].append(tag)
+        else:
+            self.dbdict['tags'] = [tag]
         self.save()
 
     def remove_tag(self, tag):
@@ -413,6 +412,9 @@ class UserDB(object):
             return self.to_user(db_user)
         else:
             raise UserNotFound("Sorry, {} could not be found in the database".format(nick))
+
+    def find_users_by_tag(self, tag):
+        return [self.to_user(usr) for usr in self.db.users.find({'tags': tag})]
 
     def online_users(self):
         """

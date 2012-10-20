@@ -12,13 +12,13 @@ class Starcraft(Plugin):
     def starcraft(self, event):
         if 'users' in event.bot.plugins:
             requestor = nick(event['user'])
-            users = event.bot.plugins['users'].get_users_by_tag('starcraft')
-            names = [usr['user'] for usr in users]
-            if requestor in names:
-                names.remove(requestor)
-            if len(names) > 0:
-                message = ", ".join(names)
-                message += ", {} wants to play StarCraft".format(requestor)
+            users = event.bot.plugins['users'].find_users_by_tag('starcraft')
+            nicks = map(str, users)
+            if requestor in nicks:
+                nicks.remove(requestor)
+            if len(nicks) > 0:
+                message = ", ".join(nicks)
+                message += ": {} wants to play StarCraft".format(requestor)
                 event.reply(message)
             else:
                 event.reply("Sorry, nobody else wants to play.")
