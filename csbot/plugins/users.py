@@ -2,6 +2,14 @@ from csbot.core import Plugin
 from csbot.util import nick, sensible_time
 from datetime import datetime
 
+def needs_db(fn):
+    def decorator(*args, **kwargs):
+        if hasattr(User, 'db'):
+            return fn(*args, **kwargs)
+        else:
+            raise DatabaseNotSet("You need to set up the database before calling {}".format(fn.__name__))
+    return decorator
+
 
 class Users(Plugin):
     """
@@ -15,54 +23,13 @@ class Users(Plugin):
     """
 
     def setup(self):
-        # Clear out any previous records as the may be out of date and can't be
-        # trusted any more
-        self.db.offline_users.remove()
-        self.db.online_users.remove()
         super(Users, self).setup()
-
-    def is_online(self, user):
-        """
-        This checks to see if a user is known to be online.
-        """
-        return self.db.online_users.find({'user': user}).count() > 0
-
-    def is_op(self, nick):
-        """
-        This checks to see if the given nick has operator privilages.
-        """
-        user = self.get_user_by_nick(nick)
-        return user['op'] == True
-
-    def get_online_users(self):
-        """
-        This returns a list of all the users currently known to be online.
-
-        This is known to be incomplete at the moment as we can not currently
-        get the list of users in the channel.
-        """
-        return [u['user'] for u in self.db.online_users.find()]
-
-    def get_user_by_nick(self, nick):
-        """
-        This finds a user in the database with the given nick. Only one
-        result will be returned.
-        """
-        return self.db.online_users.find_one({'user': nick})
-
-    def save_user(self, user):
-        """
-        This takes a user that has been modified and saves it to the database.
-        If the user doesn't already exist in the db it should fail.
-        """
-        self.db.online_users.update({'_id': user['_id']}, user)
-
-    def save_or_update_user(self, user):
-        """
-        This takes a user that has been modified and saves it to the database.
-        If the user doesn't already exist in the db it will be created.
-        """
-        self.db.online_users.update({'_id': user['_id']}, user, True)
+        # Setup the db
+        self.userdb = UserDB(self.db)
+        # Mark any previous records as untrustworth as the may be out of date
+        users = self.userdb.all_users()
+        for user in users:
+            user.set_offline()
 
     def get_users_by_tag(self, tag):
         return self.db.online_users.find({tag: True})
@@ -72,11 +39,11 @@ class Users(Plugin):
         """
         Lists the current channel ops
         """
-        ops = []
-        for user in self.db.online_users.find():
-            if 'op' in user and user['op'] == True:
-                ops.append(user['user'])
-        event.reply("Current ops: {}".format(", ".join(ops)))
+        ops = map(str, self.userdb.ops())
+        if len(ops) > 0:
+            event.reply("Current ops: {}".format(", ".join(ops)))
+        else:
+            event.reply("Sorry, there don't appear to be any ops here.")
 
     @Plugin.command('spoke')
     def spoke(self, event):
@@ -84,17 +51,17 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         spoke.
         """
-        data = event.arguments()
-        usr = self.get_user_by_nick(data[0])
-        if usr:
-            if 'time_last_spoke' in usr:
-                event.reply("{} last said something {}".format(
-                    usr['user'], sensible_time(self.bot, usr['time_last_spoke'], True)))
-            else:
+        nck = event.arguments()[0]
+        try:
+            usr = self.userdb.find_user_by_nick(nck)
+            try:
+                event.reply("{} last said something at {}".format(
+                    usr.dbdict['nick'], sensible_time(self.bot, usr.dbdict['last_spoke'], True)))
+            except KeyError:
                 event.reply("I don't remember {} saying anything.".format(
-                    usr['user']))
-        else:
-            event.reply("I've never even heard of {}".format(data[0]))
+                    usr.dbdict['nick']))
+        except UserNotFound:
+            event.reply("I've never even heard of {}".format(nck))
 
     @Plugin.command('seen')
     def seen(self, event):
@@ -102,17 +69,44 @@ class Users(Plugin):
         Tells the user who asked when the last time the user they asked about
         was online.
         """
-        data = event.arguments()
-        usr = self.db.offline_users.find_one({'user': data[0]})
-        if usr:
-            event.reply("{} was last seen at {}".format(usr['user'],
-                sensible_time(self.bot, usr['time'], True)))
-        else:
-            usr = self.db.online_users.find_one({'user': data[0]})
-            if usr:
-                event.reply("{} is here.".format(usr['user']))
+        nck = event.arguments()[0]
+        try:
+            usr = self.userdb.find_user_by_nick(nck)
+            if usr.is_offline():
+                if hasattr(usr, 'disconnection_time'):
+                    time = sensible_time(self.bot,
+                                         usr.disconnection_time, True)
+                    event.reply("{} was last seen at {}".format(usr.dbdict['nick'],
+                                                                time))
+                else:
+                    event.reply("{} left when I wasn't around to see, sorry.".format(usr.dbdict['nick']))
             else:
-                event.reply("I haven't seen {}".format(data[0]))
+                event.reply("{} is here.".format(usr.dbdict['nick']))
+        except UserNotFound:
+            event.reply("I don't know {}".format(nck))
+
+    @Plugin.command('register')
+    def register(self, event):
+        """
+        Allows users to register themselves against a tag. Other plugins can then
+        use this tag to retrieve users.
+        """
+        tags = event.arguments()
+        usr = self.userdb.find_user_by_nick(event['user'])
+        for tag in tags:
+            usr.add_tag(tag)
+        usr.save()
+
+    @Plugin.command('unregister')
+    def unregister(self, event):
+        """
+        Allows users to unregister themselves from a tag.
+        """
+        tags = event.arguments()
+        usr = self.userdb.find_user_by_nick(event['user'])
+        for tag in tags:
+            usr.remove_tag(tag)
+        usr.save()
 
     @Plugin.command('register')
     def register(self, event):
@@ -144,26 +138,13 @@ class Users(Plugin):
 
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
-        usr_matcher = {'user': event['user']}
-        # Delete any records of them being offline
-        self.db.offline_users.remove(usr_matcher)
-        # Update any existing records.
-        records = self.db.online_users.find(usr_matcher)
-        if records.count > 1:
-            # if there is more than one record, remove them and re-add them to
-            # be sure we only have one record of it
-            self.db.online_users.remove(usr_matcher)
-            usr_matcher['join_time'] = event.datetime
-            self.db.online_users.insert(usr_matcher)
-            # if there is one record update it
-        elif records.count == 1:
-            usr = records.next()
-            usr['join_time'] = event.datetime
-            self.db.online_users.update({'_id': usr['_id']}, usr)
-        else:
-            # if there is no record create a new one
-            usr_matcher['join_time'] = event.datetime
-            self.db.online_users.insert(usr_matcher)
+        try:
+            user = self.userdb.find_user_by_nick(event['user'])
+            user.set_connected(event.datetime)
+        except UserNotFound:
+            pass
+            # FIXME: what to do here?
+            # User hasn't been seen before
 
     @Plugin.hook('core.channel.names')
     def names(self, event):
@@ -171,77 +152,369 @@ class Users(Plugin):
         When we connect to a channel we get a list of the names. This handles
         that list and updates the lists of users.
         """
-        # Remove everyone in the db
-        self.db.online_users.remove()
-        self.db.offline_users.remove()
-        for nick, mode in event['names']:
-            self.db.online_users.insert({
-                'user': nick,
-                'join_time': event.datetime,
-                })
+        # mode is an array of mode characters, e.g. [u'o']
+        for nck, mode in event['names']:
+            try:
+                usr = self.userdb.find_user_by_nick(nck)
+                usr.set_op('o' in mode)
+                usr.set_online()
+            except UserNotFound:
+                event.protocol.whois(nck)
+
+    @Plugin.hook('core.user.whois')
+    def whois(self, event):
+        try:
+            user = self.userdb.find_user_by_nick(event['nick'])
+            user.user = event['user']
+            user.host = event['host']
+        except UserNotFound:
+            user = User(self.userdb, event['nick'], event['user'], event['host'])
+        user.save_or_create()
+        user.set_online()
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
-        usr = self.db.online_users.find_one({'user': nick(event['user'])})
-        if usr:
-            usr['last_said'] = event['message']
-            usr['time_last_spoke'] = event.datetime
-            self.db.online_users.update({'_id': usr['_id']}, usr)
-        else:
+        try:
+            usr = self.userdb.find_user_by_nick(event['user'])
+            usr.said(event['message'], event.datetime)
+        except UserNotFound:
             self.bot.log.info('Didn\'t find a user')
-#            usr = {'user': event.user,
-#                    'time_last_spoke': event.datetime,
-#                    'join_time': event.datetime}
-#            self.db.online_users.insert(usr)
 
     @Plugin.hook('core.user.renamed')
     def userRenamed(self, event):
-        # TODO: can this actually happen or will there only ever be one user with a nick?
-        usrs = self.db.online_users.find({'user': event['oldnick']})
-        if usrs.count() > 1:
-            self.db.online_users.remove({'user': event['oldnick']})
-        elif usrs.count() < 1:
-            usr = {'user': event['newnick'], 'join_time': event.datetime}
-            self.db.online_users.insert(usr)
-        else:
-            usr = usrs.next()
-            usr['user'] = event['newnick']
-            self.db.online_users.update({'_id': usr['_id']}, usr)
+        usr = self.userdb.find_user_by_nick(event['oldnick'])
+        usr.set_nick(event['newnick'])
 
     def userOffline(self, event):
-        # Remove any record of being online or offline
-        self.db.online_users.remove({'user': event['user']})
-        self.db.offline_users.remove({'user': event['user']})
-        # Be offline
-        self.db.offline_users.insert({
-            'user': event['user'],
-            'time': datetime.now()
-            })
+        usr = self.userdb.find_user_by_nick(event['nick'])
+        usr.set_disconnected()
 
     @Plugin.hook('core.channel.left')
     def userLeft(self, event):
         self.userOffline(event)
 
-    @Plugin.hook('core.channel.quit')
+    @Plugin.hook('core.user.quit')
     def userQuit(self, event):
         self.userOffline(event)
 
-    @Plugin.hook('core.user.quit')
+    @Plugin.hook('core.channel.kicked')
     def userKicked(self, event):
-        self.userOffline(event)
+        kickee = self.userdb.find_user_by_nick(event['kickee'])
+        kicker = self.userdb.find_user_by_nick(event['kicker'])
+        kickee.set_kicked(event.datetime, kicker, event['message'])
 
     @Plugin.hook('core.channel.modeChanged')
     def modeChanged(self, event):
         # all users in the args tuple have been affected
         if event['mode'] == 'o':
             if event['set']:
-                for nick in event['args']:
-                    user = self.get_user_by_nick(nick)
-                    user['op'] = True
-                    self.save_user(user)
+                for nck in event['args']:
+                    user = self.userdb.find_user_by_nick(nck)
+                    user.set_op(True)
             else:
-                for nick in event['args']:
-                    user = self.get_user_by_nick(nick)
-                    del user['op']
-                    self.save_user(user)
+                for nck in event['args']:
+                    user = self.userdb.find_user_by_nick(nck)
+                    user.set_op(False)
+
+    def find_users_by_tag(self, tag):
+        return self.userdb.find_users_by_tag(tag)
+
+
+class User(object):
+    """
+    This class represents a user in the channel. It is backed by the mongo database.
+
+    In the database the basic user looks similar to this:
+    {
+        'nick': 'Haegin',
+        'user': 'HJMills',
+        'host': 'unaffiliated/hjmills',
+        'online: True,
+    }
+
+    They may have extra attributes such as connection/disconnection times,
+    last spoke time, last utterance, or tags.
+    """
+
+    ONLINE  = 'online'
+    OFFLINE = 'offline'
+    UNKNOWN = 'unknown'
+
+    # def __init__(self, irc_user):
+    #     """
+    #     This relies on the irc_user being passed in being a full username
+    #     including nick, user and host information. If it isn't an exception
+    #     will be raised.
+    #     """
+    #     if self.is_full_username(irc_user):
+    #         self.nick, self.user, self.host = User.split_username(irc_user)
+    #     else:
+    #         raise UserInformationMissing("A username must have a nick, user and a host")
+
+    def __init__(self, userdb, nick, user, host):
+        """
+        Creates a new user object by passing nick, user and host separately to skip
+        any validation.
+        """
+        self.userdb = userdb
+        self.dbdict = {}
+        self.dbdict['nick'] = nick
+        self.dbdict['user'] = user
+        self.dbdict['host'] = host
+
+    def __str__(self):
+        return self.dbdict['nick']
+
+    def is_online(self):
+        """
+        This checks to see if the user is known to be online.
+        """
+        try:
+            return self.dbdict['connection_status'] == User.ONLINE
+        except KeyError:
+            return False
+
+    def is_offline(self):
+        """
+        This checks to see if the user is known to be offline.
+        """
+        try:
+            return self.dbdict['connection_status'] == User.OFFLINE
+        except KeyError:
+            return False
+
+    def is_op(self):
+        """
+        This checks to see if the user has operator privilages.
+        """
+        try:
+            return self.dbdict['op'] == True
+        except KeyError:
+            return False
+
+    def set_op(self, is_op = True):
+        """
+        This can set the user to be, or not be, an operator. If the
+        is_op parameter is not specified, it sets the user to be an
+        operator.
+        """
+        self.dbdict['op'] = is_op
+        self.save()
+
+    def has_tag(self, tag):
+        return 'tags' in self.dbdict and tag in self.dbdict['tags']
+
+    def add_tag(self, tag):
+        """
+        Adds a tag to the user that can be used for a variety of purposes.
+        """
+        if 'tags' in self.dbdict:
+            if tag not in self.dbdict['tags']:
+                self.dbdict['tags'].append(tag)
+        else:
+            self.dbdict['tags'] = [tag]
+        self.save()
+
+    def remove_tag(self, tag):
+        """
+        Removes the given tag from the list of tags associated with the user.
+        If the tag isn't in the users tag list, nothing happens.
+        """
+        if tag in self.dbdict['tags']:
+            self.dbdict['tags'].remove(tag)
+            self.save()
+
+    def save(self):
+        """
+        This saves the current user to the database.
+        If the user doesn't already exist in the db it should fail.
+        """
+        self.userdb.update_user(self.dbdict)
+
+    def save_or_create(self):
+        """
+        This saves the current user to the database.
+        If the user doesn't already exist in the db it should create it.
+        """
+        try:
+            self.userdb.update_user(self.dbdict)
+        except KeyError: # because the _id is not set
+            self.userdb.add_user(self.dbdict)
+
+    def set_online(self):
+        """
+        Sets the user as online without updating the connection_time.
+        """
+        self.dbdict['connection_status'] = User.ONLINE
+        self.save()
+
+    def set_offline(self):
+        """
+        Sets the user as offline, without updating the disconnection_time.
+        """
+        self.dbdict['connection_status'] = User.OFFLINE
+        self.save()
+
+    def set_connected(self, time = datetime.now()):
+        """
+        Marks the user as online and sets the connected_time
+        """
+        self.dbdict['connection_status'] = User.ONLINE
+        self.dbdict['connected_time'] = time
+        self.save()
+
+    def set_disconnected(self, time = datetime.now()):
+        """
+        Sets the user as offline, updating the disconnected_time
+        """
+        self.dbdict['connection_status'] = User.OFFLINE
+        self.dbdict['disconnected_time'] = time
+        self.save()
+
+    def set_kicked(self, when, by, why):
+        """
+        Marks the user as offline and records information about
+        them being kicked.
+        """
+        self.dbdict['connection_status'] = User.OFFLINE
+        self.dbdict['disconnected_time'] = when
+        self.dbdict['kicked_at'] = when
+        self.dbdict['kicked_by'] = by.db_id
+        self.dbdict['kicked_because'] = why
+        self.save()
+
+    def said(self, message, time=datetime.now()):
+        self.dbdict['last_spoke'] = time
+        self.dbdict['last_utterance'] = message
+        self.save()
+
+    def set_nick(self, newnick):
+        self.dbdict['nick'] = newnick
+        self.save()
+
+    def db_id(self):
+        """
+        Provides access to the database id of the user
+        """
+        return self.dbdict['_id']
+
+    @staticmethod
+    def is_full_username(username):
+        return "!" in username and "@" in username
+
+    @staticmethod
+    def username_has_host(username):
+        return "@" in username
+
+    @staticmethod
+    def username_has_user(username):
+        return "!" in username
+
+    @staticmethod
+    def split_username(username):
+        """
+        Splits a username into a 3 tuple of nick, user and host.
+        Parts that aren't available are replaced with None.
+        """
+        host, user = None, None
+        if User.username_has_host(username):
+            username, host = username.split("@")
+        if User.username_has_user(username):
+            username, user = username.split("!")
+        return (username, user, host)
+
+
+class UserDB(object):
+    """
+    This class represents the users within the database.
+    """
+    def __init__(self, db):
+        self.db = db
+        self.db.users.ensure_index('nick')
+
+    def find_user_by_nick(self, nick):
+        """
+        This finds a user in the database with the given nick.
+        """
+        if User.is_full_username(nick):
+            nick, _, _ = User.split_username(nick)
+        db_user = self.db.users.find_one({'nick': nick})
+        if db_user:
+            return self.to_user(db_user)
+        else:
+            raise UserNotFound("Sorry, {} could not be found in the database".format(nick))
+
+    def find_users_by_tag(self, tag):
+        return [self.to_user(usr) for usr in self.db.users.find({'tags': tag})]
+
+    def online_users(self):
+        """
+        This returns a list of all the users currently known to be online.
+        """
+        return [self.to_user(usr) for usr in self.db.users.find({'connection_state': User.ONLINE})]
+
+    def offline_users(self):
+        """
+        This returns a list of all the users currently known to be offfline.
+
+        This only returns users who HAVE been in the channel. Reporting all users ever
+        would be silly
+        """
+        return [self.to_user(usr) for usr in self.db.users.find({'connection_state': User.OFFLINE})]
+
+    def all_users(self):
+        """
+        This returns a list of all the users currently in the database.
+        """
+        return [self.to_user(usr) for usr in self.db.users.find()]
+
+    def ops(self):
+        return [self.to_user(usr) for usr in self.db.users.find({'op': True})]
+
+    def update_user(self, user):
+        user = self.db.users.update({'_id': user['_id']}, user)
+
+    def add_user(self, user):
+        self.db.users.insert(user)
+
+    def to_user(self, db_user):
+        #user = User(db_user['nick'], db_user['user'], db_user['host'])
+        user = User(self, None, None, None)
+        # FIXME: check I'm still sane
+        # set all the things on the user
+        # not sure if checking each thing isn't nick, user or host is more efficient
+        # than just resetting them to the same thing. Could probably get away with
+        # not looking them up in the first place actually... bad idea anyone?
+        for k, v in db_user.iteritems():
+            user.dbdict[k] = v
+        return user
+
+    def load_from_database(self, user):
+        db_user = self.db.users.find({'nick': user.dbdict['nick']})
+        if db_user:
+            for k, v in db_user.iteritems():
+                user.dbdict[k] = v
+        else:
+            raise UserNotFound("Sorry, {} could not be found in the database".format(self.nick))
+
+
+class UserInformationMissing(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class DatabaseNotSet(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class UserNotFound(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
 

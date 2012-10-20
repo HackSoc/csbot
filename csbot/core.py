@@ -293,6 +293,14 @@ class BotProtocol(irc.IRCClient):
             'user': user,
         })
 
+    def userKicked(self, kickee, channel, kicker, message):
+        self.emit_new('core.channel.kicked', {
+            'channel': channel,
+            'kickee': kickee,
+            'kicker': kicker,
+            'message': message,
+        })
+
     def names(self, channel, names, raw_names):
         """Called when the NAMES list for a channel has been received.
         """
@@ -300,6 +308,17 @@ class BotProtocol(irc.IRCClient):
             'channel': channel,
             'names': names,
             'raw_names': raw_names,
+        })
+
+    def whois_user(self, nick, user, host, modes, real_name):
+        """Called when a WHOISUSER reply has been received.
+        """
+        self.emit_new('core.user.whois', {
+            'nick': nick,
+            'user': user,
+            'host': host,
+            'modes': modes,
+            'real_name': real_name,
         })
 
     def userQuit(self, user, message):
@@ -337,6 +356,12 @@ class BotProtocol(irc.IRCClient):
 
         # Fire the event
         self.names(channel, names, raw_names)
+
+    def irc_RPL_WHOISUSER(self, prefix, params):
+        #print prefix # holmes.freenode.net
+        #print params # [u'Haegbot', u'Helzibah', u'~helzibah', u'unaffiliated/helzibah', u'*', u'Helen']
+        own_nick, nick, user, host, possibly_modes, real_name = params
+        self.whois_user(nick, user, host, possibly_modes, real_name)
 
     def topicUpdated(self, user, channel, newtopic):
         self.emit_new('core.channel.topic', {
