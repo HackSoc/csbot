@@ -8,10 +8,11 @@ class TopicException(Exception):
     pass
 
 class Topic(Plugin):
-    topics = {}
 
     def setup(self):
         super(Topic, self).setup()
+        self.topic = {}
+
 
     @Plugin.hook('core.channel.topic')
     def currentTopic(self, e):
