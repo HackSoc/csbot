@@ -426,13 +426,13 @@ class UserDB(object):
             raise UserNotFound("Sorry, {} could not be found in the database".format(nick))
 
     def find_users_by_tag(self, tag):
-        return [self.to_user(usr) for usr in self.db.users.find({'tags': tag})]
+        return map(self.to_user, self.db.users.find({'tags': tag}))
 
     def online_users(self):
         """
         This returns a list of all the users currently known to be online.
         """
-        return [self.to_user(usr) for usr in self.db.users.find({'connection_state': User.ONLINE})]
+        return map(self.to_user, self.db.users.find({'connection_state': User.ONLINE}))
 
     def offline_users(self):
         """
@@ -441,13 +441,13 @@ class UserDB(object):
         This only returns users who HAVE been in the channel. Reporting all users ever
         would be silly
         """
-        return [self.to_user(usr) for usr in self.db.users.find({'connection_state': User.OFFLINE})]
+        return map(self.to_user, self.db.users.find({'connection_state': User.OFFLINE}))
 
     def all_users(self):
         """
         This returns a list of all the users currently in the database.
         """
-        return [self.to_user(usr) for usr in self.db.users.find()]
+        return map(self.to_user, self.db.users.find())
 
     def ops(self):
         return [self.to_user(usr) for usr in self.db.users.find({'op': True})]
