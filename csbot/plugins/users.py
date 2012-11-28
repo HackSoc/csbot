@@ -2,14 +2,6 @@ from csbot.core import Plugin
 from csbot.util import nick, sensible_time
 from datetime import datetime
 
-def needs_db(fn):
-    def decorator(*args, **kwargs):
-        if hasattr(User, 'db'):
-            return fn(*args, **kwargs)
-        else:
-            raise DatabaseNotSet("You need to set up the database before calling {}".format(fn.__name__))
-    return decorator
-
 
 class Users(Plugin):
     """
@@ -238,17 +230,6 @@ class User(object):
     ONLINE  = 'online'
     OFFLINE = 'offline'
     UNKNOWN = 'unknown'
-
-    # def __init__(self, irc_user):
-    #     """
-    #     This relies on the irc_user being passed in being a full username
-    #     including nick, user and host information. If it isn't an exception
-    #     will be raised.
-    #     """
-    #     if self.is_full_username(irc_user):
-    #         self.nick, self.user, self.host = User.split_username(irc_user)
-    #     else:
-    #         raise UserInformationMissing("A username must have a nick, user and a host")
 
     def __init__(self, userdb, nick, user, host):
         """

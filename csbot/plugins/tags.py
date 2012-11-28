@@ -3,6 +3,9 @@ from csbot.util import nick
 
 
 class Tags(Plugin):
+
+    PLUGIN_DEPENDS = ['users']
+
     """
     This plugin allows people to request games, notifying
     anyone who has registered for a game.
