@@ -22,29 +22,29 @@ class Bot(Plugin):
 
     #: Default configuration values
     CONFIG_DEFAULTS = {
-            'nickname': 'csyorkbot',
-            'password': None,
-            'username': 'csyorkbot',
-            'realname': 'cs-york bot',
-            'sourceURL': 'http://github.com/csyork/csbot/',
-            'lineRate': '1',
-            'irc_host': 'irc.freenode.net',
-            'irc_port': '6667',
-            'command_prefix': '!',
-            'channels': ' '.join([
-                '#cs-york-dev',
-            ]),
-            'plugins': ' '.join([
-                'example',
-            ]),
-            'mongodb_uri': 'mongodb://localhost:27017',
-            'mongodb_prefix': 'csbot__',
+        'nickname': 'csyorkbot',
+        'password': None,
+        'username': 'csyorkbot',
+        'realname': 'cs-york bot',
+        'sourceURL': 'http://github.com/csyork/csbot/',
+        'lineRate': '1',
+        'irc_host': 'irc.freenode.net',
+        'irc_port': '6667',
+        'command_prefix': '!',
+        'channels': ' '.join([
+            '#cs-york-dev',
+        ]),
+        'plugins': ' '.join([
+            'example',
+        ]),
+        'mongodb_uri': 'mongodb://localhost:27017',
+        'mongodb_prefix': 'csbot__',
     }
 
     #: Environment variable fallbacks
     CONFIG_ENVVARS = {
-            'password': ['IRC_PASS'],
-            'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
+        'password': ['IRC_PASS'],
+        'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
     }
 
     #: The top-level package for all bot plugins
@@ -133,7 +133,7 @@ class Bot(Plugin):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
         command = CommandEvent.parse_command(
-                event, self.config_get('command_prefix'))
+            event, self.config_get('command_prefix'))
         if command is not None:
             self.post_event(command)
 

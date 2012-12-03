@@ -1,4 +1,6 @@
 # Additional requirements for development (e.g. documentation, linting)
 -r requirements.txt
+# Documentation
 Sphinx
-flake8
+# Frozen flake8 version so new checks don't fail existing code
+flake8==1.6.2
