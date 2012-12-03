@@ -6,18 +6,23 @@ from twisted.internet import reactor, protocol
 from twisted.python import log
 import pymongo
 import configparser
+import straight.plugin
 
-from csbot.plugin import Plugin, PluginManager
+from csbot.plugin import Plugin, SpecialPlugin
+from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import nick
 
 
-class Bot(Plugin):
+class Bot(SpecialPlugin):
     """The IRC bot.
 
     Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
     losing and regaining connection.
+
+    *config* is an optional file-like object to read configuration from, which
+    is parsed with :mod:`configparser`.
     """
 
     #: Default configuration values
@@ -47,18 +52,19 @@ class Bot(Plugin):
         'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
     }
 
-    #: The top-level package for all bot plugins
-    PLUGIN_PACKAGE = 'csbot.plugins'
+    #: Dictionary containing available plugins for loading, using
+    #: straight.plugin to discover plugin classes under a namespace.
+    available_plugins = build_plugin_dict(straight.plugin.load(
+        'csbot.plugins', subclasses=Plugin))
 
-    def __init__(self, configpath):
+    def __init__(self, config=None):
         super(Bot, self).__init__(self)
 
-        # Load the configuration file
-        self.config_path = configpath
+        # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
                                                      allow_no_value=True)
-        with open(self.config_path, 'r') as cfg:
-            self.config_root.read_file(cfg)
+        if config is not None:
+            self.config_root.read_file(config)
 
         # Make mongodb connection
         self.log.info('connecting to mongodb: ' +
@@ -66,32 +72,23 @@ class Bot(Plugin):
         self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
 
         # Plugin management
-        self.plugins = PluginManager(self.PLUGIN_PACKAGE, Plugin,
+        self.plugins = PluginManager([self], self.available_plugins,
                                      self.config_get('plugins').split(),
-                                     [self], [self])
+                                     [self])
         self.commands = {}
 
         # Event runner
-        self.events = events.ImmediateEventRunner(
-            lambda e: self.plugins.broadcast('fire_hooks', (e,)))
+        self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
 
-    @classmethod
-    def plugin_name(cls):
-        """Special plugin name that can't clash with real plugin classes.
+    def bot_setup(self):
+        """Load plugins defined in configuration and run setup methods.
         """
-        return '@' + super(Bot, cls).plugin_name()
+        self.plugins.setup()
 
-    def setup(self):
-        """Load plugins defined in configuration.
+    def bot_teardown(self):
+        """Run plugin teardown methods.
         """
-        super(Bot, self).setup()
-        self.plugins.broadcast('setup', static=False)
-
-    def teardown(self):
-        """Unload plugins and save data.
-        """
-        super(Bot, self).teardown()
-        self.plugins.broadcast('teardown', static=False)
+        self.plugins.teardown()
 
     def post_event(self, event):
         self.events.post_event(event)
@@ -388,8 +385,17 @@ def main(argv):
     rootlogger.addHandler(handler)
 
     # Create bot and run setup functions
-    bot = Bot(args.config)
-    bot.setup()
+    try:
+        config = open(args.config, 'r')
+    except IOError:
+        config = None
+
+    bot = Bot(config)
+
+    if config is not None:
+        config.close()
+
+    bot.bot_setup()
 
     # Connect and enter the reactor loop
     reactor.connectTCP(bot.config_get('irc_host'),
@@ -398,4 +404,4 @@ def main(argv):
     reactor.run()
 
     # Run teardown functions before exiting
-    bot.teardown()
+    bot.bot_teardown()
