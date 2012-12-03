@@ -380,7 +380,8 @@ def main(argv):
     handler.setLevel(args.loglevel)
     handler.addFilter(ColorLogFilter())
     handler.setFormatter(logging.Formatter(
-        '\x1b[%(color)sm[%(asctime)s] (%(name)s) %(message)s\x1b[0m',
+        ('\x1b[%(color)sm[%(asctime)s] (%(levelname).1s:%(name)s)'
+         '%(message)s\x1b[0m'),
         '%Y/%m/%d %H:%M:%S'))
     rootlogger = logging.getLogger('')
     rootlogger.setLevel(args.loglevel)
