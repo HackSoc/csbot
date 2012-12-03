@@ -1,5 +1,5 @@
 from csbot.core import Plugin
-from csbot.util import nick, sensible_time
+from csbot.util import sensible_time
 from datetime import datetime
 
 
@@ -71,7 +71,8 @@ class Users(Plugin):
                     event.reply("{} was last seen at {}".format(usr.dbdict['nick'],
                                                                 time))
                 else:
-                    event.reply("{} left when I wasn't around to see, sorry.".format(usr.dbdict['nick']))
+                    event.reply("{} left when I wasn't around to see, sorry."
+                                .format(usr.dbdict['nick']))
             else:
                 event.reply("{} is here.".format(usr.dbdict['nick']))
         except UserNotFound:
@@ -100,41 +101,16 @@ class Users(Plugin):
             usr.remove_tag(tag)
         usr.save()
 
-    @Plugin.command('register')
-    def register(self, event):
-        """
-        Allows users to register themselves against a tag. Other plugins can then
-        use this tag to retrieve users.
-        """
-        tags = event.arguments()
-        usr = self.userdb.find_user_by_nick(event['user'])
-        if usr:
-            for tag in tags:
-                usr.add_tag(tag)
-            usr.save()
-
-    @Plugin.command('unregister')
-    def unregister(self, event):
-        """
-        Allows users to unregister themselves from a tag.
-        """
-        tags = event.arguments()
-        usr = self.userdb.find_user_by_nick(event['user'])
-        if usr:
-            for tag in tags:
-                usr.remove_tag(tag)
-            usr.save()
-
     @Plugin.hook('core.channel.joined')
     def userJoined(self, event):
         try:
             user = self.userdb.find_user_by_nick(event['user'])
             user.set_connected(event.datetime)
         except UserNotFound:
-            nick, user, host = User.split_username(event['user'])
-            usr = User(self.userdb, nick, user, host)
+            nck, user, host = User.split_username(event['user'])
+            usr = User(self.userdb, nck, user, host)
             if (user is None or host is None):
-                event.protocol.whois(nick)
+                event.protocol.whois(nck)
             usr.set_connected(event.datetime)
 
     @Plugin.hook('core.channel.names')
@@ -269,11 +245,11 @@ class User(object):
         This checks to see if the user has operator privilages.
         """
         try:
-            return self.dbdict['op'] == True
+            return self.dbdict['op'] is True
         except KeyError:
             return False
 
-    def set_op(self, is_op = True):
+    def set_op(self, is_op=True):
         """
         This can set the user to be, or not be, an operator. If the
         is_op parameter is not specified, it sets the user to be an
@@ -319,7 +295,7 @@ class User(object):
         """
         try:
             self.userdb.update_user(self.dbdict)
-        except KeyError: # because the _id is not set
+        except KeyError:  # because the _id is not set
             self.userdb.add_user(self.dbdict)
 
     def set_online(self):
@@ -336,7 +312,7 @@ class User(object):
         self.dbdict['connection_status'] = User.OFFLINE
         self.save()
 
-    def set_connected(self, time = datetime.now()):
+    def set_connected(self, time=datetime.now()):
         """
         Marks the user as online and sets the connected_time
         """
@@ -344,7 +320,7 @@ class User(object):
         self.dbdict['connected_time'] = time
         self.save()
 
-    def set_disconnected(self, time = datetime.now()):
+    def set_disconnected(self, time=datetime.now()):
         """
         Sets the user as offline, updating the disconnected_time
         """
@@ -480,22 +456,27 @@ class UserDB(object):
 
 
 class UserInformationMissing(Exception):
+
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
 
 
 class DatabaseNotSet(Exception):
+
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
 
 
 class UserNotFound(Exception):
+
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
-
