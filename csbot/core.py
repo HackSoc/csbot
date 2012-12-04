@@ -4,7 +4,6 @@ import collections
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
-import pymongo
 import configparser
 import straight.plugin
 
@@ -42,14 +41,11 @@ class Bot(SpecialPlugin):
         'plugins': ' '.join([
             'example',
         ]),
-        'mongodb_uri': 'mongodb://localhost:27017',
-        'mongodb_prefix': 'csbot__',
     }
 
     #: Environment variable fallbacks
     CONFIG_ENVVARS = {
         'password': ['IRC_PASS'],
-        'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
     }
 
     #: Dictionary containing available plugins for loading, using
@@ -65,11 +61,6 @@ class Bot(SpecialPlugin):
                                                      allow_no_value=True)
         if config is not None:
             self.config_root.read_file(config)
-
-        # Make mongodb connection
-        self.log.info('connecting to mongodb: ' +
-                      self.config_get('mongodb_uri'))
-        self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
 
         # Plugin management
         self.plugins = PluginManager([self], self.available_plugins,
