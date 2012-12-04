@@ -48,7 +48,7 @@ class Topic(Plugin):
                 if position is None:
                     position, payload = payload.split(" ", 1)
 
-                    if not position.isdigit() or int(position) >= len(splitted_topic):
+                    if self.valid_position(position, splitted_topic):
                         raise TopicException(u"Invalid position number")
 
                     position = int(position)
@@ -62,7 +62,7 @@ class Topic(Plugin):
             elif command == "remove":
                 position = payload
 
-                if not position.isdigit() or int(position) >= len(splitted_topic):
+                if self.valid_position(position, splitted_topic):
                     raise TopicException(u"Invalid position number")
 
                 position = int(position) 
@@ -72,7 +72,7 @@ class Topic(Plugin):
             elif command == "change":
                 position, payload = payload.split(" ", 1)
 
-                if not position.isdigit() or int(position) >= len(splitted_topic):
+                if self.valid_position(position, splitted_topic):
                     raise TopicException(u"Invalid position number")
 
                 position = int(position)
@@ -82,3 +82,6 @@ class Topic(Plugin):
             e.protocol.topic(e["reply_to"], (" "+separator+" ").join(splitted_topic))
         except TopicException as exception:
             e.protocol.msg(e["reply_to"], "Topic error: " + str(exception))
+
+    def valid_position(self, position, splitted_topic):
+        return not position.isdigit() or int(position) >= len(splitted_topic)
