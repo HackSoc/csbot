@@ -1,3 +1,4 @@
+import os.path
 import re
 from urlparse import urlparse
 import collections
@@ -15,6 +16,8 @@ class LinkInfo(Plugin):
         'scan_limit': 1,
         # Minimum slug length in "title in URL" filter
         'minimum_slug_length': 10,
+        # Maximum file extension length (including the dot) for "title in URL"
+        'max_file_ext_length': 6,
         # Number of seconds for rolling rate limiting period
         'rate_limit_time': 60,
         # Maximum rate of URL responses over rate limiting period
@@ -190,6 +193,11 @@ class LinkInfo(Plugin):
         # Ignore case
         path = path.lower()
         title = title.lower()
+        # Strip file extension if present
+        if not path.endswith('/'):
+            path_noext, ext = os.path.splitext(path)
+            if len(ext) <= int(self.config_get('max_file_ext_length')):
+                path = path_noext
         # Strip characters that are unlikely to end up in a slugified URL
         strip_pattern = r'[^a-z/]'
         path = re.sub(strip_pattern, '', path)
