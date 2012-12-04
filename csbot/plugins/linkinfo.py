@@ -5,6 +5,7 @@ import collections
 import datetime
 
 import requests
+import lxml.etree
 import lxml.html
 
 from csbot.plugin import Plugin
@@ -163,14 +164,13 @@ class LinkInfo(Plugin):
             return None
 
         # Attempt to scrape the HTML for a <title>
-        html = None
-        try:
-            html = lxml.html.document_fromstring(r.text)
-        except ValueError:
-            # ValueError is usually "Unicode strings with encoding declaration
-            # are not supported", so let's try again without decoding the
-            # content ourselves.
-            html = lxml.html.document_fromstring(r.content)
+        if 'charset=' in r.headers['content-type']:
+            # If present, HTTP Content-Type header charset takes precedence
+            parser = lxml.html.HTMLParser(
+                encoding=r.headers['content-type'].rsplit('=', 1)[1])
+        else:
+            parser = lxml.html.html_parser
+        html = lxml.etree.fromstring(r.content, parser)
         title = html.find('.//title')
 
         if title is None:
