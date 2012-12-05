@@ -3,6 +3,7 @@ from StringIO import StringIO
 
 from twisted.trial import unittest
 from httpretty import httprettified, HTTPretty
+from lxml.etree import LIBXML_VERSION
 
 from csbot.core import Bot
 from csbot.plugins.linkinfo import LinkInfo
@@ -14,7 +15,7 @@ plugins = linkinfo
 """
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
-encoding_test_cases = (
+encoding_test_cases = [
     # (These test case are synthetic, to test various encoding scenarios)
 
     # UTF-8 with Content-Type header encoding only
@@ -29,14 +30,6 @@ encoding_test_cases = (
         "http://example.com/utf8-meta-http-equiv-only",
         "text/html",
         ('<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
-         '<title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>'),
-        u'"EM DASH \u2014 \u2014"'
-    ),
-    # UTF-8 with meta charset encoding only
-    (
-        "http://example.com/utf8-meta-charset-only",
-        "text/html",
-        ('<html><head><meta charset="UTF-8">'
          '<title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>'),
         u'"EM DASH \u2014 \u2014"'
     ),
@@ -97,7 +90,22 @@ encoding_test_cases = (
         """,
         u'"15.7. logging \u2014 Logging facility for Python \u2014 Python v2.7.3 documentation"'
     ),
-)
+]
+
+# Add HTML5 test-cases if libxml2 is new enough (<meta charset=...> encoding
+# detection was added in 2.8.0)
+if LIBXML_VERSION >= (2, 8, 0):
+    encoding_test_cases += [
+        # UTF-8 with meta charset encoding only
+        (
+            "http://example.com/utf8-meta-charset-only",
+            "text/html",
+            ('<html><head><meta charset="UTF-8">'
+             '<title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>'),
+            u'"EM DASH \u2014 \u2014"'
+        ),
+    ]
+
 
 class TestLinkInfoPlugin(unittest.TestCase):
     def setUp(self):
