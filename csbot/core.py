@@ -41,6 +41,10 @@ class Bot(SpecialPlugin):
         'plugins': ' '.join([
             'example',
         ]),
+        'mongodb_uri': 'mongodb://localhost:27017',
+        'mongodb_prefix': 'csbot__',
+        'date_format': '%d/%m/%Y',
+        'time_format': '%H:%M',
     }
 
     #: Environment variable fallbacks
@@ -233,6 +237,26 @@ class BotProtocol(irc.IRCClient):
             'reply_to': nick(user) if channel == self.nickname else channel,
         })
 
+    def modeChanged(self, user, channel, set, mode, args):
+        """
+        function:: modeChanged(self, user, channel, set, mode, args)
+
+        The Twisted IRCClient handler for mode changes. Emits events that plugins can bind to.
+
+        :param user: The user and hostmask which instigated this change. (type: str )
+        :param channel: The channel where the modes are changed. If args is empty the channel for which the modes are changing. If the changes are at server level it could be equal to user. (type: str )
+        :param set: True if the mode(s) is being added, False if it is being removed. If some modes are added and others removed at the same time this function will be called twice, the first time with all the added modes, the second with the removed ones. (To change this behaviour override the irc_MODE method) (type: bool or int )
+        :param modes: The mode or modes which are being changed. (type: str )
+        :param args: Any additional information required for the mode change. (type: tuple )
+        """
+        self.emit_new('core.channel.modeChanged', {
+            'channel': channel,
+            'user': user,
+            'set': set,
+            'mode': mode,
+            'args': args,
+        })
+
     def noticed(self, user, channel, message):
         self.emit_new('core.message.notice', {
             'channel': channel,
@@ -263,6 +287,14 @@ class BotProtocol(irc.IRCClient):
             'user': user,
         })
 
+    def userKicked(self, kickee, channel, kicker, message):
+        self.emit_new('core.channel.kicked', {
+            'channel': channel,
+            'kickee': kickee,
+            'kicker': kicker,
+            'message': message,
+        })
+
     def names(self, channel, names, raw_names):
         """Called when the NAMES list for a channel has been received.
         """
@@ -270,6 +302,17 @@ class BotProtocol(irc.IRCClient):
             'channel': channel,
             'names': names,
             'raw_names': raw_names,
+        })
+
+    def whois_user(self, nick, user, host, modes, real_name):
+        """Called when a WHOISUSER reply has been received.
+        """
+        self.emit_new('core.user.whois', {
+            'nick': nick,
+            'user': user,
+            'host': host,
+            'modes': modes,
+            'real_name': real_name,
         })
 
     def userQuit(self, user, message):
@@ -307,6 +350,12 @@ class BotProtocol(irc.IRCClient):
 
         # Fire the event
         self.names(channel, names, raw_names)
+
+    def irc_RPL_WHOISUSER(self, prefix, params):
+        #print prefix # holmes.freenode.net
+        #print params # [u'Haegbot', u'Helzibah', u'~helzibah', u'unaffiliated/helzibah', u'*', u'Helen']
+        own_nick, nick, user, host, possibly_modes, real_name = params
+        self.whois_user(nick, user, host, possibly_modes, real_name)
 
     def topicUpdated(self, user, channel, newtopic):
         self.emit_new('core.channel.topic', {
