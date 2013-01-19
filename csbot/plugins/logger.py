@@ -39,47 +39,43 @@ class Logger(Plugin):
     @Plugin.hook('core.channel.joined')
     def user_joined(self, event):
         self.pretty_log.info(u'[{channel}] {user} has joined'.format(
-                channel=event['channel'],
-                user=event['user']))
+            channel=event['channel'], user=event['user']))
 
     @Plugin.hook('core.channel.left')
     def user_left(self, event):
         self.pretty_log.info(u'[{channel}] {user} has left'.format(
-                channel=event['channel'],
-                user=event['user']))
+            channel=event['channel'], user=event['user']))
 
     @Plugin.hook('core.channel.names')
     def names(self, event):
         self.pretty_log.info(u'[{channel}] Users: {names}'.format(
-            channel=event['channel'],
-            names=', '.join(event['raw_names'])))
+            channel=event['channel'], names=', '.join(event['raw_names'])))
 
     @Plugin.hook('core.channel.topic')
     def topic(self, event):
         self.pretty_log.info(u'[{channel}] Topic: {topic}'.format(
-            channel=event['channel'],
-            topic=event['topic']))
+            channel=event['channel'], topic=event['topic']))
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         self.pretty_log.info(u'[{channel}] <{nick}> {message}'.format(
-                channel=event['channel'],
-                nick=nick(event['user']),
-                message=event['message']))
+            channel=event['channel'],
+            nick=nick(event['user']),
+            message=event['message']))
 
     @Plugin.hook('core.message.notice')
     def notice(self, event):
         self.pretty_log.info(u'[{channel}] -{nick}- {message}'.format(
-                channel=event['channel'],
-                nick=nick(event['user']),
-                message=event['message']))
+            channel=event['channel'],
+            nick=nick(event['user']),
+            message=event['message']))
 
     @Plugin.hook('core.message.action')
     def action(self, event):
         self.pretty_log.info(u'[{channel}] * {nick} {message}'.format(
-                channel=event['channel'],
-                nick=nick(event['user']),
-                message=event['message']))
+            channel=event['channel'],
+            nick=nick(event['user']),
+            message=event['message']))
 
     @Plugin.hook('core.user.quit')
     def quit(self, event):
@@ -88,8 +84,7 @@ class Logger(Plugin):
     @Plugin.hook('core.user.renamed')
     def renamed(self, event):
         self.pretty_log.info(u'{oldnick} is now {newnick}'.format(
-            oldnick=event['oldnick'],
-            newnick=event['newnick']))
+            oldnick=event['oldnick'], newnick=event['newnick']))
 
     @Plugin.hook('core.command')
     def command(self, event):

@@ -1,29 +1,23 @@
-from itertools import chain
 from functools import partial
 import collections
 import logging
 import os
 
-import straight.plugin
 
-
-class PluginBase(object):
-    """Minimal plugin base class to work with :class:`PluginManager`."""
-    #: Plugins which *must* be loaded before this plugin.
-    PLUGIN_DEPENDS = []
-
-    @classmethod
-    def plugin_name(cls):
-        """Get the name of the plugin, by default the class name in lowercase.
-        """
-        return cls.__name__.lower()
-
-    @classmethod
-    def qualified_name(cls):
-        """Get the fully qualified class name, most useful when complaining
-        about duplicate plugins names.
-        """
-        return '{}.{}'.format(cls.__module__, cls.__name__)
+def build_plugin_dict(plugins):
+    """Build a dictionary mapping the value of :meth:`~Plugin.plugin_name` to
+    each plugin class in *plugins*.  :exc:`PluginDuplicate` is raised if more
+    than one plugin has the same name.
+    """
+    mapping = {}
+    for P in plugins:
+        name = P.plugin_name()
+        if name in mapping:
+            raise PluginDuplicate(name, P.qualified_name(),
+                                  mapping[name].qualified_name())
+        else:
+            mapping[name] = P
+    return mapping
 
 
 class PluginDuplicate(Exception):
@@ -39,35 +33,38 @@ class PluginFeatureError(Exception):
 
 
 class PluginManager(collections.Mapping):
-    """A simple plugin manager based on `straight.plugin`_.
+    """A simple plugin manager and proxy.
 
-    The plugin manager will discover plugins under *namespace* that subclass
-    *baseclass*.  Each of *plugins* will be loaded by name, passing *args* as
-    arguments to the constructor.
+    The plugin manager is responsible for loading plugins and proxying method
+    calls to all plugins.  In addition to accepting *loaded*, a list of
+    existing plugin objects, it will attempt to load each of *plugins* from
+    *available* (a mapping of plugin name to plugin class), passing *args* to
+    the constructors.
 
-    Optionally, *static* can be used to supply a list of plugins that have
-    already been loaded.  These do not have to subclass *baseclass*, but are
-    still assumed to follow the same interface.  The :class:`PluginBase` class
-    demonstrates the minimum interface that :class:`PluginManager` requires.
+    Attempting to load missing or duplicate plugins will log errors and
+    warnings respectively, but will not result in an exception or any change of
+    state.  A plugin class' dependencies are checked before loading and a
+    :exc:`PluginDependencyUnmet` is raised if any are missing.
 
-    Methods are invoked across all plugins by using :meth:`broadcast`.
-
-    .. _straight.plugin: https://github.com/ironfroggy/straight.plugin
+    The :class:`~collections.Mapping` interface is implemented to provide easy
+    querying and access to the loaded plugins.  All attributes that do not
+    start with a ``_`` are treated as methods that will be proxied through to
+    every plugin in the order they were loaded (*loaded* before *plugins*) with
+    the same arguments.
     """
 
-    #: Plugins loaded outside of the plugin manager.
-    static = []
-    #: Plugins loaded by the plugin manager
+    #: Loaded plugins.
     plugins = {}
 
-    def __init__(self, namespace, baseclass, plugins, static=None, args=None):
+    def __init__(self, loaded, available, plugins, args):
         self.log = logging.getLogger(__name__)
-        self.static = static or []
         self.plugins = collections.OrderedDict()
 
-        args = args or []
-        available = self.discover(namespace, baseclass)
+        # Register already-loaded plugins
+        for p in loaded:
+            self.plugins[p.plugin_name()] = p
 
+        # Attempt to load other plugins
         for p in plugins:
             if p in self.plugins:
                 self.log.warn('not loading duplicate plugin:  ' + p)
@@ -75,50 +72,28 @@ class PluginManager(collections.Mapping):
                 self.log.error('plugin not found: ' + p)
             else:
                 P = available[p]
-                for dep in P.PLUGIN_DEPENDS:
-                    if dep not in self.plugins:
-                        raise PluginDependencyUnmet(
-                            "{} depends on {}, which isn't loaded yet"
-                            .format(p, dep))
+                missing = P.missing_dependencies(self.plugins)
+                if len(missing) > 0:
+                    raise PluginDependencyUnmet(
+                        "{} has unmet dependencies: {}".format(
+                            p, ', '.join(missing)))
                 self.plugins[p] = P(*args)
                 self.log.info('plugin loaded: ' + p)
 
-    @staticmethod
-    def discover(namespace, baseclass):
-        """Discover plugins under *namespace* subclassing *baseclass*.
+    def __getattr__(self, name):
+        """Treat all undefined public attributes as proxy methods.
 
-        Return a dict mapping plugin names to plugin classes.  A
-        :exc:`PluginDuplicate` is raised if multiple plugins have the same
-        name.
+        It is assumed that the invoked method exists on all plugins, so this
+        should probably only be used when the method call is part of the
+        :class:`Plugin` base class.
         """
-        # Use straight.plugin to discover classes
-        plugins = straight.plugin.load(namespace,
-                                       subclasses=baseclass)
+        if name.startswith('_'):
+            raise AttributeError
 
-        # Build available plugins dict, checking for duplicates
-        available = {}
-        for P in plugins:
-            name = P.plugin_name()
-            if name in available:
-                raise PluginDuplicate(name, P.qualified_name(),
-                                      available[name].qualified_name())
-            else:
-                available[name] = P
-        return available
-
-    def broadcast(self, method, args=(), static=True):
-        """Call ``p.method(*args)`` on every plugin.
-
-        Plugins are always called in the order they were loaded.  If *static*
-        is True then all static plugins are called before loaded plugins.
-        """
-        if static:
-            plugins = chain(self.static, self.plugins.itervalues())
-        else:
-            plugins = self.plugins.itervalues()
-
-        for p in plugins:
-            getattr(p, method)(*args)
+        def f(*args):
+            for p in self.plugins.itervalues():
+                getattr(p, name)(*args)
+        return f
 
     # Implement abstract "read-only" Mapping interface
 
@@ -154,7 +129,7 @@ class PluginMeta(type):
                 cls.plugin_integrations.append((f.plugin_integrate_with, f))
 
 
-class Plugin(PluginBase):
+class Plugin(object):
     """Bot plugin base class.
 
     All bot plugins should inherit from this class.  It provides convenience
@@ -168,43 +143,43 @@ class Plugin(PluginBase):
     #: Configuration environment variables, used automatically by
     #: :meth:`config_get`.
     CONFIG_ENVVARS = {}
+    #: Plugins that :meth:`missing_dependencies` should check for.
+    PLUGIN_DEPENDS = []
 
     #: The plugin's logger, created by default using the plugin class'
     #: containing module name as the logger name.
     log = None
 
     def __init__(self, bot):
+        # Get the logger for the module the actual plugin is defined in, not
+        # this base class; using __name__ would make every plugin log to
+        # 'csbot.plugin' instead.
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
         self._db = None
 
-    def fire_hooks(self, event):
-        """Execute all of this plugin's handlers for *event*."""
-        for f in self.plugin_hooks.get(event.event_type, ()):
-            f(self, event)
-
-    def setup(self):
-        """Plugin setup.
-
-        * Fire all plugin integration methods.
-        * Register all commands provided by the plugin.
+    @classmethod
+    def plugin_name(cls):
+        """Get the name of the plugin, by default the class name in lowercase.
         """
-        for plugin_names, f in self.plugin_integrations:
-            plugins = [self.bot.plugins[p] for p in plugin_names
-                       if p in self.bot.plugins]
-            # Only fire integration method if all named plugins were loaded
-            if len(plugins) == len(plugin_names):
-                f(self, *plugins)
+        return cls.__name__.lower()
 
-        for cmd, meta, f in self.plugin_cmds:
-            self.bot.register_command(cmd, meta, partial(f, self), tag=self)
-
-    def teardown(self):
-        """Plugin teardown.
-
-        * Unregister all commands provided by the plugin.
+    @classmethod
+    def qualified_name(cls):
+        """Get the fully qualified class name, most useful when complaining
+        about duplicate plugins names.
         """
-        self.bot.unregister_commands(tag=self)
+        return '{}.{}'.format(cls.__module__, cls.__name__)
+
+    @classmethod
+    def missing_dependencies(cls, plugins):
+        """Return elements from :attr:`PLUGIN_DEPENDS` that are not in the
+        container *plugins*.
+
+        This should be used with some container of already loaded plugin names
+        (e.g. a dictionary or set) to find out which dependencies are missing.
+        """
+        return [p for p in cls.PLUGIN_DEPENDS if p not in plugins]
 
     @staticmethod
     def hook(hook):
@@ -257,6 +232,34 @@ class Plugin(PluginBase):
             return f
         return decorate
 
+    def fire_hooks(self, event):
+        """Execute all of this plugin's handlers for *event*."""
+        for f in self.plugin_hooks.get(event.event_type, ()):
+            f(self, event)
+
+    def setup(self):
+        """Plugin setup.
+
+        * Fire all plugin integration methods.
+        * Register all commands provided by the plugin.
+        """
+        for plugin_names, f in self.plugin_integrations:
+            plugins = [self.bot.plugins[p] for p in plugin_names
+                       if p in self.bot.plugins]
+            # Only fire integration method if all named plugins were loaded
+            if len(plugins) == len(plugin_names):
+                f(self, *plugins)
+
+        for cmd, meta, f in self.plugin_cmds:
+            self.bot.register_command(cmd, meta, partial(f, self), tag=self)
+
+    def teardown(self):
+        """Plugin teardown.
+
+        * Unregister all commands provided by the plugin.
+        """
+        self.bot.unregister_commands(tag=self)
+
     @property
     def config(self):
         """Get the configuration section for this plugin.
@@ -300,10 +303,15 @@ class Plugin(PluginBase):
         else:
             return self.config.getboolean(key)
 
-    @property
-    def db(self):
-        """Get a MongoDB database for the plugin, based on the plugin name."""
-        if self._db is None:
-            self._db = self.bot.mongodb[self.bot.config_get('mongodb_prefix') +
-                                        self.plugin_name()]
-        return self._db
+
+class SpecialPlugin(Plugin):
+    """A special plugin with a special name that expects to be handled
+    specially.  Probably shouldn't have too many of these or they won't feel
+    special anymore.
+    """
+    @classmethod
+    def plugin_name(cls):
+        """Change the plugin name to something that can't possibly result from
+        a class name by prepending a ``@``.
+        """
+        return '@' + super(SpecialPlugin, cls).plugin_name()
