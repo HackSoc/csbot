@@ -78,3 +78,52 @@ class TestPermissionDB(unittest.TestCase):
         self.assertEqual(self.permissions.get_permissions(None), {
             ('#boring-channel', '*'),
         })
+
+    def test_check_exact_channel_permission(self):
+        """Check that exact channel permission checks work."""
+        self.permissions.process('User1', '#channel:foo')
+        self.assertTrue(self.permissions.check('User1', 'foo', '#channel'))
+        self.assertFalse(self.permissions.check('User1', 'foo', '#other-channel'))
+        self.assertFalse(self.permissions.check('User1', 'bar', '#channel'))
+        self.assertFalse(self.permissions.check('User2', 'foo', '#channel'))
+        # Ensure channel and bot permissions are not confused
+        self.assertFalse(self.permissions.check('User1', 'foo'))
+
+    def test_check_exact_bot_permission(self):
+        """Check that exact bot permission checks work."""
+        self.permissions.process('User1', 'foo')
+        self.assertTrue(self.permissions.check('User1', 'foo'))
+        self.assertFalse(self.permissions.check('User1', 'bar'))
+        self.assertFalse(self.permissions.check('User2', 'foo'))
+        # Ensure channel and bot permissions are not confused
+        self.assertFalse(self.permissions.check('User1', 'foo', '#channel'))
+
+    def test_check_wildcard_channel_permission(self):
+        """Check that wildcard channel permissions work."""
+        self.permissions.process('User1', '#channel:*')
+        self.permissions.process('User2', '*:foo')
+        self.permissions.process('User3', '*:*')
+        # Test permission wildcard with fixed channel
+        self.assertTrue(self.permissions.check('User1', 'foo', '#channel'))
+        self.assertTrue(self.permissions.check('User1', 'bar', '#channel'))
+        self.assertFalse(self.permissions.check('User1', 'foo', '#other'))
+        # Test channel wildcard with fixed permission
+        self.assertTrue(self.permissions.check('User2', 'foo', '#channel'))
+        self.assertTrue(self.permissions.check('User2', 'foo', '#other'))
+        self.assertFalse(self.permissions.check('User2', 'bar', '#channel'))
+        # Test channel and permission wildcard
+        self.assertTrue(self.permissions.check('User3', 'foo', '#other'))
+        self.assertTrue(self.permissions.check('User3', 'bar', '#channel'))
+        # Ensure channel and bot permissions are not confused
+        self.assertFalse(self.permissions.check('User1', 'foo'))
+        self.assertFalse(self.permissions.check('User2', 'foo'))
+        self.assertFalse(self.permissions.check('User3', 'foo'))
+
+    def test_check_wildcard_bot_permission(self):
+        """Check that wildcard bot permissions work."""
+        self.permissions.process('User1', '*')
+        self.assertTrue(self.permissions.check('User1', 'foo'))
+        self.assertTrue(self.permissions.check('User1', 'bar'))
+        self.assertFalse(self.permissions.check('User2', 'foo'))
+        # Ensure channel and bot permissions are not confused
+        self.assertFalse(self.permissions.check('User1', 'foo', '#channel'))
