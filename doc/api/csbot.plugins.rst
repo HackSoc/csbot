@@ -9,6 +9,22 @@ plugins Package
     :undoc-members:
     :show-inheritance:
 
+:mod:`auth` Module
+------------------
+
+.. automodule:: csbot.plugins.auth
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`csyork` Module
+--------------------
+
+.. automodule:: csbot.plugins.csyork
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 :mod:`example` Module
 ---------------------
 
@@ -17,10 +33,26 @@ plugins Package
     :undoc-members:
     :show-inheritance:
 
-:mod:`manager` Module
----------------------
+:mod:`hoogle` Module
+--------------------
 
-.. automodule:: csbot.plugins.manager
+.. automodule:: csbot.plugins.hoogle
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`imgur` Module
+-------------------
+
+.. automodule:: csbot.plugins.imgur
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`linkinfo` Module
+----------------------
+
+.. automodule:: csbot.plugins.linkinfo
     :members:
     :undoc-members:
     :show-inheritance:
@@ -33,18 +65,18 @@ plugins Package
     :undoc-members:
     :show-inheritance:
 
-:mod:`manager` Module
+:mod:`mongodb` Module
 ---------------------
 
-.. automodule:: csbot.plugins.manager
+.. automodule:: csbot.plugins.mongodb
     :members:
     :undoc-members:
     :show-inheritance:
 
-:mod:`users` Module
--------------------
+:mod:`usertrack` Module
+-----------------------
 
-.. automodule:: csbot.plugins.users
+.. automodule:: csbot.plugins.usertrack
     :members:
     :undoc-members:
     :show-inheritance:

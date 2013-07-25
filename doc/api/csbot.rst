@@ -4,6 +4,10 @@ csbot Package
 :mod:`csbot` Package
 --------------------
 
+.. automodule:: csbot.__init__
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 :mod:`core` Module
 ------------------
@@ -43,4 +47,5 @@ Subpackages
 .. toctree::
 
     csbot.plugins
+    csbot.test
 
