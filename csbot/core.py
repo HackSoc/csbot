@@ -59,6 +59,7 @@ class Bot(SpecialPlugin):
         # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
                                                      allow_no_value=True)
+        self.config_root.optionxform = str  # No lowercase option names
         if config is not None:
             self.config_root.read_file(config)
 
