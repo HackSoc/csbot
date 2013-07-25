@@ -1,7 +1,6 @@
 from collections import defaultdict
 
 from csbot.plugin import Plugin
-from csbot.util import nick
 
 
 class PermissionDB(defaultdict):
@@ -19,6 +18,8 @@ class PermissionDB(defaultdict):
         self._current = (entity, permissions)
 
         if entity.startswith('@'):
+            if entity in self._groups:
+                self._error('Group "{}" already defined'.format(entity))
             entity_perms = self._groups[entity]
         else:
             entity_perms = self[entity]
@@ -34,7 +35,16 @@ class PermissionDB(defaultdict):
         self._current = None
 
     def get_permissions(self, entity):
-        return self.get(entity, set()) | self.get('*', set())
+        """Get the set of permissions for *entity*.
+
+        The union of the permissions for *entity* and the universal (``*``)
+        permissions is returned.  If *entity* is ``None``, only the universal
+        permissions are returned.
+        """
+        if entity is None:
+            return set(self.get('*', set()))
+        else:
+            return self.get(entity, set()) | self.get('*', set())
 
     def _add_channel_permissions(self, entity_perms, permission):
         channel, _, permissions = permission.partition(':')
@@ -52,6 +62,8 @@ class PermissionDB(defaultdict):
     def _copy_group_permissions(self, entity_perms, group):
         if group not in self._groups:
             self._error('Permission group "{}" undefined'.format(group))
+        if group == self._current[0]:
+            self._error('Recursive group definition')
         entity_perms.update(self._groups[group])
 
     def _add_bot_permission(self, entity_perms, permission):
@@ -77,13 +89,7 @@ class Auth(Plugin):
 
     def check(self, nick, perm, channel=None):
         account = self.bot.plugins['usertrack'].get_user(nick)['account']
-
-        if account is None:
-            # People without accounts still have the universal permissions
-            # if any are set
-            permissions = self._permissions.get_permissions('*')
-        else:
-            permissions = self._permissions.get_permissions(account)
+        permissions = self._permissions.get_permissions(account)
 
         if channel is None:
             checks = {('*', perm)}
