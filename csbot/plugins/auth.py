@@ -46,6 +46,20 @@ class PermissionDB(defaultdict):
         else:
             return self.get(entity, set()) | self.get('*', set())
 
+    def check(self, entity, permission, channel=None):
+        """Check if *entity* has *permission*.
+
+        If *channel* is present, check for a channel permission, otherwise check
+        for a bot permission.  Compatible wildcard permissions are also checked.
+        """
+        if channel is None:
+            checks = {permission, '*'}
+        else:
+            checks = {(channel, permission), (channel, '*'),
+                      ('*', permission), ('*', '*')}
+
+        return len(checks & self.get_permissions(entity)) > 0
+
     def _add_channel_permissions(self, entity_perms, permission):
         channel, _, permissions = permission.partition(':')
 
@@ -89,11 +103,4 @@ class Auth(Plugin):
 
     def check(self, nick, perm, channel=None):
         account = self.bot.plugins['usertrack'].get_user(nick)['account']
-        permissions = self._permissions.get_permissions(account)
-
-        if channel is None:
-            checks = {('*', perm)}
-        else:
-            checks = {('*', '*'), (channel, '*'), ('*', perm), (channel, perm)}
-
-        return len(checks & permissions) > 0
+        return self._permissions.check(account, perm, channel)
