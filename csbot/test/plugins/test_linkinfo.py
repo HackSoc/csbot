@@ -1,18 +1,9 @@
 # coding=utf-8
-from StringIO import StringIO
-
-from twisted.trial import unittest
 from httpretty import httprettified, HTTPretty
 from lxml.etree import LIBXML_VERSION
 
-from csbot.core import Bot
-from csbot.plugins.linkinfo import LinkInfo
+from ..helpers import BotTestCase
 
-
-bot_config = """
-[@bot]
-plugins = linkinfo
-"""
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
 encoding_test_cases = [
@@ -107,10 +98,13 @@ if LIBXML_VERSION >= (2, 8, 0):
     ]
 
 
-class TestLinkInfoPlugin(unittest.TestCase):
-    def setUp(self):
-        self.bot = Bot(StringIO(bot_config))
-        self.linkinfo = self.bot.plugins['linkinfo']
+class TestLinkInfoPlugin(BotTestCase):
+    CONFIG = """\
+    [@bot]
+    plugins = linkinfo
+    """
+
+    PLUGINS = ['linkinfo']
 
     @httprettified
     def test_encoding_handling(self):

@@ -59,6 +59,7 @@ class Bot(SpecialPlugin):
         # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
                                                      allow_no_value=True)
+        self.config_root.optionxform = str  # No lowercase option names
         if config is not None:
             self.config_root.read_file(config)
 
@@ -164,6 +165,8 @@ class PluginError(Exception):
 class BotProtocol(irc.IRCClient):
     log = logging.getLogger('csbot.protocol')
 
+    _WHO_IDENTIFY = ('1', '%na')
+
     def __init__(self, bot):
         self.bot = bot
         # Get IRCClient configuration from the Bot
@@ -192,6 +195,7 @@ class BotProtocol(irc.IRCClient):
 
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
+        self.sendLine('CAP REQ :account-notify extended-join')
         self.emit_new('core.raw.connected')
 
     def connectionLost(self, reason):
@@ -219,6 +223,7 @@ class BotProtocol(irc.IRCClient):
         self.emit_new('core.self.connected')
 
     def joined(self, channel):
+        self.identify(channel)
         self.emit_new('core.self.joined', {'channel': channel})
 
     def left(self, channel):
@@ -251,11 +256,24 @@ class BotProtocol(irc.IRCClient):
             'reply_to': nick(user) if channel == self.nickname else channel,
         })
 
-    def userJoined(self, user, channel):
-        self.emit_new('core.channel.joined', {
-            'channel': channel,
-            'user': user,
-        })
+    def irc_JOIN(self, prefix, params):
+        """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
+        """
+        user = prefix
+        nick_ = nick(user)
+        channel, account, _ = params
+
+        if nick_ == self.nickname:
+            self.joined(channel)
+        else:
+            self.emit_new('core.user.identified', {
+                'user': user,
+                'account': None if account == '*' else account,
+            })
+            self.emit_new('core.channel.joined', {
+                'channel': channel,
+                'user': user,
+            })
 
     def userLeft(self, user, channel):
         self.emit_new('core.channel.left', {
@@ -315,6 +333,28 @@ class BotProtocol(irc.IRCClient):
             'topic': newtopic,
         })
 
+    def identify(self, target):
+        """Find the account for a user or all users in a channel."""
+        tag, query = self._WHO_IDENTIFY
+        self.sendLine('WHO {} {}t,{}'.format(target, query, tag))
+        pass
+
+    def irc_354(self, prefix, params):
+        """Handle "formatted WHO" responses."""
+        tag = params[1]
+        if tag == self._WHO_IDENTIFY[0]:
+            self.emit_new('core.user.identified', {
+                'user': params[2],
+                'account': None if params[3] == '0' else params[3],
+            })
+
+    def irc_ACCOUNT(self, prefix, params):
+        """Account change notification from ``account-notify`` capability."""
+        self.emit_new('core.user.identified', {
+            'user': prefix,
+            'account': None if params[0] == '*' else params[0],
+        })
+
 
 class BotFactory(protocol.ClientFactory):
     def __init__(self, bot):
@@ -368,7 +408,7 @@ def main(argv):
     handler.setLevel(args.loglevel)
     handler.addFilter(ColorLogFilter())
     handler.setFormatter(logging.Formatter(
-        ('\x1b[%(color)sm[%(asctime)s] (%(levelname).1s:%(name)s)'
+        ('\x1b[%(color)sm[%(asctime)s] (%(levelname).1s:%(name)s) '
          '%(message)s\x1b[0m'),
         '%Y/%m/%d %H:%M:%S'))
     rootlogger = logging.getLogger('')
