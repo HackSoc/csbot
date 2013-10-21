@@ -50,3 +50,6 @@ _trial_temp/
 
 #Mr Developer
 .mr.developer.cfg
+
+# PyCharm
+.idea/

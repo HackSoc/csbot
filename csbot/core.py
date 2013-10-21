@@ -4,94 +4,83 @@ import collections
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
-import pymongo
 import configparser
+import straight.plugin
 
-from csbot.plugin import Plugin, PluginManager
+from csbot.plugin import Plugin, SpecialPlugin
+from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import nick
 
 
-class Bot(Plugin):
+class Bot(SpecialPlugin):
     """The IRC bot.
 
     Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
     losing and regaining connection.
+
+    *config* is an optional file-like object to read configuration from, which
+    is parsed with :mod:`configparser`.
     """
 
     #: Default configuration values
     CONFIG_DEFAULTS = {
-            'nickname': 'csyorkbot',
-            'password': None,
-            'username': 'csyorkbot',
-            'realname': 'cs-york bot',
-            'sourceURL': 'http://github.com/csyork/csbot/',
-            'lineRate': '1',
-            'irc_host': 'irc.freenode.net',
-            'irc_port': '6667',
-            'command_prefix': '!',
-            'channels': ' '.join([
-                '#cs-york-dev',
-            ]),
-            'plugins': ' '.join([
-                'example',
-            ]),
-            'mongodb_uri': 'mongodb://localhost:27017',
-            'mongodb_prefix': 'csbot__',
+        'nickname': 'csyorkbot',
+        'password': None,
+        'username': 'csyorkbot',
+        'realname': 'cs-york bot',
+        'sourceURL': 'http://github.com/csyork/csbot/',
+        'lineRate': '1',
+        'irc_host': 'irc.freenode.net',
+        'irc_port': '6667',
+        'command_prefix': '!',
+        'channels': ' '.join([
+            '#cs-york-dev',
+        ]),
+        'plugins': ' '.join([
+            'example',
+        ]),
     }
 
     #: Environment variable fallbacks
     CONFIG_ENVVARS = {
-            'password': ['IRC_PASS'],
-            'mongodb_uri': ['MONGOLAB_URI', 'MONGODB_URI'],
+        'password': ['IRC_PASS'],
     }
 
-    #: The top-level package for all bot plugins
-    PLUGIN_PACKAGE = 'csbot.plugins'
+    #: Dictionary containing available plugins for loading, using
+    #: straight.plugin to discover plugin classes under a namespace.
+    available_plugins = build_plugin_dict(straight.plugin.load(
+        'csbot.plugins', subclasses=Plugin))
 
-    def __init__(self, configpath):
+    def __init__(self, config=None):
         super(Bot, self).__init__(self)
 
-        # Load the configuration file
-        self.config_path = configpath
+        # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
                                                      allow_no_value=True)
-        with open(self.config_path, 'r') as cfg:
-            self.config_root.read_file(cfg)
-
-        # Make mongodb connection
-        self.log.info('connecting to mongodb: ' +
-                      self.config_get('mongodb_uri'))
-        self.mongodb = pymongo.Connection(self.config_get('mongodb_uri'))
+        self.config_root.optionxform = str  # No lowercase option names
+        if config is not None:
+            self.config_root.read_file(config)
 
         # Plugin management
-        self.plugins = PluginManager(self.PLUGIN_PACKAGE, Plugin,
+        self.plugins = PluginManager([self], self.available_plugins,
                                      self.config_get('plugins').split(),
-                                     [self], [self])
+                                     [self])
         self.commands = {}
 
         # Event runner
-        self.events = events.ImmediateEventRunner(
-            lambda e: self.plugins.broadcast('fire_hooks', (e,)))
+        self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
 
-    @classmethod
-    def plugin_name(cls):
-        """Special plugin name that can't clash with real plugin classes.
+    def bot_setup(self):
+        """Load plugins defined in configuration and run setup methods.
         """
-        return '@' + super(Bot, cls).plugin_name()
+        self.plugins.setup()
 
-    def setup(self):
-        """Load plugins defined in configuration.
+    def bot_teardown(self):
+        """Run plugin teardown methods.
         """
-        super(Bot, self).setup()
-        self.plugins.broadcast('setup', static=False)
-
-    def teardown(self):
-        """Unload plugins and save data.
-        """
-        super(Bot, self).teardown()
-        self.plugins.broadcast('teardown', static=False)
+        self.plugins.teardown()
 
     def post_event(self, event):
         self.events.post_event(event)
@@ -133,7 +122,7 @@ class Bot(Plugin):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
         command = CommandEvent.parse_command(
-                event, self.config_get('command_prefix'))
+            event, self.config_get('command_prefix'))
         if command is not None:
             self.post_event(command)
 
@@ -176,6 +165,8 @@ class PluginError(Exception):
 class BotProtocol(irc.IRCClient):
     log = logging.getLogger('csbot.protocol')
 
+    _WHO_IDENTIFY = ('1', '%na')
+
     def __init__(self, bot):
         self.bot = bot
         # Get IRCClient configuration from the Bot
@@ -204,6 +195,7 @@ class BotProtocol(irc.IRCClient):
 
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
+        self.sendLine('CAP REQ :account-notify extended-join')
         self.emit_new('core.raw.connected')
 
     def connectionLost(self, reason):
@@ -231,6 +223,7 @@ class BotProtocol(irc.IRCClient):
         self.emit_new('core.self.connected')
 
     def joined(self, channel):
+        self.identify(channel)
         self.emit_new('core.self.joined', {'channel': channel})
 
     def left(self, channel):
@@ -263,11 +256,24 @@ class BotProtocol(irc.IRCClient):
             'reply_to': nick(user) if channel == self.nickname else channel,
         })
 
-    def userJoined(self, user, channel):
-        self.emit_new('core.channel.joined', {
-            'channel': channel,
-            'user': user,
-        })
+    def irc_JOIN(self, prefix, params):
+        """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
+        """
+        user = prefix
+        nick_ = nick(user)
+        channel, account, _ = params
+
+        if nick_ == self.nickname:
+            self.joined(channel)
+        else:
+            self.emit_new('core.user.identified', {
+                'user': user,
+                'account': None if account == '*' else account,
+            })
+            self.emit_new('core.channel.joined', {
+                'channel': channel,
+                'user': user,
+            })
 
     def userLeft(self, user, channel):
         self.emit_new('core.channel.left', {
@@ -327,6 +333,28 @@ class BotProtocol(irc.IRCClient):
             'topic': newtopic,
         })
 
+    def identify(self, target):
+        """Find the account for a user or all users in a channel."""
+        tag, query = self._WHO_IDENTIFY
+        self.sendLine('WHO {} {}t,{}'.format(target, query, tag))
+        pass
+
+    def irc_354(self, prefix, params):
+        """Handle "formatted WHO" responses."""
+        tag = params[1]
+        if tag == self._WHO_IDENTIFY[0]:
+            self.emit_new('core.user.identified', {
+                'user': params[2],
+                'account': None if params[3] == '0' else params[3],
+            })
+
+    def irc_ACCOUNT(self, prefix, params):
+        """Account change notification from ``account-notify`` capability."""
+        self.emit_new('core.user.identified', {
+            'user': prefix,
+            'account': None if params[0] == '*' else params[0],
+        })
+
 
 class BotFactory(protocol.ClientFactory):
     def __init__(self, bot):
@@ -380,15 +408,25 @@ def main(argv):
     handler.setLevel(args.loglevel)
     handler.addFilter(ColorLogFilter())
     handler.setFormatter(logging.Formatter(
-        '\x1b[%(color)sm[%(asctime)s] (%(name)s) %(message)s\x1b[0m',
+        ('\x1b[%(color)sm[%(asctime)s] (%(levelname).1s:%(name)s) '
+         '%(message)s\x1b[0m'),
         '%Y/%m/%d %H:%M:%S'))
     rootlogger = logging.getLogger('')
     rootlogger.setLevel(args.loglevel)
     rootlogger.addHandler(handler)
 
     # Create bot and run setup functions
-    bot = Bot(args.config)
-    bot.setup()
+    try:
+        config = open(args.config, 'r')
+    except IOError:
+        config = None
+
+    bot = Bot(config)
+
+    if config is not None:
+        config.close()
+
+    bot.bot_setup()
 
     # Connect and enter the reactor loop
     reactor.connectTCP(bot.config_get('irc_host'),
@@ -397,4 +435,4 @@ def main(argv):
     reactor.run()
 
     # Run teardown functions before exiting
-    bot.teardown()
+    bot.bot_teardown()

@@ -1,9 +1,11 @@
+import os.path
 import re
 from urlparse import urlparse
 import collections
 import datetime
 
 import requests
+import lxml.etree
 import lxml.html
 
 from csbot.plugin import Plugin
@@ -15,6 +17,11 @@ class LinkInfo(Plugin):
         'scan_limit': 1,
         # Minimum slug length in "title in URL" filter
         'minimum_slug_length': 10,
+        # Maximum file extension length (including the dot) for "title in URL"
+        'max_file_ext_length': 6,
+        # Minimum match (fraction) between path component and title for title
+        # to be considered present in the URL
+        'minimum_path_match': 0.5,
         # Number of seconds for rolling rate limiting period
         'rate_limit_time': 60,
         # Maximum rate of URL responses over rate limiting period
@@ -157,14 +164,13 @@ class LinkInfo(Plugin):
             return None
 
         # Attempt to scrape the HTML for a <title>
-        html = None
-        try:
-            html = lxml.html.document_fromstring(r.text)
-        except ValueError:
-            # ValueError is usually "Unicode strings with encoding declaration
-            # are not supported", so let's try again without decoding the
-            # content ourselves.
-            html = lxml.html.document_fromstring(r.content)
+        if 'charset=' in r.headers['content-type']:
+            # If present, HTTP Content-Type header charset takes precedence
+            parser = lxml.html.HTMLParser(
+                encoding=r.headers['content-type'].rsplit('=', 1)[1])
+        else:
+            parser = lxml.html.html_parser
+        html = lxml.etree.fromstring(r.content, parser)
         title = html.find('.//title')
 
         if title is None:
@@ -190,6 +196,11 @@ class LinkInfo(Plugin):
         # Ignore case
         path = path.lower()
         title = title.lower()
+        # Strip file extension if present
+        if not path.endswith('/'):
+            path_noext, ext = os.path.splitext(path)
+            if len(ext) <= int(self.config_get('max_file_ext_length')):
+                path = path_noext
         # Strip characters that are unlikely to end up in a slugified URL
         strip_pattern = r'[^a-z/]'
         path = re.sub(strip_pattern, '', path)
@@ -209,7 +220,9 @@ class LinkInfo(Plugin):
         # Attempt 2: is some part of the URL path the start of the title?
         slug_length = int(self.config_get('minimum_slug_length'))
         for part in path.split('/'):
-            if len(part) >= slug_length and title.startswith(part):
+            ratio = float(len(part)) / float(len(title))
+            if (len(part) >= slug_length and title.startswith(part) and
+                    ratio >= float(self.config_get('minimum_path_match'))):
                 self.log.debug(u'path part "{}" matches title "{}"'.format(
                     part, title))
                 return True
