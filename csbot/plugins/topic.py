@@ -167,3 +167,34 @@ class Topic(Plugin):
 
         # Update with new topic
         self._set_topic(e, self._build_topic(delim, parts))
+
+    @Plugin.command('topic.insert', help=('topic.insert <position> <text>: '
+                                          'insert an element at a 0-indexed '
+                                          'position in the title.  Negative '
+                                          'positions count from the end'))
+    def topic_insert(self, e):
+        delim = self._get_delimiters(e['channel'])
+        parts = self._split_topic(delim, self._get_topic(e['channel']))
+
+        # Check number of arguments
+        data_parts = e['data'].split(None, 1)
+        if len(data_parts) != 2:
+            e.protocol.msg(e['reply_to'], 'error: missing argument')
+            return
+
+        # Parse position number
+        try:
+            position = int(data_parts[0])
+        except ValueError:
+            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            return
+
+        # Insert topic part
+        try:
+            parts.insert(position, data_parts[1])
+        except IndexError:
+            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            return
+
+        # Update with new topic
+        self._set_topic(e, self._build_topic(delim, parts))
