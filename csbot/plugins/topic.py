@@ -1,87 +1,133 @@
-import requests
-import urllib
-
 from csbot.plugin import Plugin
 from csbot.util import nick
+
 
 class TopicException(Exception):
     pass
 
+
 class Topic(Plugin):
+    PLUGIN_DEPENDS = ['auth']
+
+    CONFIG_DEFAULTS = {
+        'start': '',
+        'sep': '|',
+        'end': '',
+    }
 
     def setup(self):
         super(Topic, self).setup()
-        self.topic = {}
+        self.topics = {}
 
+    def _get_delimiters(self, channel):
+        """Get the delimiters for a channel.
+        """
+        config = self.subconfig(channel)
+        start = config.get('start', self.config_get('start'))
+        sep = config.get('sep', self.config_get('sep'))
+        end = config.get('end', self.config_get('end'))
+        return start + ' ', ' ' + sep + ' ', ' ' + end
+
+    @staticmethod
+    def _split_topic(delim, topic):
+        """Split *topic* according to *delim* (a ``(start, sep, end)`` tuple).
+        """
+        start, sep, end = delim
+        if topic.startswith(start):
+            topic = topic[len(start):]
+        if topic.endswith(end):
+            topic = topic[:-len(end)]
+        return [s.strip() for s in topic.split(sep)]
+
+    @staticmethod
+    def _build_topic(delim, parts):
+        """Join *parts* according to *delim* (a ``(start, sep, end)`` tuple).
+        """
+        start, sep, end = delim
+        return start + sep.join(parts) + end
+
+    def _set_topic(self, e, topic):
+        if not self.bot.plugins['auth'].check_or_error(e, 'topic', e['channel']):
+            return
+        e.protocol.topic(e['channel'], topic)
 
     @Plugin.hook('core.channel.topic')
-    def currentTopic(self, e):
-        self.topics[e["channel"]] = e['topic']
+    def topic_changed(self, e):
+        self.topics[e['channel']] = e['topic']
 
-    @Plugin.command('topic')
+    @Plugin.command('topic', help='topic: show current topic as list of parts')
     def topic(self, e):
-        """Manipulate the topic. Possible commands: add append prepend remove change.
-        """
-        try: 
-            if not nick(e['user']) in self.config_get("users").split(" "):
-                raise TopicException(u"You do not have permission to execute that command")
+        topic = self.topics[e['channel']]
+        delim = self._get_delimiters(e['channel'])
+        parts = self._split_topic(delim, topic)
+        e.protocol.msg(e['reply_to'], repr(parts))
 
-            command, payload = e['data'].split(" ", 1)
-            separator = self.config_get("separator")
+    @Plugin.command('topic.append', help=('topic.append <text>: append an '
+                                          'element to the topic'))
+    def topic_append(self, e):
+        delim = self._get_delimiters(e['channel'])
+        parts = self._split_topic(delim, self.topics[e['channel']])
+        parts.append(e['data'])
+        self._set_topic(e, self._build_topic(delim, parts))
 
-            splitted_topic = self.topics[e["reply_to"]].split(" "+separator+" ")
+    @Plugin.command('topic.pop', help=('topic.pop [position]: remove a '
+                                       '0-indexed element from the topic. '
+                                       'Negative positions count from the end, '
+                                       'with -1 being the last.. Default '
+                                       'position is -1 if omitted.'))
+    def topic_pop(self, e):
+        delim = self._get_delimiters(e['channel'])
+        parts = self._split_topic(delim, self.topics[e['channel']])
 
-            position = None
+        if e['data']:
+            # Try and use provided position, error if it's not an integer
+            try:
+                position = int(e['data'])
+            except ValueError:
+                e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+                return
+        else:
+            # Default to removing the last item
+            position = -1
 
-            #map append alias to add to last position
-            if command == "append":
-                command = "add"
-                position = len(splitted_topic)
+        # Pop the specified item, error if tho position was invalid
+        try:
+            parts.pop(position)
+        except IndexError:
+            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            return
 
-            #map prepend alias to add to first position
-            if command == "prepend":
-                command = "add"
-                position = 0
+        # Update with new topic
+        self._set_topic(e, self._build_topic(delim, parts))
 
-            #handle the add comand
-            if command == "add":
-                if position is None:
-                    position, payload = payload.split(" ", 1)
+    @Plugin.command('topic.replace', help=('topic.replace <position> <text>: '
+                                           'replace a 0-indexed element in the '
+                                           'topic. Negative positions count '
+                                           'from the end, with -1 being the '
+                                           'last.'))
+    def topic_replace(self, e):
+        delim = self._get_delimiters(e['channel'])
+        parts = self._split_topic(delim, self.topics[e['channel']])
 
-                    if self.valid_position(position, splitted_topic):
-                        raise TopicException(u"Invalid position number")
+        # Check number of arguments
+        data_parts = e['data'].split(None, 1)
+        if len(data_parts) != 2:
+            e.protocol.msg(e['reply_to'], 'error: missing argument')
+            return
 
-                    position = int(position)
+        # Parse position number
+        try:
+            position = int(data_parts[0])
+        except ValueError:
+            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            return
 
-                if position == len(splitted_topic):
-                    splitted_topic.append(payload)
-                else: 
-                    splitted_topic.insert(position, payload)
+        # Set topic part
+        try:
+            parts[position] = data_parts[1]
+        except IndexError:
+            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            return
 
-            #handle the remove command
-            elif command == "remove":
-                position = payload
-
-                if self.valid_position(position, splitted_topic):
-                    raise TopicException(u"Invalid position number")
-
-                position = int(position) 
-
-                del splitted_topic[position]
-            #handle the change command
-            elif command == "change":
-                position, payload = payload.split(" ", 1)
-
-                if self.valid_position(position, splitted_topic):
-                    raise TopicException(u"Invalid position number")
-
-                position = int(position)
-
-                splitted_topic[position] = payload
-
-            e.protocol.topic(e["reply_to"], (" "+separator+" ").join(splitted_topic))
-        except TopicException as exception:
-            e.protocol.msg(e["reply_to"], "Topic error: " + str(exception))
-
-    def valid_position(self, position, splitted_topic):
-        return not position.isdigit() or int(position) >= len(splitted_topic)
+        # Update with new topic
+        self._set_topic(e, self._build_topic(delim, parts))

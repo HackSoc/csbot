@@ -264,7 +264,8 @@ class Plugin(object):
     def config(self):
         """Get the configuration section for this plugin.
 
-        If the config section doesn't exist yet, it is created empty.
+        Uses the ``[plugin_name]`` section of the configuration file, creating
+        an empty section if it doesn't exist.
 
         .. seealso:: :mod:`py3k:configparser`
         """
@@ -272,6 +273,17 @@ class Plugin(object):
         if plugin not in self.bot.config_root:
             self.bot.config_root[plugin] = {}
         return self.bot.config_root[plugin]
+
+    def subconfig(self, subsection):
+        """Get a configuration subsection for this plugin.
+
+        Uses the ``[plugin_name/subsection]`` section of the configuration file,
+        creating an empty section if it doesn't exist.
+        """
+        section = self.plugin_name() + '/' + subsection
+        if section not in self.bot.config_root:
+            self.bot.config_root[section] = {}
+        return self.bot.config_root[section]
 
     def config_get(self, key):
         """Convenience wrapper proxying ``get()`` on :attr:`config`.

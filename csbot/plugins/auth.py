@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from csbot.plugin import Plugin
+import csbot.util
 
 
 class PermissionDB(defaultdict):
@@ -104,3 +105,23 @@ class Auth(Plugin):
     def check(self, nick, perm, channel=None):
         account = self.bot.plugins['usertrack'].get_user(nick)['account']
         return self._permissions.check(account, perm, channel)
+
+    def check_or_error(self, e, perm, channel=None):
+        nick = csbot.util.nick(e['user'])
+        account = self.bot.plugins['usertrack'].get_user(nick)['account']
+        success = self._permissions.check(account, perm, channel)
+
+        if channel is None:
+            printable_perm = perm
+        else:
+            printable_perm = channel + ':' + perm
+
+        if account is None:
+            e.protocol.msg(e['reply_to'], 'error: not authenticated')
+            return False
+        elif success is False:
+            e.protocol.msg(e['reply_to'], ('error: {} not authorised for {}'
+                                           .format(account, printable_perm)))
+            return False
+        else:
+            return True
