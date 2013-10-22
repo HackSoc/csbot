@@ -1,15 +1,13 @@
+from collections import defaultdict, deque
+
 from csbot.plugin import Plugin
-from csbot.util import nick
-
-
-class TopicException(Exception):
-    pass
 
 
 class Topic(Plugin):
     PLUGIN_DEPENDS = ['auth']
 
     CONFIG_DEFAULTS = {
+        'history': 5,
         'start': '',
         'sep': '|',
         'end': '',
@@ -17,15 +15,26 @@ class Topic(Plugin):
 
     def setup(self):
         super(Topic, self).setup()
-        self.topics = {}
+        self.topics = defaultdict(deque)
+
+    def config_get(self, key, channel=None):
+        """A special implementation of :meth:`Plugin.config_get` which looks at
+        a channel-based configuration subsection before the plugin's
+        configuration section.
+        """
+        default = super(Topic, self).config_get(key)
+
+        if channel is None:
+            return default
+        else:
+            return self.subconfig(channel).get(key, default)
 
     def _get_delimiters(self, channel):
         """Get the delimiters for a channel.
         """
-        config = self.subconfig(channel)
-        start = config.get('start', self.config_get('start'))
-        sep = config.get('sep', self.config_get('sep'))
-        end = config.get('end', self.config_get('end'))
+        start = self.config_get('start', channel)
+        sep = self.config_get('sep', channel)
+        end = self.config_get('end', channel)
         return start + ' ', ' ' + sep + ' ', ' ' + end
 
     @staticmethod
@@ -46,6 +55,11 @@ class Topic(Plugin):
         start, sep, end = delim
         return start + sep.join(parts) + end
 
+    def _get_topic(self, channel):
+        """Get the most recent topic for *channel*.
+        """
+        return self.topics[channel][-1]
+
     def _set_topic(self, e, topic):
         if not self.bot.plugins['auth'].check_or_error(e, 'topic', e['channel']):
             return
@@ -53,20 +67,28 @@ class Topic(Plugin):
 
     @Plugin.hook('core.channel.topic')
     def topic_changed(self, e):
-        self.topics[e['channel']] = e['topic']
+        topics = self.topics[e['channel']]
+        if len(topics) == 0 or e['topic'] != topics[-1]:
+            topics.append(e['topic'])
+        if len(topics) > int(self.config_get('history', e['channel'])):
+            topics.popleft()
 
     @Plugin.command('topic', help='topic: show current topic as list of parts')
     def topic(self, e):
-        topic = self.topics[e['channel']]
+        topic = self._get_topic(e['channel'])
         delim = self._get_delimiters(e['channel'])
         parts = self._split_topic(delim, topic)
         e.protocol.msg(e['reply_to'], repr(parts))
+
+    @Plugin.command('topic.history', help='topic.history: show recent topics')
+    def topic_history(self, e):
+        e.protocol.msg(e['reply_to'], repr(list(self.topics[e['channel']])))
 
     @Plugin.command('topic.append', help=('topic.append <text>: append an '
                                           'element to the topic'))
     def topic_append(self, e):
         delim = self._get_delimiters(e['channel'])
-        parts = self._split_topic(delim, self.topics[e['channel']])
+        parts = self._split_topic(delim, self._get_topic(e['channel']))
         parts.append(e['data'])
         self._set_topic(e, self._build_topic(delim, parts))
 
@@ -77,7 +99,7 @@ class Topic(Plugin):
                                        'position is -1 if omitted.'))
     def topic_pop(self, e):
         delim = self._get_delimiters(e['channel'])
-        parts = self._split_topic(delim, self.topics[e['channel']])
+        parts = self._split_topic(delim, self._get_topic(e['channel']))
 
         if e['data']:
             # Try and use provided position, error if it's not an integer
@@ -107,7 +129,7 @@ class Topic(Plugin):
                                            'last.'))
     def topic_replace(self, e):
         delim = self._get_delimiters(e['channel'])
-        parts = self._split_topic(delim, self.topics[e['channel']])
+        parts = self._split_topic(delim, self._get_topic(e['channel']))
 
         # Check number of arguments
         data_parts = e['data'].split(None, 1)
