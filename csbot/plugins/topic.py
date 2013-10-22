@@ -62,8 +62,9 @@ class Topic(Plugin):
 
     def _set_topic(self, e, topic):
         if not self.bot.plugins['auth'].check_or_error(e, 'topic', e['channel']):
-            return
+            return False
         e.protocol.topic(e['channel'], topic)
+        return True
 
     @Plugin.hook('core.channel.topic')
     def topic_changed(self, e):
@@ -83,6 +84,19 @@ class Topic(Plugin):
     @Plugin.command('topic.history', help='topic.history: show recent topics')
     def topic_history(self, e):
         e.protocol.msg(e['reply_to'], repr(list(self.topics[e['channel']])))
+
+    @Plugin.command('topic.undo', help=('topic.undo: revert to previous topic '
+                                        'see topic.history)'))
+    def topic_undo(self, e):
+        topics = self.topics[e['channel']]
+
+        if len(topics) < 2:
+            e.protocol.msg(e['reply_to'], 'error: no history to revert to')
+            return
+
+        # Attempt to set the topic, and if it was allowed, drop the most recent
+        if self._set_topic(e, topics[-2]):
+            topics.pop()
 
     @Plugin.command('topic.append', help=('topic.append <text>: append an '
                                           'element to the topic'))
