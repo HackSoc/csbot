@@ -32,19 +32,29 @@ class Topic(Plugin):
     def _get_delimiters(self, channel):
         """Get the delimiters for a channel.
         """
+        # Start of topic, with a space for padding
         start = self.config_get('start', channel)
-        sep = self.config_get('sep', channel)
+        if len(start) > 0:
+            start = start + ' '
+
+        # Topic element separator, with spaces for padding
+        sep = ' ' + self.config_get('sep', channel) + ' '
+
+        # End of topic, with a space for padding
         end = self.config_get('end', channel)
-        return start + ' ', ' ' + sep + ' ', ' ' + end
+        if len(end) > 0:
+            end = ' ' + end
+
+        return start, sep, end
 
     @staticmethod
     def _split_topic(delim, topic):
         """Split *topic* according to *delim* (a ``(start, sep, end)`` tuple).
         """
         start, sep, end = delim
-        if topic.startswith(start):
+        if len(start) > 0 and topic.startswith(start):
             topic = topic[len(start):]
-        if topic.endswith(end):
+        if len(end) > 0 and topic.endswith(end):
             topic = topic[:-len(end)]
         return [s.strip() for s in topic.split(sep)]
 
