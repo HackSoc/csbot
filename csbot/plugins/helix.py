@@ -32,18 +32,20 @@ class Helix(Plugin):
     def setup(self):
         super(Helix, self).setup()
 
+    def _answer(self, message):
+        # The almighty helix accepts only cleansed queries
+        worshippers_question = filter(lambda x: x.isalpha(), message).lower()
+
+        # Recieve and demystify the almighty helix's answer
+        answer = hashlib.sha1(worshippers_question)
+        answer = int(answer.hexdigest(), 16)
+        return self.outcomes[answer % len(self.outcomes)]
+
     @Plugin.command('helix')
     def ask_the_almighty_helix(self, e):
         """
         Ask and you shall recieve.
         """
-        # The almighty helix accepts only cleansed queries
-        worshippers_question = filter(lambda x: x.isalpha(), e["data"]).lower()
-
-        # Recieve and demystify the almighty helix's answer
-        answer = hashlib.sha1(worshippers_question)
-        answer = int(16, answer.hexdigest())
-        answer = self.outcomes[answer % len(self.outcomes)]
-
+        answer = self._answer(e["data"])
         e.protocol.msg(e['reply_to'],
-                       u'The Helix Fossil says, "{}"'.format(answer))
+                       u'The Helix Fossil says: "{}"'.format(answer))
