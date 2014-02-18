@@ -38,7 +38,7 @@ class Helix(Plugin):
         Ask and you shall recieve.
         """
         # The almighty helix accepts only cleansed queries
-        worshippers_question = filter(str.isalpha, e["data"]).lower()
+        worshippers_question = filter(lambda x: x.isalpha(), e["data"]).lower()
 
         # Recieve and demystify the almighty helix's answer
         answer = hashlib.sha1(worshippers_question)
