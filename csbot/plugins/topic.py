@@ -110,6 +110,8 @@ class Topic(Plugin):
 
     @Plugin.command('topic.append', help=('topic.append <text>: append an '
                                           'element to the topic'))
+    @Plugin.command('topic.push', help=('topic.push <text>: alias '
+                                        'of topic.append'))
     def topic_append(self, e):
         delim = self._get_delimiters(e['channel'])
         parts = self._split_topic(delim, self._get_topic(e['channel']))
