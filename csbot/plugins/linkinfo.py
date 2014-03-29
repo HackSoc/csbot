@@ -153,7 +153,7 @@ class LinkInfo(Plugin):
         """Scrape the ``<title>`` tag contents from an HTML page.
         """
         # Let's see what's on the other end...
-        r = requests.get(url.geturl())
+        r = requests.get(url.geturl(), verify=False)
         # Only bother with 200 OK
         if r.status_code != requests.codes.ok:
             self.log.debug(u'request failed for ' + url.geturl())
