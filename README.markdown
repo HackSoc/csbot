@@ -25,6 +25,7 @@ Twisted's extension of Python's unittest module.  If structured correctly, tests
 with `trial csbot`.
 
 [![Build Status](https://secure.travis-ci.org/csyork/csbot.png)](http://travis-ci.org/csyork/csbot)
+![Codeship Status](https://www.codeship.io/projects/5f4323e0-9d4e-0131-a30d-7e1e6c5b7178/status)
 
 ## Further Reading ##
 Please read the [Procedures page](https://github.com/csyork/csbot/wiki/Procedure) for more information. The wiki will be updated more often than this Read Me file and so should be taken as the first point of reference.
