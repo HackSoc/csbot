@@ -6,7 +6,7 @@ We are developing an IRC bot and plugin system for the #cs-york channel on irc.f
 It's written in Python 2.7, using the PEP 8 coding style.
 
 ## Code Management & Version Control ##
-The code is stored [here](http://github.com/csyork/csbot/) on github.com. Please fork it if you want to help with it.
+The code is stored [here](http://github.com/HackSoc/csbot/) on github.com. Please fork it if you want to help with it.
 
 The basic procedure for contributing is as follows
 
@@ -27,4 +27,4 @@ with `trial csbot`.
 [![Codeship Status for csyork/csbot](https://www.codeship.io/projects/5f4323e0-9d4e-0131-a30d-7e1e6c5b7178/status?branch=master)](https://www.codeship.io/projects/17895)
 
 ## Further Reading ##
-Please read the [Procedures page](https://github.com/csyork/csbot/wiki/Procedure) for more information. The wiki will be updated more often than this Read Me file and so should be taken as the first point of reference.
+Please read the [Procedures page](https://github.com/HackSoc/csbot/wiki/Procedure) for more information. The wiki will be updated more often than this Read Me file and so should be taken as the first point of reference.
