@@ -8,10 +8,23 @@ class TermDates(Plugin):
     ever-changing calendar.
     """
 
+    PLUGIN_DEPENDS = ['mongodb']
+
     DATE_FORMAT = '%Y-%m-%d'
+
+    @Plugin.integrate_with('mongodb')
+    def _get_db(self, mongodb):
+        self.db = mongodb.get_db(self.plugin_name())
 
     def setup(self):
         super(TermDates, self).setup()
+
+        # If we have stuff in mongodb, we can just load it directly.
+        if self.db.terms.find_one():
+            self.initialised = True
+            self.terms = self.db.terms.find_one()
+            self.weeks = self.db.weeks.find_one()
+            return
 
         # If no term dates have been set, the calendar is uninitialised and
         # can't be asked about term things.
@@ -100,7 +113,8 @@ class TermDates(Plugin):
         """
 
         now = datetime.now()
-        for term, dates in self.terms.items():
+        for term in ['aut', 'spr', 'sum']:
+            dates = self.terms[term]
             if now >= dates[0] and now <= dates[1]:
                 return term
             elif now <= dates[0]:
@@ -152,6 +166,12 @@ class TermDates(Plugin):
             for week in range(2, 11):
                 week_start = real_start + timedelta(weeks=week-1)
                 self.weeks['{} {}'.format(term, week)] = week_start
+
+        # Save to the database. As we don't touch the _id attribute in this
+        # method, this will cause `save` to override the previously-loaded
+        # entry (if there is one).
+        self.db.terms.save(self.terms)
+        self.db.weeks.save(self.weeks)
 
         # Finally, we're initialised!
         self.initialised = True
