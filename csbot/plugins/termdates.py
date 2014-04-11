@@ -106,6 +106,7 @@ class TermDates(Plugin):
             e.protocol.msg(e['reply_to'], 'error: bad week')
             return
 
+        term = term.capitalize()
         e.protocol.msg(e['reply_to'],
                        '{} {}: {}'.format(term, weeknum, weekstart))
 
