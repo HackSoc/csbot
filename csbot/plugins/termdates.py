@@ -2,7 +2,7 @@ from csbot.plugin import Plugin
 from datetime import datetime, timedelta
 
 
-class Cal(Plugin):
+class TermDates(Plugin):
     """
     A wonderful plugin allowing old people (graduates) to keep track of the
     ever-changing calendar.
@@ -11,7 +11,7 @@ class Cal(Plugin):
     DATE_FORMAT = '%Y-%m-%d'
 
     def setup(self):
-        super(Cal, self).setup()
+        super(TermDates, self).setup()
 
         # If no term dates have been set, the calendar is uninitialised and
         # can't be asked about term things.
