@@ -85,14 +85,14 @@ class TermDates(Plugin):
         week = e['data'].split()
         if len(week) == 1:
             term = self._current_term()
-            weeknum = week[0]
+            weeknum = week[0][:3]
         elif len(week) >= 2:
             try:
-                term = week[0]
+                term = week[0][:3]
                 weeknum = int(week[1])
             except ValueError:
                 try:
-                    term = week[1]
+                    term = week[1][:3]
                     weeknum = int(week[0])
                 except ValueError:
                     e.prototol.msg(e['reply_to'], 'error: bad week format')
