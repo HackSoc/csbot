@@ -57,6 +57,7 @@ class TermDates(Plugin):
         Get the start date (first Monday) of a term as a string.
         """
 
+        term = term.lower()
         return self.terms[term][0].strftime(self.DATE_FORMAT)
 
     def _term_end(self, term):
@@ -64,6 +65,7 @@ class TermDates(Plugin):
         Get the end date (last Friday) of a term as a string.
         """
 
+        term = term.lower()
         return self.terms[term][1].strftime(self.DATE_FORMAT)
 
     @Plugin.command('week', help='week: get the start date of a week')
@@ -126,6 +128,7 @@ class TermDates(Plugin):
         Get the start date of a week as a string.
         """
 
+        term = term.lower()
         return self.weeks['{} {}'.format(term, week)].strftime(
             self.DATE_FORMAT)
 
