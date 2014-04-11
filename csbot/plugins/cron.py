@@ -1,6 +1,7 @@
 from csbot.plugin import Plugin
 import threading
 from twisted.internet import reactor
+from datetime import datetime
 
 
 class Cron(Plugin):
@@ -67,6 +68,13 @@ class Cron(Plugin):
                 self.tasks[plugin][name] = task_id
 
             return True
+
+    def scheduleAt(self, plugin, when, callback, name=None):
+        """
+        Exactly the same as schedule(...), except the when is a datetime.
+        """
+
+        self.schedule(plugin, when - datetime.now(), callback, name)
 
     def unschedule(self, plugin, name):
         """
