@@ -68,7 +68,8 @@ class TermDates(Plugin):
         term = term.lower()
         return self.terms[term][1].strftime(self.DATE_FORMAT)
 
-    @Plugin.command('week', help='week: get the start date of a week')
+    @Plugin.command('week',
+                    help='week [term] <num>: get the start date of a week')
     def week(self, e):
         if not self.initialised:
             e.protocol.msg(e['reply_to'],
@@ -133,7 +134,8 @@ class TermDates(Plugin):
         return self.weeks['{} {}'.format(term, week)].strftime(
             self.DATE_FORMAT)
 
-    @Plugin.command('termdates.set', help='termdates.set: set the term dates')
+    @Plugin.command('termdates.set',
+                    help='termdates.set <sur> <spr> <sum>: set the term dates')
     def termdates_set(self, e):
         dates = e['data'].split()
 
