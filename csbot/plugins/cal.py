@@ -53,6 +53,68 @@ class Cal(Plugin):
 
         return self.terms[term][1].strftime(self.DATE_FORMAT)
 
+    @Plugin.command('week', help='week: get the start date of a week')
+    def week(self, e):
+        if not self.initialised:
+            e.protocol.msg(e['reply_to'],
+                           'error: no term dates (see termdates.set)')
+            return
+
+        # We can handle weeks in the following formats:
+        #  !week n - get the date of week n in the current (or next, if in
+        #            holiday) term
+        #  !week term n - get the date of week n in the given term
+        #  !week n term - as above
+
+        week = e['data'].split()
+        if len(week) == 1:
+            term = self._current_term()
+            weeknum = week[0]
+        elif len(week) >= 2:
+            try:
+                term = week[0]
+                weeknum = int(week[1])
+            except ValueError:
+                try:
+                    term = week[1]
+                    weeknum = int(week[0])
+                except ValueError:
+                    e.prototol.msg(e['reply_to'], 'error: bad week format')
+                    return
+        else:
+            e.protocol.msg(e['reply_to'], 'error: bad week format')
+            return
+
+        try:
+            weekstart = self._week_start(term, weeknum)
+        except KeyError:
+            e.protocol.msg(e['reply_to'], 'error: bad week')
+            return
+
+        e.protocol.msg(e['reply_to'],
+                       '{} {}: {}'.format(term, weeknum, weekstart))
+
+    def _current_term(self):
+        """
+        Get the name of the current term
+        """
+
+        now = datetime.now()
+        for term, dates in self.terms.items():
+            if now >= dates[0] and now <= dates[1]:
+                return term
+            elif now <= dates[0]:
+                # We can do this because the terms are ordered
+                return term
+
+    def _week_start(self, term, week):
+        """
+        Get the start date of a week as a string.
+        """
+
+        return self.weeks['{} {}'.format(term, week)].strftime(
+            self.DATE_FORMAT)
+
     @Plugin.command('termdates.set', help='termdates.set: set the term dates')
     def termdates_set(self, e):
         dates = e['data'].split()
