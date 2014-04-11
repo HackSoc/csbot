@@ -71,12 +71,24 @@ class Cal(Plugin):
                                'error: dates must be in %Y-%M-%d format.')
                 return
 
-            term_end = term_start + timedelta(days=4, weeks=9)
+            # Not all terms start on a monday, so we need to compute the "real"
+            # term start used in all the other calculations.
+            # Fortunately Monday is used as the start of the week in Python's
+            # datetime stuff, which makes this really simple.
+            real_start = term_start - timedelta(days=term_start.weekday())
+
+            # Log for informational purposes
+            if not term_start == real_start:
+                self.log.info(u'Computed real_start as {} (from {})'.format(
+                    repr(real_start), repr(term_start)))
+
+            term_end = real_start + timedelta(days=4, weeks=9)
             self.terms[term] = (term_start, term_end)
 
             # Then the start of each week
-            for week in range(1, 11):
-                week_start = term_start + timedelta(weeks=week-1)
+            self.weeks['{} 1'.format(term)] = term_start
+            for week in range(2, 11):
+                week_start = real_start + timedelta(weeks=week-1)
                 self.weeks['{} {}'.format(term, week)] = week_start
 
         # Finally, we're initialised!
