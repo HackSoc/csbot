@@ -42,7 +42,7 @@ class Cron(Plugin):
     def setup(self):
         super(Cron, self).setup()
 
-        # Tasks is a map plugin -> name -> (date, callback)
+        # Tasks is a map plugin -> name -> callback
         self.tasks = {}
 
         # Add regular cron.hourly/daily/weekly events which
@@ -51,30 +51,30 @@ class Cron(Plugin):
         # seconds", which is what we need, so I handle this by having
         # a seperate set-up method for the recurring events which
         # isn't called until the first time they should run.
-        when = datetime.now()
-        when -= timedelta(minutes=when.minute,
-                          seconds=when.second,
-                          microseconds=when.microsecond)
+        now = datetime.now()
+        when = -timedelta(minutes=now.minute,
+                          seconds=now.second,
+                          microseconds=now.microsecond)
 
-        self.scheduleAt(self.plugin_name(),
-                        when + timedelta(hours=1),
-                        lambda: self.setup_regular('hourly',
-                                                   timedelta(hours=1)),
-                        "hourly set-up")
+        self.schedule(self.plugin_name(),
+                      when + timedelta(hours=1),
+                      lambda: self.setup_regular('hourly',
+                                                 timedelta(hours=1)),
+                      "hourly set-up")
 
         when -= timedelta(hours=when.hour)
-        self.scheduleAt(self.plugin_name(),
-                        when + timedelta(days=1),
-                        lambda: self.setup_regular('daily',
-                                                   timedelta(days=1)),
-                        "daily set-up")
+        self.schedule(self.plugin_name(),
+                      when + timedelta(days=1),
+                      lambda: self.setup_regular('daily',
+                                                 timedelta(days=1)),
+                      "daily set-up")
 
         when -= timedelta(days=when.weekday())
-        self.scheduleAt(self.plugin_name(),
-                        when + timedelta(weeks=1),
-                        lambda: self.setup_regular('weekly',
-                                                   timedelta(weeks=1)),
-                        "weekly set-up")
+        self.schedule(self.plugin_name(),
+                      when + timedelta(weeks=1),
+                      lambda: self.setup_regular('weekly',
+                                                 timedelta(weeks=1)),
+                      "weekly set-up")
 
     def setup_regular(self, name, tdelta):
         """
