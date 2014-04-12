@@ -28,8 +28,7 @@ class Cron(Plugin):
 
             def setup(self):
                 ...
-                self.cron.schedule(
-                    self.plugin_name(),
+                self.cron.after(
                     datetime.timedelta(days=1),
                     lambda: self._callback(),
                     "hello world")
@@ -183,7 +182,7 @@ class PluginCron(object):
         self.cron = cron
         self.plugin = plugin.plugin_name()
 
-    def schedule(self, delay, callback, name=None):
+    def after(self, delay, callback, name=None):
         """
         Schedule an event to occur after the timedelta delay has passed.
         """
