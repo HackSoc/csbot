@@ -1,7 +1,8 @@
 from csbot.plugin import Plugin
+from csbot.events import Event
 import threading
-from twisted.internet import reactor
-from datetime import datetime
+from twisted.internet import reactor, task
+from datetime import datetime, timedelta
 
 
 class Cron(Plugin):
@@ -33,6 +34,12 @@ class Cron(Plugin):
                     "hello world")
     """
 
+    RECURRING_EVENTS = {'hourly': timedelta(hours=1),
+                        'daily': timedelta(days=1),
+                        'weekly': timedelta(weeks=1)}
+
+    EPOCH = datetime(1970, 1, 1)
+
     def setup(self):
         super(Cron, self).setup()
 
@@ -42,6 +49,47 @@ class Cron(Plugin):
         # Because we keep a dict of all tasks (to allow easy cancellation), we
         # need to be able to ensure atomic access to the tasks dict.
         self.tasklock = threading.RLock()
+
+        # Add regular cron.hourly/daily/weekly/monthly events which
+        # plugins can listen to. Unfortunately LoopingCall can't
+        # handle things like "run this every hour, starting in x
+        # seconds", which is what we need, so I handle this by having
+        # a seperate set-up method for the recurring events which
+        # isn't called until the next hour.
+        when = datetime.now()
+        when -= timedelta(minutes=when.minute,
+                          seconds=when.second,
+                          microseconds=when.microsecond)
+        when += timedelta(hours=1)
+        self.scheduleAt(self.plugin_name(),
+                        when,
+                        lambda: self.setup_regular(when),
+                        "regular events")
+
+    def setup_regular(self, now):
+        """
+        Set up recurring events: hourly, daily, weekly, and monthly.
+
+        This method also fires off those events if appropriate when called.
+        """
+
+        self.log.info(u'Registering regular events')
+
+        epochtime = (now - self.EPOCH).total_seconds()
+
+        for name, tdelta in self.RECURRING_EVENTS.items():
+            func = lambda: self.bot.post_event(
+                Event(None, 'cron.{}'.format(name)))
+
+            # Schedule the recurring event
+            self.scheduleEvery(self.plugin_name(),
+                               tdelta, func, name)
+
+            # Call it now if appropriate
+            if epochtime % tdelta.total_seconds() == 0:
+                self.log.info(u'Running initial repeating event {}.{}.'.format(
+                    self.plugin_name(), name))
+                func()
 
     def schedule(self, plugin, when, callback, name=None):
         """
@@ -74,7 +122,30 @@ class Cron(Plugin):
         Exactly the same as schedule(...), except the when is a datetime.
         """
 
-        self.schedule(plugin, when - datetime.now(), callback, name)
+        return self.schedule(plugin, when - datetime.now(), callback, name)
+
+    def scheduleEvery(self, plugin, freq, callback, name=None):
+        """
+        Schedule a recurring event, freq is the frequency (as a timedelta) to
+        call it.
+        """
+
+        with self.tasklock:
+            # Create the empty plugin schedule if it doesn't exist
+            if plugin not in self.tasks:
+                self.tasks[plugin] = {}
+
+            if name is not None and name in self.tasks[plugin]:
+                return False
+
+            task_id = task.LoopingCall(self._runcb(
+                plugin, name, callback, False))
+            task_id.start(freq.total_seconds())
+
+            if name is not None:
+                self.tasks[plugin][name] = task_id
+
+            return True
 
     def unschedule(self, plugin, name):
         """
@@ -86,7 +157,7 @@ class Cron(Plugin):
                 self.tasks[plugin][name].cancel()
                 del self.tasks[plugin][name]
 
-    def _runcb(self, plugin, name, cb):
+    def _runcb(self, plugin, name, cb, unschedule=True):
         """
         Run a callback, and remove it from the tasks dict.
         """
@@ -100,7 +171,7 @@ class Cron(Plugin):
             except:
                 pass
 
-            if name is not None:
+            if unschedule and name is not None:
                 with self.tasklock:
                     del self.tasks[plugin][name]
 
