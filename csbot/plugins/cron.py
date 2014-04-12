@@ -2,6 +2,7 @@ from csbot.plugin import Plugin
 from csbot.events import Event
 from twisted.internet import reactor, task
 from datetime import datetime, timedelta
+import sys
 
 
 class Cron(Plugin):
@@ -161,9 +162,13 @@ class Cron(Plugin):
             try:
                 cb()
             except:
-                pass
-
-            if unschedule and name is not None:
-                del self.tasks[plugin][name]
+                exctype, value = sys.exc_info()[:2]
+                self.log.error(
+                    u'Exception raised when running callback {}.{} {}: {} {}'.format(
+                        plugin, name, cb,
+                        exctype, value))
+            finally:
+                if unschedule and name is not None:
+                    del self.tasks[plugin][name]
 
         return run
