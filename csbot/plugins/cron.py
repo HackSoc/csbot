@@ -39,58 +39,62 @@ class Cron(Plugin):
                 self.log.info(u'An hour has passed')
     """
 
-    RECURRING_EVENTS = {'hourly': timedelta(hours=1),
-                        'daily': timedelta(days=1),
-                        'weekly': timedelta(weeks=1)}
-
-    EPOCH = datetime(1970, 1, 1)
-
     def setup(self):
         super(Cron, self).setup()
 
         # Tasks is a map plugin -> name -> (date, callback)
         self.tasks = {}
 
-        # Add regular cron.hourly/daily/weekly/monthly events which
+        # Add regular cron.hourly/daily/weekly events which
         # plugins can listen to. Unfortunately LoopingCall can't
         # handle things like "run this every hour, starting in x
         # seconds", which is what we need, so I handle this by having
         # a seperate set-up method for the recurring events which
-        # isn't called until the next hour.
+        # isn't called until the first time they should run.
         when = datetime.now()
         when -= timedelta(minutes=when.minute,
                           seconds=when.second,
                           microseconds=when.microsecond)
-        when += timedelta(hours=1)
+
         self.scheduleAt(self.plugin_name(),
-                        when,
-                        lambda: self.setup_regular(when),
-                        "regular events")
+                        when + timedelta(hours=1),
+                        lambda: self.setup_regular('hourly',
+                                                   timedelta(hours=1)),
+                        "hourly set-up")
 
-    def setup_regular(self, now):
+        when -= timedelta(hours=when.hour)
+        self.scheduleAt(self.plugin_name(),
+                        when + timedelta(days=1),
+                        lambda: self.setup_regular('daily',
+                                                   timedelta(days=1)),
+                        "daily set-up")
+
+        when -= timedelta(days=when.weekday())
+        self.scheduleAt(self.plugin_name(),
+                        when + timedelta(weeks=1),
+                        lambda: self.setup_regular('weekly',
+                                                   timedelta(weeks=1)),
+                        "weekly set-up")
+
+    def setup_regular(self, name, tdelta):
         """
-        Set up recurring events: hourly, daily, weekly, and monthly.
-
-        This method also fires off those events if appropriate when called.
+        Set up a recurring event: hourly, daily, weekly, etc. This should be
+        called at the first time such an event should be sent.
         """
 
-        self.log.info(u'Registering regular events')
+        self.log.info(u'Registering regular event cron.{}'.format(name))
 
-        epochtime = (now - self.EPOCH).total_seconds()
+        func = lambda: self.bot.post_event(
+            Event(None, 'cron.{}'.format(name)))
 
-        for name, tdelta in self.RECURRING_EVENTS.items():
-            func = lambda: self.bot.post_event(
-                Event(None, 'cron.{}'.format(name)))
+        # Schedule the recurring event
+        self.scheduleEvery(self.plugin_name(),
+                           tdelta, func, name)
 
-            # Schedule the recurring event
-            self.scheduleEvery(self.plugin_name(),
-                               tdelta, func, name)
-
-            # Call it now if appropriate
-            if epochtime % tdelta.total_seconds() == 0:
-                self.log.info(u'Running initial repeating event {}.{}.'.format(
-                    self.plugin_name(), name))
-                func()
+        # Call it now
+        self.log.info(u'Running initial repeating event {}.{}.'.format(
+            self.plugin_name(), name))
+        func()
 
     def schedule(self, plugin, when, callback, name=None):
         """
