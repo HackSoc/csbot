@@ -11,10 +11,11 @@ class Cron(Plugin):
     continuous? What was before time? Does that even make sense to ask? This
     plugin will attempt to address some, perhaps all, of these questions.
 
-    More seriously, this plugin allows the scheduling of events with a
-    resolution of one second. Due to computers being the constructs of
-    fallible humans, it's not guaranteed that a callback will be run
-    precisely when you want it to be.
+    More seriously, this plugin allows the scheduling of events. Due to
+    computers being the constructs of fallible humans, it's not guaranteed
+    that a callback will be run precisely when you want it to be. Furthermore,
+    if you schedule multiple events at the same time, don't make any
+    assumptions about the order in which they'll be called.
 
     Example of usage:
 
@@ -30,8 +31,12 @@ class Cron(Plugin):
                 self.cron.schedule(
                     self.plugin_name(),
                     datetime.timedelta(days=1),
-                    lambda date: self._callback(date),
+                    lambda: self._callback(),
                     "hello world")
+
+            @Plugin.hook('cron.hourly')
+            def hourlyevent(self, e):
+                self.log.info(u'An hour has passed')
     """
 
     RECURRING_EVENTS = {'hourly': timedelta(hours=1),
@@ -152,7 +157,7 @@ class Cron(Plugin):
 
     def _runcb(self, plugin, name, cb, unschedule=True):
         """
-        Run a callback, and remove it from the tasks dict.
+        Return a function to run a callback, and remove it from the tasks dict.
         """
 
         def run():
