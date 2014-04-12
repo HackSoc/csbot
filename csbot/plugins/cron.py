@@ -24,7 +24,7 @@ class Cron(Plugin):
 
             @Plugin.integrate_with('cron')
             def _get_cron(self, cron):
-                self.cron = cron
+                self.cron = cron.get_cron(self)
 
             def setup(self):
                 ...
@@ -96,9 +96,16 @@ class Cron(Plugin):
             self.plugin_name(), name))
         func()
 
-    def schedule(self, plugin, when, callback, name=None):
+    def get_cron(self, plugin):
         """
-        Schedule a new callback, the "when" is a timedelta.
+        Return the crond for the given plugin
+        """
+
+        return PluginCron(self, plugin)
+
+    def schedule(self, plugin, delay, callback, name=None):
+        """
+        Schedule a new callback, the "delay" is a timedelta.
 
         The name, if given, can be used to remove a callback. Names must be
         unique.
@@ -113,7 +120,7 @@ class Cron(Plugin):
         if name is not None and name in self.tasks[plugin]:
             return False
 
-        task_id = reactor.callLater(when.total_seconds(),
+        task_id = reactor.callLater(delay.total_seconds(),
                                     self._runcb(plugin, name, callback))
 
         if name is not None:
@@ -181,3 +188,48 @@ class Cron(Plugin):
                     del self.tasks[plugin][name]
 
         return run
+
+
+class PluginCron(object):
+    """
+    An iterface to the cron methods restricted to the view of one named plugin.
+
+    All of the scheduling functions have a signature of the form
+    (time, callback, name). The time is either a delay (as a timedelta) or an
+    absolute time (as a datetime), the callback is the function to call then,
+    and the name is an optional name which can be used to remove a callback
+    before it is fired.
+    """
+
+    def __init__(self, cron, plugin):
+        self.cron = cron
+        self.plugin = plugin.plugin_name()
+
+    def schedule(self, delay, callback, name=None):
+        """
+        Schedule an event to occur after the timedelta delay has passed.
+        """
+
+        self.cron.schedule(self.plugin, delay, callback, name=None)
+
+    def at(self, when, callback, name=None):
+        """
+        Schedule an event to occur at a given time.
+        """
+
+        self.cron.scheduleAt(self.plugin, when, callback, name)
+
+    def every(self, freq, callback, name=None):
+        """
+        Schedule an event to occur every time the delay passes, starting
+        immediately.
+        """
+
+        self.cron.scheduleEvery(self.plugin, freq, callback, name)
+
+    def unschedule(self, name):
+        """
+        Unschedule a named event which hasn't yet happened.
+        """
+
+        self.cron.unschedule(self.plugin, name)
