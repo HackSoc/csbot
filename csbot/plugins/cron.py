@@ -152,9 +152,8 @@ class Cron(Plugin):
             except:
                 exctype, value = sys.exc_info()[:2]
                 self.log.error(
-                    u'Exception raised when running callback {} {}: {} {}'.format(
-                        name, cb,
-                        exctype, value))
+                    u'Exception raised when running callback {}: {} {}'.format(
+                        name, exctype, value))
             finally:
                 if not repeating:
                     del self.tasks[name]
