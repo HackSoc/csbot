@@ -208,9 +208,17 @@ class Cron(Plugin):
 
             run_time = taskdef.time
 
-            func = getattr(
-                self.plugins[taskdef.plugin_name],
-                taskdef.method_name)
+            try:
+                func = getattr(
+                    self.plugins[taskdef.plugin_name],
+                    taskdef.method_name)
+            except:
+                self.log.error(
+                    u'Couldn\'t find method {}.{} for callback {}'.format(
+                        taskdef.plugin_name, taskdef.method_name,
+                        taskdef.name))
+                del self.tasks[taskdef.name]
+                continue
 
             try:
                 func(run_time, *taskdef.args, **taskdef.kwargs)
