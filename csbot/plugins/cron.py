@@ -52,11 +52,23 @@ class Cron(Plugin):
                 self.log.info(u'An hour has passed')
     """
 
+    @Plugin.integrate_with('mongodb')
+    def _get_db(self, mongodb):
+        self.db = mongodb.get_db(self.plugin_name())
+
     def setup(self):
         super(Cron, self).setup()
 
         # self.tasks is a map name -> Task
-        self.tasks = {}
+        # If there are tasks in the database, pull them out. Otherwise insert
+        # the empty tasks dict so we get an ID to use for future writes.
+        if self.db.tasks.find_one():
+            tasks = self.db.tasks.find_one()
+            self.tasks = tasks[u'tasks']
+            self.tasks_id = tasks[u'_id']
+        else:
+            self.tasks = {}
+            self.tasks_id = self.db.tasks.insert({u'tasks': self.tasks})
 
         # self.plugins is a map plugin name -> plugin instance
         self.plugins = {'cron': self}
@@ -94,6 +106,17 @@ class Cron(Plugin):
                       when + timedelta(weeks=1),
                       'cron', 'setup_regular',
                       args=['cron.weekly', timedelta(weeks=1)])
+
+    def teardown(self):
+        """
+        Save all the tasks (other than hourly/daily/weekly as there is no
+        point) which haven't yet run to the database.
+
+        If there were tasks in the database before, overwrite them.
+        """
+
+        self.db.tasks.save({u'_id':   self.tasks_id,
+                            u'tasks': self.tasks})
 
     def setup_regular(self, now, name, tdelta):
         """
