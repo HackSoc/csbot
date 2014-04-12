@@ -104,8 +104,8 @@ class Cron(Plugin):
         unique, otherwise a DuplicateNameException will be raised.
         """
 
-        if name is not None and name in self.tasks:
-            raise DuplicateNameException('{} in use.'.format(name))
+        if name in self.tasks:
+            raise DuplicateNameException(name)
 
         seconds = delay.total_seconds()
         callback = self._runcb(name, callback, unschedule=not repeat)
