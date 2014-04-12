@@ -63,13 +63,13 @@ class Cron(Plugin):
                       lambda t: self.setup_regular('cron.hourly',
                                                    timedelta(hours=1)))
 
-        when -= timedelta(hours=when.hour)
+        when -= timedelta(hours=now.hour)
         self.schedule('cron.daily-init',
                       when + timedelta(days=1),
                       lambda t: self.setup_regular('cron.daily',
                                                    timedelta(days=1)))
 
-        when -= timedelta(days=when.weekday())
+        when -= timedelta(days=now.weekday())
         self.schedule('cron.weekly-init',
                       when + timedelta(weeks=1),
                       lambda t: self.setup_regular('cron.weekly',
