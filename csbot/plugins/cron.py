@@ -1,6 +1,5 @@
 from csbot.plugin import Plugin
 from csbot.events import Event
-import threading
 from twisted.internet import reactor, task
 from datetime import datetime, timedelta
 
@@ -45,10 +44,6 @@ class Cron(Plugin):
 
         # Tasks is a map plugin -> name -> (date, callback)
         self.tasks = {}
-
-        # Because we keep a dict of all tasks (to allow easy cancellation), we
-        # need to be able to ensure atomic access to the tasks dict.
-        self.tasklock = threading.RLock()
 
         # Add regular cron.hourly/daily/weekly/monthly events which
         # plugins can listen to. Unfortunately LoopingCall can't
@@ -101,21 +96,20 @@ class Cron(Plugin):
         True is returned if the event was scheduled, False otherwise.
         """
 
-        with self.tasklock:
-            # Create the empty plugin schedule if it doesn't exist
-            if plugin not in self.tasks:
-                self.tasks[plugin] = {}
+        # Create the empty plugin schedule if it doesn't exist
+        if plugin not in self.tasks:
+            self.tasks[plugin] = {}
 
-            if name is not None and name in self.tasks[plugin]:
-                return False
+        if name is not None and name in self.tasks[plugin]:
+            return False
 
-            task_id = reactor.callLater(when.total_seconds(),
-                                        self._runcb(plugin, name, callback))
+        task_id = reactor.callLater(when.total_seconds(),
+                                    self._runcb(plugin, name, callback))
 
-            if name is not None:
-                self.tasks[plugin][name] = task_id
+        if name is not None:
+            self.tasks[plugin][name] = task_id
 
-            return True
+        return True
 
     def scheduleAt(self, plugin, when, callback, name=None):
         """
@@ -130,32 +124,30 @@ class Cron(Plugin):
         call it.
         """
 
-        with self.tasklock:
-            # Create the empty plugin schedule if it doesn't exist
-            if plugin not in self.tasks:
-                self.tasks[plugin] = {}
+        # Create the empty plugin schedule if it doesn't exist
+        if plugin not in self.tasks:
+            self.tasks[plugin] = {}
 
-            if name is not None and name in self.tasks[plugin]:
-                return False
+        if name is not None and name in self.tasks[plugin]:
+            return False
 
-            task_id = task.LoopingCall(self._runcb(
-                plugin, name, callback, False))
-            task_id.start(freq.total_seconds())
+        task_id = task.LoopingCall(self._runcb(
+            plugin, name, callback, False))
+        task_id.start(freq.total_seconds())
 
-            if name is not None:
-                self.tasks[plugin][name] = task_id
+        if name is not None:
+            self.tasks[plugin][name] = task_id
 
-            return True
+        return True
 
     def unschedule(self, plugin, name):
         """
         Unschedule a named callback.
         """
 
-        with self.tasklock:
-            if plugin in self.tasks and name in self.tasks[plugin]:
-                self.tasks[plugin][name].cancel()
-                del self.tasks[plugin][name]
+        if plugin in self.tasks and name in self.tasks[plugin]:
+            self.tasks[plugin][name].cancel()
+            del self.tasks[plugin][name]
 
     def _runcb(self, plugin, name, cb, unschedule=True):
         """
@@ -172,7 +164,6 @@ class Cron(Plugin):
                 pass
 
             if unschedule and name is not None:
-                with self.tasklock:
-                    del self.tasks[plugin][name]
+                del self.tasks[plugin][name]
 
         return run
