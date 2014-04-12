@@ -128,13 +128,6 @@ class Cron(Plugin):
 
         return True
 
-    def scheduleAt(self, plugin, when, callback, name=None):
-        """
-        Exactly the same as schedule(...), except the when is a datetime.
-        """
-
-        return self.schedule(plugin, when - datetime.now(), callback, name)
-
     def scheduleEvery(self, plugin, freq, callback, name=None):
         """
         Schedule a recurring event, freq is the frequency (as a timedelta) to
@@ -217,7 +210,8 @@ class PluginCron(object):
         Schedule an event to occur at a given time.
         """
 
-        self.cron.scheduleAt(self.plugin, when, callback, name)
+        delay = when - datetime.now()
+        self.cron.schedule(self.plugin, delay, callback, name)
 
     def every(self, freq, callback, name=None):
         """
