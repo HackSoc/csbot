@@ -88,8 +88,9 @@ class Cron(Plugin):
             Event(None, 'cron.{}'.format(name)))
 
         # Schedule the recurring event
-        self.scheduleEvery(self.plugin_name(),
-                           tdelta, func, name)
+        self.schedule(self.plugin_name(),
+                      tdelta, func,
+                      name=name, repeat=True)
 
         # Call it now
         self.log.info(u'Running initial repeating event {}.{}.'.format(
@@ -103,7 +104,7 @@ class Cron(Plugin):
 
         return PluginCron(self, plugin)
 
-    def schedule(self, plugin, delay, callback, name=None):
+    def schedule(self, plugin, delay, callback, name=None, repeat=False):
         """
         Schedule a new callback, the "delay" is a timedelta.
 
@@ -120,30 +121,14 @@ class Cron(Plugin):
         if name is not None and name in self.tasks[plugin]:
             return False
 
-        task_id = reactor.callLater(delay.total_seconds(),
-                                    self._runcb(plugin, name, callback))
+        seconds = delay.total_seconds()
+        callback = self._runcb(plugin, name, callback, unschedule=not repeat)
 
-        if name is not None:
-            self.tasks[plugin][name] = task_id
-
-        return True
-
-    def scheduleEvery(self, plugin, freq, callback, name=None):
-        """
-        Schedule a recurring event, freq is the frequency (as a timedelta) to
-        call it.
-        """
-
-        # Create the empty plugin schedule if it doesn't exist
-        if plugin not in self.tasks:
-            self.tasks[plugin] = {}
-
-        if name is not None and name in self.tasks[plugin]:
-            return False
-
-        task_id = task.LoopingCall(self._runcb(
-            plugin, name, callback, False))
-        task_id.start(freq.total_seconds())
+        if repeat:
+            task_id = task.LoopingCall(callback)
+            task_id.start(seconds)
+        else:
+            task_id = reactor.callLater(seconds, callback)
 
         if name is not None:
             self.tasks[plugin][name] = task_id
@@ -203,7 +188,7 @@ class PluginCron(object):
         Schedule an event to occur after the timedelta delay has passed.
         """
 
-        self.cron.schedule(self.plugin, delay, callback, name=None)
+        self.cron.schedule(self.plugin, delay, callback, name=name)
 
     def at(self, when, callback, name=None):
         """
@@ -211,7 +196,7 @@ class PluginCron(object):
         """
 
         delay = when - datetime.now()
-        self.cron.schedule(self.plugin, delay, callback, name)
+        self.cron.schedule(self.plugin, delay, callback, name=name)
 
     def every(self, freq, callback, name=None):
         """
@@ -219,7 +204,7 @@ class PluginCron(object):
         immediately.
         """
 
-        self.cron.scheduleEvery(self.plugin, freq, callback, name)
+        self.cron.schedule(self.plugin, freq, callback, name=name, repeat=True)
 
     def unschedule(self, name):
         """
