@@ -1,8 +1,22 @@
 from csbot.plugin import Plugin
 from csbot.events import Event
-from twisted.internet import reactor, task
+from twisted.internet import task
 from datetime import datetime, timedelta
+from collections import namedtuple
 import sys
+
+# A Task is the data structure used to represent a scheduled event. These can
+# be nicely serialised and stored in the database, so all is good.
+# - time: when the task is to be run
+# - delay: the delay before running it again (if repeating)
+# - plugin_name: the name of the plugin that registered it
+# - method_name: the name of the method on the plugin it should call
+# - args, kwargs: arguments to pass the callback method
+# - repeating: whether it is repeating or not
+Task = namedtuple('Task', ['time', 'delay',
+                           'plugin_name', 'method_name',
+                           'args', 'kwargs',
+                           'repeating'])
 
 
 class Cron(Plugin):
@@ -41,11 +55,17 @@ class Cron(Plugin):
     def setup(self):
         super(Cron, self).setup()
 
-        # self.asks is a map name -> callback
+        # self.tasks is a map name -> Task
         self.tasks = {}
 
-        # self.repeating is used to get the call time for a repeating event
-        self.repeating = {}
+        # self.plugins is a map plugin name -> plugin instance
+        self.plugins = {'cron': self}
+
+        # self.scheduler is a handle to the scheduler repeating task, and
+        # self.scheduler_freq is how frequently it gets called. These need to
+        # be set before anything is scheduled (like the repeated events).
+        self.scheduler = None
+        self.scheduler_freq = -1
 
         # Add regular cron.hourly/daily/weekly events which
         # plugins can listen to. Unfortunately LoopingCall can't
@@ -60,22 +80,22 @@ class Cron(Plugin):
 
         self.schedule('cron.hourly-init',
                       when + timedelta(hours=1),
-                      lambda t: self.setup_regular('cron.hourly',
-                                                   timedelta(hours=1)))
+                      'cron', 'setup_regular',
+                      args=['cron.hourly', timedelta(hours=1)])
 
         when -= timedelta(hours=now.hour)
         self.schedule('cron.daily-init',
                       when + timedelta(days=1),
-                      lambda t: self.setup_regular('cron.daily',
-                                                   timedelta(days=1)))
+                      'cron', 'setup_regular',
+                      args=['cron.daily', timedelta(days=1)])
 
         when -= timedelta(days=now.weekday())
         self.schedule('cron.weekly-init',
                       when + timedelta(weeks=1),
-                      lambda t: self.setup_regular('cron.weekly',
-                                                   timedelta(weeks=1)))
+                      'cron', 'setup_regular',
+                      args=['cron.weekly', timedelta(weeks=1)])
 
-    def setup_regular(self, name, tdelta):
+    def setup_regular(self, now, name, tdelta):
         """
         Set up a recurring event: hourly, daily, weekly, etc. This should be
         called at the first time such an event should be sent.
@@ -94,12 +114,16 @@ class Cron(Plugin):
 
     def get_cron(self, plugin):
         """
-        Return the crond for the given plugin
+        Return the crond for the given plugin, and save a reference to the
+        plugin so it can be used by scheduled tasks,
         """
 
+        self.plugins[plugin.plugin_name()] = plugin
         return PluginCron(self, plugin)
 
-    def schedule(self, name, delay, callback, repeat=False):
+    def schedule(self, name, delay, plugin_name, method_name,
+                 args=[], kwargs={},
+                 repeating=False):
         """
         Schedule a new callback, the "delay" is a timedelta.
 
@@ -110,22 +134,27 @@ class Cron(Plugin):
         if name in self.tasks:
             raise DuplicateNameException(name)
 
-        seconds = delay.total_seconds()
-        callback = self._runcb(name, callback, datetime.now() + delay, repeat)
+        # Create the new task
+        self.tasks[name] = Task(time=datetime.now() + delay,
+                                delay=delay,
+                                plugin_name=plugin_name,
+                                method_name=method_name,
+                                args=args,
+                                kwargs=kwargs,
+                                repeating=repeating)
 
-        if repeat:
-            task_id = task.LoopingCall(callback)
-            task_id.start(seconds)
-            self.repeating[name] = {'last': datetime.now(),
-                                    'delay': delay}
-        else:
-            task_id = reactor.callLater(seconds, callback)
-
-        self.tasks[name] = task_id
+        # Call the scheduler immediately, as it may now need to be called
+        # sooner than it had planned.
+        self.event_runner()
 
     def unschedule(self, name):
         """
         Unschedule a named callback.
+
+        This could result in the scheduler having nothing to do in its next
+        call, but this isn't a problem as it's not a very intensive function
+        (unless there is a *lot* scheduled), so there's no point in
+        rescheduling it here.
         """
 
         if name in self.tasks:
@@ -135,30 +164,65 @@ class Cron(Plugin):
         if name in self.repeating:
             del self.repeating[name]
 
-    def _runcb(self, name, cb, now, repeating=False):
+    def event_runner(self):
         """
-        Return a function to run a callback, and remove it from the tasks dict.
+        Run all tasks which have a trigger time in the past, and then
+        reschedule self to run in time for the next task.
         """
 
-        def run():
-            self.log.info(u'Running callback {} {}'.format(name, cb))
+        now = datetime.now()
 
-            if repeating:
-                self.repeating[name]['last'] += self.repeating[name]['delay']
-                now = self.repeating[name]
+        # Firstly find the tasks which happen <= now
+        to_run = {}
+
+        for name, taskdef in self.tasks.items():
+            if taskdef.time <= now:
+                to_run[name] = taskdef
+
+        # Then run each task
+        for taskdef in to_run:
+            self.log.info(u'Running callback {}'.format(taskdef.name))
+
+            run_time = taskdef.time
+
+            func = getattr(
+                self.plugins[taskdef.plugin_name],
+                taskdef.method_name)
 
             try:
-                cb(now)
+                func(run_time, *taskdef.args, **taskdef.kwargs)
             except:
+                # Don't really want exceptions to kill cron, so let's just log
+                # them as an error.
                 exctype, value = sys.exc_info()[:2]
                 self.log.error(
                     u'Exception raised when running callback {}: {} {}'.format(
-                        name, exctype, value))
+                        taskdef.name, exctype, value))
             finally:
-                if not repeating:
-                    del self.tasks[name]
+                # If the task is repeating we update its call time, otherwise
+                # we drop it from the scheduler.
+                if taskdef.repeating:
+                    taskdef.time += taskdef.delay
+                else:
+                    del self.tasks[taskdef.name]
 
-        return run
+        # Schedule the event runner to happen no sooner than is required by the
+        # next scheduled task.
+        next_run = now + timedelta(days=100)
+
+        for taskdef in self.tasks.values():
+            if taskdef.time < next_run:
+                next_run = taskdef.time
+
+        freq = (next_run - now).total_seconds()
+
+        if freq < self.scheduler_freq or self.scheduler is None:
+            if self.scheduler is not None:
+                self.scheduler.stop()
+
+            self.scheduler = task.LoopingCall(self.event_runner)
+            self.scheduler.start(freq, now=False)
+            self.scheduler_freq = freq
 
 
 class DuplicateNameException(Exception):
@@ -174,30 +238,36 @@ class PluginCron(object):
     """
     An iterface to the cron methods restricted to the view of one named plugin.
 
-    All of the scheduling functions have a signature of the form
-    (time, callback, name). The time is either a delay (as a timedelta) or an
-    absolute time (as a datetime), the callback is the function to call then,
-    and the name is an optional name which can be used to remove a callback
-    before it is fired.
+    How scheduling works:
 
-    These functions will raise a DuplicateNameException if you try to schedule
-    two events with the same name.
+        All of the scheduling functions have a signature of the form
+        (name, time, method_name, *args, **kwargs).
+
+        This means that at the appropriate time, the method plugin.method_name
+        will be called with the arguments (time, *args, **kwargs), where the
+        time argument is the time it was supposed to be run by the scheduler
+        (which may not be identical to teh actual time it is run).
+
+        These functions will raise a DuplicateNameException if you try to
+        schedule two events with the same name.
     """
 
     def __init__(self, cron, plugin):
         self.cron = cron
         self.plugin = plugin.plugin_name()
 
-    def after(self, name, delay, callback):
+    def after(self, name, delay, method_name, *args, **kwargs):
         """
         Schedule an event to occur after the timedelta delay has passed.
         """
 
         name = '{}.{}'.format(self.plugin, name)
 
-        self.cron.schedule(name, delay, callback)
+        self.cron.schedule(name, delay,
+                           self.plugin, method_name,
+                           args, kwargs)
 
-    def at(self, name, when, callback):
+    def at(self, name, when, method_name, *args, **kwargs):
         """
         Schedule an event to occur at a given time.
         """
@@ -205,9 +275,11 @@ class PluginCron(object):
         name = '{}.{}'.format(self.plugin, name)
         delay = when - datetime.now()
 
-        self.cron.schedule(name, delay, callback)
+        self.cron.schedule(name, delay,
+                           self.plugin, method_name,
+                           args, kwargs)
 
-    def every(self, name, freq, callback):
+    def every(self, name, freq, method_name, *args, **kwargs):
         """
         Schedule an event to occur every time the delay passes, starting
         immediately.
@@ -215,7 +287,10 @@ class PluginCron(object):
 
         name = '{}.{}'.format(self.plugin, name)
 
-        self.cron.schedule(name, freq, callback, repeat=True)
+        self.cron.schedule(name, freq,
+                           self.plugin, method_name,
+                           args, kwargs,
+                           repeating=True)
 
     def unschedule(self, name):
         """
