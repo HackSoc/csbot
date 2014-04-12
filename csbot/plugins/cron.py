@@ -110,7 +110,8 @@ class Cron(Plugin):
         The name, if given, can be used to remove a callback. Names must be
         unique.
 
-        True is returned if the event was scheduled, False otherwise.
+        This will raise a DuplicateNameException if the name is already in use
+        by the given plugin.
         """
 
         # Create the empty plugin schedule if it doesn't exist
@@ -118,7 +119,7 @@ class Cron(Plugin):
             self.tasks[plugin] = {}
 
         if name is not None and name in self.tasks[plugin]:
-            return False
+            raise DuplicateNameException('{}.{} in use.'.format(plugin, name))
 
         seconds = delay.total_seconds()
         callback = self._runcb(plugin, name, callback, unschedule=not repeat)
@@ -131,8 +132,6 @@ class Cron(Plugin):
 
         if name is not None:
             self.tasks[plugin][name] = task_id
-
-        return True
 
     def unschedule(self, plugin, name):
         """
@@ -167,6 +166,15 @@ class Cron(Plugin):
         return run
 
 
+class DuplicateNameException(Exception):
+    """
+    This can be raised by Cron::schedule if a plugin tries to register two
+    events with the same name.
+    """
+
+    pass
+
+
 class PluginCron(object):
     """
     An iterface to the cron methods restricted to the view of one named plugin.
@@ -176,6 +184,9 @@ class PluginCron(object):
     absolute time (as a datetime), the callback is the function to call then,
     and the name is an optional name which can be used to remove a callback
     before it is fired.
+
+    These functions will raise a DuplicateNameException if you try to schedule
+    two events with the same name.
     """
 
     def __init__(self, cron, plugin):
@@ -208,6 +219,7 @@ class PluginCron(object):
     def unschedule(self, name):
         """
         Unschedule a named event which hasn't yet happened.
+        If the name doesn't exist, nothing happens.
         """
 
         self.cron.unschedule(self.plugin, name)
