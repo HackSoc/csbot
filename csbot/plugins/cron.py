@@ -115,8 +115,12 @@ class Cron(Plugin):
         If there were tasks in the database before, overwrite them.
         """
 
+        tasks = {name: taskdef
+                 for name, taskdef in self.tasks.items()
+                 if name not in ['cron.hourly', 'cron.daily', 'cron.weekly']}
+
         self.db.tasks.save({u'_id':   self.tasks_id,
-                            u'tasks': self.tasks})
+                            u'tasks': tasks})
 
     def setup_regular(self, now, name, tdelta):
         """
