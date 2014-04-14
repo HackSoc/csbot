@@ -187,6 +187,18 @@ class Cron(Plugin):
         for taskdef in self.tasks.find({'time': {'$lt': now}}):
             self.log.info(u'Running callback {}'.format(taskdef['name']))
 
+            # Now that we have the task, we need to remove it from the
+            # database (or reschedule it for the future) straight
+            # away, as if it schedules things itself, the scheduler
+            # will be called again, but the task will still be there
+            # (and so be run again), resulting in an error when it
+            # tries to schedule the second time.
+            if taskdef['repeating']:
+                taskdef['time'] += timedelta(seconds=taskdef['delay'])
+                self.tasks.save(taskdef)
+            else:
+                self.unschedule(taskdef['name'])
+
             # There are two things that could go wrong in running a
             # task. The method might not exist, this can arise in two
             # ways: a plugin scheduled it in a prior incarnation of
@@ -227,14 +239,6 @@ class Cron(Plugin):
                 self.log.error(
                     u'Exception raised when running callback {}: {} {}'.format(
                         taskdef['name'], exctype, value))
-            finally:
-                # If the task is repeating we update its call time, otherwise
-                # we drop it from the scheduler.
-                if taskdef['repeating']:
-                    taskdef['time'] += timedelta(seconds=taskdef['delay'])
-                    self.tasks.save(taskdef)
-                else:
-                    self.unschedule(taskdef['name'])
 
         # Schedule the event runner to happen no sooner than is required by the
         # next scheduled task.
