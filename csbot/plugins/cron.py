@@ -151,7 +151,8 @@ class Cron(Plugin):
             raise DuplicateNameException(name)
 
         # Create the new task
-        self.tasks.insert({'time': datetime.now() + delay,
+        self.tasks.insert({'name': name,
+                           'time': datetime.now() + delay,
                            'delay': delay.total_seconds(),
                            'plugin_name': plugin_name,
                            'method_name': method_name,
