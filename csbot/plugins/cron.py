@@ -177,11 +177,8 @@ class Cron(Plugin):
 
         now = datetime.now()
 
-        # Firstly find the tasks which happen <= now
-        to_run = self.tasks.find({'time': {'$lt': now}})
-
-        # Then run each task
-        for taskdef in to_run:
+        # Find and run every task from before now
+        for taskdef in self.tasks.find({'time': {'$lt': now}}):
             self.log.info(u'Running callback {}'.format(taskdef['name']))
 
             run_time = taskdef['time']
@@ -218,15 +215,24 @@ class Cron(Plugin):
 
         # Schedule the event runner to happen no sooner than is required by the
         # next scheduled task.
-        next_run = now + timedelta(days=100)
-
+        #
+        # There will always be at least one event remaining because we
+        # have three repeating ones, so this is safe.
         remaining_tasks = self.tasks.find().sort('time', pymongo.ASCENDING)
-        if remaining_tasks.count() >= 1:
-            next_run = remaining_tasks[0]['time']
+        next_run = remaining_tasks[0]['time']
 
+        # We use a looping call for the scheduler, rather than a
+        # deferred task, because the expected behaviour is that cron
+        # won't actually have that much to do. In fact, it wouldn't
+        # surprise me if the most frequent events were the cron.hourly
+        # ones. As it's likely that cron will end up running at a
+        # mostly constant frequency anyway, using a looping call is
+        # less work compared to rescheduling it every single time.
         freq = (next_run - now).total_seconds()
 
-        if freq < self.scheduler_freq or self.scheduler is None:
+        if freq != self.scheduler_freq:
+            # The first time this runs we won't actually have a
+            # scheduler handle, so we have to check.
             if self.scheduler is not None:
                 self.scheduler.stop()
 
