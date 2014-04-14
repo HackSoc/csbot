@@ -269,7 +269,8 @@ class DuplicateNameException(Exception):
 
 class PluginCron(object):
     """
-    An iterface to the cron methods restricted to the view of one named plugin.
+    An interface to the cron methods restricted to the view of one named
+    plugin.
 
     How scheduling works:
 
