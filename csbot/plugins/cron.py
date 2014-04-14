@@ -181,8 +181,18 @@ class Cron(Plugin):
         for taskdef in self.tasks.find({'time': {'$lt': now}}):
             self.log.info(u'Running callback {}'.format(taskdef['name']))
 
-            run_time = taskdef['time']
-
+            # There are two things that could go wrong in running a
+            # task. The method might not exist, this can arise in two
+            # ways: a plugin scheduled it in a prior incarnation of
+            # the bot, and then didn't register itself with cron on
+            # this run, resulting in there being no entry in
+            # self.plugins, or it could have just provided a bad
+            # method name.
+            #
+            # There is clearly no way to recover from this with any
+            # degree of certainty, so we just drop it from the
+            # database to prevent an error cropping up every time it
+            # gets run.
             try:
                 func = getattr(
                     self.plugins[taskdef['plugin_name']],
@@ -195,8 +205,15 @@ class Cron(Plugin):
                 self.unschedule(taskdef['name'])
                 continue
 
+            # The second way is if the method does exist, but raises
+            # an exception during its execution. There are two ways to
+            # handle this. We could let the exception propagate
+            # upwards and outwards, killing the bot, or we could log
+            # it as an error and carry on. I went for the latter here,
+            # on the assumption that, whilst exceptions are bad and
+            # shouldn't get this far anyway, killing the bot is worse.
             try:
-                func(run_time, *taskdef['args'], **taskdef['kwargs'])
+                func(taskdef['time'], *taskdef['args'], **taskdef['kwargs'])
             except:
                 # Don't really want exceptions to kill cron, so let's just log
                 # them as an error.
