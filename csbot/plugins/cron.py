@@ -32,7 +32,10 @@ class Cron(Plugin):
                 self.cron.after(
                     "hello world",
                     datetime.timedelta(days=1),
-                    lambda when: print "I was called at " + repr(when))
+                    "callback")
+
+            def callback(self, when):
+                self.log.info(u'I got called at {}'.format(when))
 
             @Plugin.hook('cron.hourly')
             def hourlyevent(self, e):
@@ -59,10 +62,11 @@ class Cron(Plugin):
         # Now we need to remove the hourly, daily, and weekly events
         # (if there are any), because the scheduler just runs things
         # when their time has passed, but for these we want to run
-        # them as close to the correct time as possible.
+        # them as close to the correct time as possible, so running a
+        # past event is useless for our purposes.
         #
-        # Sadly this can't happen in the teardown, as we this even if
-        # the bot crashes unexpectedly.
+        # Sadly this can't happen in the teardown, as we want to do
+        # this even if the bot crashes unexpectedly.
         self.tasks.remove({'name': 'cron.hourly-init'})
         self.tasks.remove({'name': 'cron.daily-init'})
         self.tasks.remove({'name': 'cron.weekly-init'})
@@ -122,7 +126,7 @@ class Cron(Plugin):
     def get_cron(self, plugin):
         """
         Return the crond for the given plugin, and save a reference to the
-        plugin so it can be used by scheduled tasks,
+        plugin so it can be used by scheduled tasks.
         """
 
         self.plugins[plugin.plugin_name()] = plugin
@@ -159,9 +163,8 @@ class Cron(Plugin):
         Unschedule a named callback.
 
         This could result in the scheduler having nothing to do in its next
-        call, but this isn't a problem as it's not a very intensive function
-        (unless there is a *lot* scheduled), so there's no point in
-        rescheduling it here.
+        call, but this isn't a problem as it's not a very intensive function,
+        so there's no point in rescheduling it here.
         """
 
         self.tasks.remove({'name': name})
