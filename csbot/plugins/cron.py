@@ -112,16 +112,25 @@ class Cron(Plugin):
         called at the first time such an event should be sent.
         """
 
-        self.log.info(u'Registering repeating event {}'.format(name))
-
-        func = lambda t: self.bot.post_event(Event(None, name))
+        self.log.info(u'Registering regular event {}'.format(name))
 
         # Schedule the recurring event
-        self.schedule(name, timedelta(seconds=tdelta), func, repeat=True)
+        self.schedule(name,
+                      timedelta(seconds=tdelta),
+                      'cron', 'fire_regular',
+                      args=['name'])
 
         # Call it now
-        self.log.info(u'Running initial repeating event {}.'.format(name))
-        func(datetime.now())
+        self.log.info(u'Running initial regular event {}.'.format(name))
+        self.fire_regular(datetime.now(), name)
+
+    def fire_regular(self, now, name):
+        """
+        Fire off a regular event. This gets called by the scheduler at the
+        appropriate time.
+        """
+
+        self.bot.post_event(Event(None, name))
 
     def get_cron(self, plugin):
         """
