@@ -67,7 +67,7 @@ class Cron(Plugin):
         #
         # Sadly this can't happen in the teardown, as we want to do
         # this even if the bot crashes unexpectedly.
-        self.tasks.remove({'name': {'$regex': '/^cron\..*/'}})
+        self.tasks.remove({'name': {'$regex': r'cron\..*'}})
 
         # Add regular cron.hourly/daily/weekly events which plugins
         # can listen to. Unfortunately the scheduler can't handle
