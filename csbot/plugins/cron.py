@@ -2,21 +2,8 @@ from csbot.plugin import Plugin
 from csbot.events import Event
 from twisted.internet import task
 from datetime import datetime, timedelta
-from collections import namedtuple
+import pymongo
 import sys
-
-# A Task is the data structure used to represent a scheduled event. These can
-# be nicely serialised and stored in the database, so all is good.
-# - time: when the task is to be run
-# - delay: the delay before running it again (if repeating)
-# - plugin_name: the name of the plugin that registered it
-# - method_name: the name of the method on the plugin it should call
-# - args, kwargs: arguments to pass the callback method
-# - repeating: whether it is repeating or not
-Task = namedtuple('Task', ['time', 'delay',
-                           'plugin_name', 'method_name',
-                           'args', 'kwargs',
-                           'repeating'])
 
 
 class Cron(Plugin):
@@ -55,20 +42,10 @@ class Cron(Plugin):
     @Plugin.integrate_with('mongodb')
     def _get_db(self, mongodb):
         self.db = mongodb.get_db(self.plugin_name())
+        self.tasks = self.db.tasks
 
     def setup(self):
         super(Cron, self).setup()
-
-        # self.tasks is a map name -> Task
-        # If there are tasks in the database, pull them out. Otherwise insert
-        # the empty tasks dict so we get an ID to use for future writes.
-        if self.db.tasks.find_one():
-            tasks = self.db.tasks.find_one()
-            self.tasks = tasks[u'tasks']
-            self.tasks_id = tasks[u'_id']
-        else:
-            self.tasks = {}
-            self.tasks_id = self.db.tasks.insert({u'tasks': self.tasks})
 
         # self.plugins is a map plugin name -> plugin instance
         self.plugins = {'cron': self}
@@ -79,12 +56,30 @@ class Cron(Plugin):
         self.scheduler = None
         self.scheduler_freq = -1
 
-        # Add regular cron.hourly/daily/weekly events which
-        # plugins can listen to. Unfortunately LoopingCall can't
-        # handle things like "run this every hour, starting in x
-        # seconds", which is what we need, so I handle this by having
-        # a seperate set-up method for the recurring events which
-        # isn't called until the first time they should run.
+        # Now we need to remove the hourly, daily, and weekly events
+        # (if there are any), because the scheduler just runs things
+        # when their time has passed, but for these we want to run
+        # them as close to the correct time as possible.
+        #
+        # Sadly this can't happen in the teardown, as we this even if
+        # the bot crashes unexpectedly.
+        self.tasks.remove({'name': 'cron.hourly-init'})
+        self.tasks.remove({'name': 'cron.daily-init'})
+        self.tasks.remove({'name': 'cron.weekly-init'})
+        self.tasks.remove({'name': 'cron.hourly'})
+        self.tasks.remove({'name': 'cron.daily'})
+        self.tasks.remove({'name': 'cron.weekly'})
+
+        # Add regular cron.hourly/daily/weekly events which plugins
+        # can listen to. Unfortunately the scheduler can't handle
+        # things like "run this every hour, starting in x seconds",
+        # which is what we need, so I handle this by having a seperate
+        # set-up method for the recurring events which isn't called
+        # until the first time they should run.
+        #
+        # Arguably the scheduler should support this directly, but I
+        # think it's a bit of a niche use case, and it adds
+        # complexity, so I decided to leave it out.
         now = datetime.now()
         when = -timedelta(minutes=now.minute,
                           seconds=now.second,
@@ -93,34 +88,19 @@ class Cron(Plugin):
         self.schedule('cron.hourly-init',
                       when + timedelta(hours=1),
                       'cron', 'setup_regular',
-                      args=['cron.hourly', timedelta(hours=1)])
+                      args=['cron.hourly', timedelta(hours=1).total_seconds()])
 
         when -= timedelta(hours=now.hour)
         self.schedule('cron.daily-init',
                       when + timedelta(days=1),
                       'cron', 'setup_regular',
-                      args=['cron.daily', timedelta(days=1)])
+                      args=['cron.daily', timedelta(days=1).total_seconds()])
 
         when -= timedelta(days=now.weekday())
         self.schedule('cron.weekly-init',
                       when + timedelta(weeks=1),
                       'cron', 'setup_regular',
-                      args=['cron.weekly', timedelta(weeks=1)])
-
-    def teardown(self):
-        """
-        Save all the tasks (other than hourly/daily/weekly as there is no
-        point) which haven't yet run to the database.
-
-        If there were tasks in the database before, overwrite them.
-        """
-
-        tasks = {name: taskdef
-                 for name, taskdef in self.tasks.items()
-                 if name not in ['cron.hourly', 'cron.daily', 'cron.weekly']}
-
-        self.db.tasks.save({u'_id':   self.tasks_id,
-                            u'tasks': tasks})
+                      args=['cron.weekly', timedelta(weeks=1).total_seconds()])
 
     def setup_regular(self, now, name, tdelta):
         """
@@ -133,7 +113,7 @@ class Cron(Plugin):
         func = lambda t: self.bot.post_event(Event(None, name))
 
         # Schedule the recurring event
-        self.schedule(name, tdelta, func, repeat=True)
+        self.schedule(name, timedelta(seconds=tdelta), func, repeat=True)
 
         # Call it now
         self.log.info(u'Running initial repeating event {}.'.format(name))
@@ -158,17 +138,17 @@ class Cron(Plugin):
         otherwise a DuplicateNameException will be raised.
         """
 
-        if name in self.tasks:
+        if self.tasks.find_one({'name': name}):
             raise DuplicateNameException(name)
 
         # Create the new task
-        self.tasks[name] = Task(time=datetime.now() + delay,
-                                delay=delay,
-                                plugin_name=plugin_name,
-                                method_name=method_name,
-                                args=args,
-                                kwargs=kwargs,
-                                repeating=repeating)
+        self.tasks.insert({'time': datetime.now() + delay,
+                           'delay': delay.total_seconds(),
+                           'plugin_name': plugin_name,
+                           'method_name': method_name,
+                           'args': args,
+                           'kwargs': kwargs,
+                           'repeating': repeating})
 
         # Call the scheduler immediately, as it may now need to be called
         # sooner than it had planned.
@@ -184,12 +164,7 @@ class Cron(Plugin):
         rescheduling it here.
         """
 
-        if name in self.tasks:
-            self.tasks[name].cancel()
-            del self.tasks[name]
-
-        if name in self.repeating:
-            del self.repeating[name]
+        self.tasks.remove({'name': name})
 
     def event_runner(self):
         """
@@ -200,54 +175,51 @@ class Cron(Plugin):
         now = datetime.now()
 
         # Firstly find the tasks which happen <= now
-        to_run = {}
-
-        for name, taskdef in self.tasks.items():
-            if taskdef.time <= now:
-                to_run[name] = taskdef
+        to_run = self.tasks.find({'time': {'$lt': now}})
 
         # Then run each task
         for taskdef in to_run:
-            self.log.info(u'Running callback {}'.format(taskdef.name))
+            self.log.info(u'Running callback {}'.format(taskdef['name']))
 
-            run_time = taskdef.time
+            run_time = taskdef['time']
 
             try:
                 func = getattr(
-                    self.plugins[taskdef.plugin_name],
-                    taskdef.method_name)
+                    self.plugins[taskdef['plugin_name']],
+                    taskdef['method_name'])
             except:
                 self.log.error(
                     u'Couldn\'t find method {}.{} for callback {}'.format(
-                        taskdef.plugin_name, taskdef.method_name,
-                        taskdef.name))
-                del self.tasks[taskdef.name]
+                        taskdef['plugin_name'], taskdef['method_name'],
+                        taskdef['name']))
+                self.unschedule(taskdef['name'])
                 continue
 
             try:
-                func(run_time, *taskdef.args, **taskdef.kwargs)
+                func(run_time, *taskdef['args'], **taskdef['kwargs'])
             except:
                 # Don't really want exceptions to kill cron, so let's just log
                 # them as an error.
                 exctype, value = sys.exc_info()[:2]
                 self.log.error(
                     u'Exception raised when running callback {}: {} {}'.format(
-                        taskdef.name, exctype, value))
+                        taskdef['name'], exctype, value))
             finally:
                 # If the task is repeating we update its call time, otherwise
                 # we drop it from the scheduler.
-                if taskdef.repeating:
-                    taskdef.time += taskdef.delay
+                if taskdef['repeating']:
+                    taskdef['time'] += timedelta(seconds=taskdef['delay'])
+                    self.tasks.save(taskdef)
                 else:
-                    del self.tasks[taskdef.name]
+                    self.unschedule(taskdef['name'])
 
         # Schedule the event runner to happen no sooner than is required by the
         # next scheduled task.
         next_run = now + timedelta(days=100)
 
-        for taskdef in self.tasks.values():
-            if taskdef.time < next_run:
-                next_run = taskdef.time
+        remaining_tasks = self.tasks.find().sort('time', pymongo.ASCENDING)
+        if remaining_tasks.count() >= 1:
+            next_run = remaining_tasks[0]['time']
 
         freq = (next_run - now).total_seconds()
 
