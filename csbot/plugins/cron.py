@@ -113,7 +113,7 @@ class Cron(Plugin):
         self.schedule(name,
                       timedelta(seconds=tdelta),
                       'cron', 'fire_regular',
-                      args=['name'],
+                      args=[name],
                       repeating=True)
 
         # Call it now
