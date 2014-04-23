@@ -9,6 +9,7 @@ import lxml.etree
 import lxml.html
 
 from csbot.plugin import Plugin
+from csbot.util import simple_http_get
 
 
 class LinkInfo(Plugin):
@@ -153,7 +154,7 @@ class LinkInfo(Plugin):
         """Scrape the ``<title>`` tag contents from an HTML page.
         """
         # Let's see what's on the other end...
-        r = requests.get(url.geturl(), verify=False)
+        r = simple_http_get(url.geturl())
         # Only bother with 200 OK
         if r.status_code != requests.codes.ok:
             self.log.debug(u'request failed for ' + url.geturl())

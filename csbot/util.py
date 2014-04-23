@@ -1,5 +1,7 @@
 import shlex
 
+import requests
+
 
 class User(object):
     def __init__(self, raw):
@@ -76,3 +78,14 @@ def parse_arguments(raw):
     lex.quotes = '"'
     # Parse the string
     return list(lex)
+
+
+def simple_http_get(url):
+    """A deliberately dumb wrapper around :func:`requests.get`.
+
+    This should be used for the vast majority of HTTP GET requests.  It turns
+    off SSL certificate verification and sets a non-default User-Agent, thereby
+    succeeding at most "just get the content" requests.
+    """
+    headers = {'User-Agent': 'csbot/0.1'}
+    return requests.get(url, verify=False, headers=headers)
