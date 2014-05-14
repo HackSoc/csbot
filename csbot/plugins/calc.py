@@ -45,6 +45,9 @@ class Calc(Plugin):
         Start the calculation, and handle any exceptions.
         Returns a string of the answer.
         """
+
+        if not calc_str:
+            return "You want to calculate something? Type in an expression then, silly!"
         try:
             return str(calc_eval(ast.parse(calc_str).body[0].value))
         except ValueError as ex:
