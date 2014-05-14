@@ -19,8 +19,8 @@ class TestCalcPlugin(BotTestCase):
     def test_error(self):
         self.assertEqual(self.calc._calc("999**999"), "Error, 999**999 is too big")
         self.assertEqual(self.calc._calc("1 / 0"), "Silly, you cannot divide by 0")
-        self.assertEqual(self.calc._calc("pi + 3"), "You cannot use mathematical constants yet")
-        self.assertEqual(self.calc._calc("1 + "), "Error, \"1 +\" is not a valid calculation")
+        self.assertEqual(self.calc._calc("pi + 3"), "No constants or variables allowed")
+        self.assertEqual(self.calc._calc("1 + "), "Error, \"1 + \" is not a valid calculation")
 
 
 

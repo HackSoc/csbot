@@ -56,7 +56,7 @@ class Calc(Plugin):
         except ZeroDivisionError:  # "1 / 0"
             return "Silly, you cannot divide by 0"
         except NotImplementedError:  # "pi + 3"
-            return "You cannot yet use mathematical constants"
+            return "No constants or variables allowed"
         except (TypeError, SyntaxError):  # "1 +"
             return "Error, \"{}\" is not a valid calculation".format(calc_str)
 
