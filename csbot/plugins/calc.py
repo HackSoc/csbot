@@ -50,7 +50,7 @@ class Calc(Plugin):
         Ask and you shall recieve.
         """
         try:
-            answer = self._calc(e["message"])
+            answer = self._calc(e["data"])
         except TypeError:
             answer = "Invalid calculation!"
         except ValueError:
