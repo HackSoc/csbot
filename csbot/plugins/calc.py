@@ -49,6 +49,11 @@ class Calc(Plugin):
         """
         Ask and you shall recieve.
         """
-        answer = self._calc(e["message"])
-        e.protocol.msg(e["reply_to"],
-                       str(answer))
+        try:
+            answer = self._calc(e["message"])
+        except TypeError:
+            answer = "Invalid calculation!"
+        except ValueError:
+            answer = "Too many powers!"
+        finally:
+            e.protocol.msg(e["reply_to"], str(answer))
