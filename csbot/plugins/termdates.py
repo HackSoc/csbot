@@ -135,7 +135,7 @@ class TermDates(Plugin):
             self.DATE_FORMAT)
 
     @Plugin.command('termdates.set',
-                    help='termdates.set <sur> <spr> <sum>: set the term dates')
+                    help='termdates.set <aut> <spr> <sum>: set the term dates')
     def termdates_set(self, e):
         dates = e['data'].split()
 
