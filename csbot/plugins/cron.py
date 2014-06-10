@@ -49,9 +49,6 @@ class Cron(Plugin):
     def setup(self):
         super(Cron, self).setup()
 
-        # self.plugins is a map plugin name -> plugin instance
-        self.plugins = {'cron': self}
-
         # self.scheduler is a handle to the scheduler repeating task, and
         # self.scheduler_freq is how frequently it gets called. These need to
         # be set before anything is scheduled (like the repeated events).
@@ -212,7 +209,7 @@ class Cron(Plugin):
             # gets run.
             try:
                 func = getattr(
-                    self.plugins[taskdef['plugin_name']],
+                    self.bot.plugins[taskdef['plugin_name']],
                     taskdef['method_name'])
             except AttributeError:
                 self.log.error(
