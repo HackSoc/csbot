@@ -3,7 +3,6 @@ from csbot.events import Event
 from twisted.internet import task
 from datetime import datetime, timedelta
 import pymongo
-import sys
 
 
 class Cron(Plugin):
@@ -232,13 +231,13 @@ class Cron(Plugin):
             # shouldn't get this far anyway, killing the bot is worse.
             try:
                 func(taskdef['time'], *taskdef['args'], **taskdef['kwargs'])
-            except:
+            except Exception as e:
                 # Don't really want exceptions to kill cron, so let's just log
                 # them as an error.
-                exctype, value = sys.exc_info()[:2]
+
                 self.log.error(
                     u'Exception raised when running callback {}: {} {}'.format(
-                        taskdef['name'], exctype, value))
+                        taskdef['name'], type(e), e.args))
 
         # Schedule the event runner to happen no sooner than is required by the
         # next scheduled task.
