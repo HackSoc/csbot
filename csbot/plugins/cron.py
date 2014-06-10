@@ -214,7 +214,7 @@ class Cron(Plugin):
                 func = getattr(
                     self.plugins[taskdef['plugin_name']],
                     taskdef['method_name'])
-            except:
+            except AttributeError:
                 self.log.error(
                     u'Couldn\'t find method {}.{} for callback {}'.format(
                         taskdef['plugin_name'], taskdef['method_name'],
