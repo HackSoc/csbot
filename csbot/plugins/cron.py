@@ -20,11 +20,7 @@ class Cron(Plugin):
     Example of usage:
 
         class MyPlugin(Plugin):
-            PLUGIN_DEPENDS = ['cron']
-
-            @Plugin.integrate_with('cron')
-            def _get_cron(self, cron):
-                self.cron = cron.get_cron(self)
+            cron = Plugin.use('cron')
 
             def setup(self):
                 ...
@@ -40,11 +36,7 @@ class Cron(Plugin):
             def hourlyevent(self, e):
                 self.log.info(u'An hour has passed')
     """
-
-    @Plugin.integrate_with('mongodb')
-    def _get_db(self, mongodb):
-        self.db = mongodb.get_db(self.plugin_name())
-        self.tasks = self.db.tasks
+    tasks = Plugin.use('mongodb', collection='tasks')
 
     def setup(self):
         super(Cron, self).setup()
@@ -103,13 +95,11 @@ class Cron(Plugin):
 
         self.bot.post_event(Event(None, name))
 
-    def get_cron(self, plugin):
+    def provide(self, plugin_name):
         """
-        Return the crond for the given plugin, and save a reference to the
-        plugin so it can be used by scheduled tasks.
+        Return the crond for the given plugin,
         """
-
-        return PluginCron(self, plugin)
+        return PluginCron(self, plugin_name)
 
     def schedule(self, owner, name, when,
                  interval=None, callback=None,
@@ -291,7 +281,7 @@ class PluginCron(object):
 
     def __init__(self, cron, plugin):
         self.cron = cron
-        self.plugin = plugin.plugin_name()
+        self.plugin = plugin
 
     def after(self, name, delay, method_name, *args, **kwargs):
         """
@@ -311,7 +301,7 @@ class PluginCron(object):
 
         self.cron.schedule(self.plugin, name,
                            when,
-                           callback=methhod_name,
+                           callback=method_name,
                            args=args,
                            kwargs=kwargs)
 
