@@ -88,23 +88,18 @@ class Cron(Plugin):
                            args=['cron.weekly'])
 
     def fire_event(self, now, name):
-        """
-        Fire off a regular event. This gets called by the scheduler at the
-        appropriate time.
-        """
+        """Fire off a regular event.
 
+        This gets called by the scheduler at the appropriate time.
+        """
         self.bot.post_event(Event(None, name))
 
     def provide(self, plugin_name):
-        """
-        Return the crond for the given plugin,
-        """
+        """Return the crond for the given plugin."""
         return PluginCron(self, plugin_name)
 
     def match_task(self, owner, name=None, args=None, kwargs=None):
-        """
-        Create a MongoDB search for a task definition.
-        """
+        """Create a MongoDB search for a task definition."""
         matcher = {'owner': owner}
         if name is not None:
             matcher['name'] = name
@@ -117,8 +112,7 @@ class Cron(Plugin):
     def schedule(self, owner, name, when,
                  interval=None, callback=None,
                  args=None, kwargs=None):
-        """
-        Schedule a new task.
+        """Schedule a new task.
 
         :param owner:    The plugin which created the task
         :param name:     The name of the task
@@ -136,7 +130,6 @@ class Cron(Plugin):
         :exc:`DuplicateTaskError`.  Any subset of the signature can be used to
         :meth:`unschedule` all matching tasks (``owner`` is mandatory).
         """
-
         # Create the new task
         secs = interval.total_seconds() if interval is not None else None
         task = {'owner': owner,
@@ -161,8 +154,7 @@ class Cron(Plugin):
         self.event_runner()
 
     def unschedule(self, owner, name=None, args=None, kwargs=None):
-        """
-        Unschedule a task.
+        """Unschedule a task.
 
         Removes all existing tasks that match based on the criteria passed as
         arguments (see :meth:`match_task`).
@@ -171,15 +163,14 @@ class Cron(Plugin):
         call, but this isn't a problem as it's not a very intensive function,
         so there's no point in rescheduling it here.
         """
-
         self.tasks.remove(self.match_task(owner, name, args, kwargs))
 
     def event_runner(self):
-        """
+        """Run pending tasks.
+
         Run all tasks which have a trigger time in the past, and then
         reschedule self to run in time for the next task.
         """
-
         now = datetime.now()
 
         # Find and run every task from before now
@@ -273,49 +264,41 @@ class Cron(Plugin):
 
 
 class DuplicateTaskError(Exception):
-    """
-    This can be raised by Cron::schedule if a plugin tries to register two
-    events with the same name.
-    """
+    """Task with a given signature already exists.
 
+    This can be raised by :meth:`Cron.schedule` if a plugin tries to register
+    two events with the same name.
+    """
     pass
 
 
 class PluginCron(object):
+    """Interface to the cron methods restricted to *plugin* as the task owner..
+
+    How scheduling works
+    --------------------
+
+    All of the scheduling functions have a signature of the form
+    (name, time, method_name, *args, **kwargs).
+
+    This means that at the appropriate time, the method plugin.method_name
+    will be called with the arguments (time, *args, **kwargs), where the
+    time argument is the time it was supposed to be run by the scheduler
+    (which may not be identical to teh actual time it is run).
+
+    These functions will raise a DuplicateNameException if you try to
+    schedule two events with the same name.
     """
-    An interface to the cron methods restricted to the view of one named
-    plugin.
-
-    How scheduling works:
-
-        All of the scheduling functions have a signature of the form
-        (name, time, method_name, *args, **kwargs).
-
-        This means that at the appropriate time, the method plugin.method_name
-        will be called with the arguments (time, *args, **kwargs), where the
-        time argument is the time it was supposed to be run by the scheduler
-        (which may not be identical to teh actual time it is run).
-
-        These functions will raise a DuplicateNameException if you try to
-        schedule two events with the same name.
-    """
-
     def __init__(self, cron, plugin):
         self.cron = cron
         self.plugin = plugin
 
     def schedule(self, name, when, interval=None, callback=None, args=None, kwargs=None):
-        """
-        Pass through to :meth:`Cron.schedule`, adding *owner* argument.
-        """
-
+        """Pass through to :meth:`Cron.schedule`, adding *owner* argument."""
         self.cron.schedule(self.plugin, name, when, interval, callback, args, kwargs)
 
     def after(self, name, delay, method_name, *args, **kwargs):
-        """
-        Schedule an event to occur after the timedelta delay has passed.
-        """
-
+        """Schedule an event to occur after the timedelta delay has passed."""
         self.schedule(name,
                       datetime.now() + delay,
                       callback=method_name,
@@ -323,10 +306,7 @@ class PluginCron(object):
                       kwargs=kwargs)
 
     def at(self, name, when, method_name, *args, **kwargs):
-        """
-        Schedule an event to occur at a given time.
-        """
-
+        """Schedule an event to occur at a given time."""
         self.schedule(name,
                       when,
                       callback=method_name,
@@ -334,10 +314,7 @@ class PluginCron(object):
                       kwargs=kwargs)
 
     def every(self, name, freq, method_name, *args, **kwargs):
-        """
-        Schedule an event to occur every time the delay passes.
-        """
-
+        """Schedule an event to occur every time the delay passes."""
         self.schedule(name,
                       datetime.now() + freq,
                       interval=freq,
@@ -346,18 +323,13 @@ class PluginCron(object):
                       kwargs=kwargs)
 
     def unschedule(self, name, args=None, kwargs=None):
-        """
-        Pass through to :meth:`Cron.unschedule`, adding *owner* argument.
-        """
-
+        """Pass through to :meth:`Cron.unschedule`, adding *owner* argument."""
         self.cron.unschedule(self.plugin, name, args, kwargs)
 
     def unschedule_all(self):
-        """
-        Unschedule all tasks for this plugin.
+        """Unschedule all tasks for this plugin.
 
         This could be supported by :meth:`unschedule`, but it's nice to
         prevent code accidentally wiping all of a plugin's tasks.
         """
-
         self.cron.unschedule(self.plugin)
