@@ -131,23 +131,30 @@ class Cron(Plugin):
         :param args:     Callback positional arguments.
         :param kwargs:   Callback keyword arguments.
 
-        The name can be used to remove a callback. Names must be unique,
-        otherwise a DuplicateNameException will be raised.
+        The signature of a task is ``(owner, name, args, kwargs)``, and trying
+        to create a task with the same signature as an existing task will raise
+        :exc:`DuplicateTaskError`.  Any subset of the signature can be used to
+        :meth:`unschedule` all matching tasks (``owner`` is mandatory).
         """
-
-        if self.tasks.find_one({'owner': owner,
-                                'name': name}):
-            raise DuplicateNameException(name)
 
         # Create the new task
         secs = interval.total_seconds() if interval is not None else None
-        self.tasks.insert({'owner': owner,
-                           'name': name,
-                           'when': when,
-                           'interval': secs,
-                           'callback': callback or name,
-                           'args': args or [],
-                           'kwargs': kwargs or {}})
+        task = {'owner': owner,
+                'name': name,
+                'when': when,
+                'interval': secs,
+                'callback': callback or name,
+                'args': args or [],
+                'kwargs': kwargs or {}}
+
+        # See if this task duplicates another
+        match = self.match_task(task['owner'], task['name'],
+                                task['args'], task['kwargs'])
+        if self.tasks.find_one(match):
+            raise DuplicateTaskError('Identical task already scheduled', match)
+
+        # If we made it this far, save the task
+        self.tasks.insert(task)
 
         # Call the scheduler immediately, as it may now need to be called
         # sooner than it had planned.
@@ -265,7 +272,7 @@ class Cron(Plugin):
             self.scheduler_freq = freq
 
 
-class DuplicateNameException(Exception):
+class DuplicateTaskError(Exception):
     """
     This can be raised by Cron::schedule if a plugin tries to register two
     events with the same name.
