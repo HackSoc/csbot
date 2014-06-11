@@ -7,23 +7,19 @@ class TermDates(Plugin):
     A wonderful plugin allowing old people (graduates) to keep track of the
     ever-changing calendar.
     """
-
-    PLUGIN_DEPENDS = ['mongodb']
-
     DATE_FORMAT = '%Y-%m-%d'
 
-    @Plugin.integrate_with('mongodb')
-    def _get_db(self, mongodb):
-        self.db = mongodb.get_db(self.plugin_name())
+    db_terms = Plugin.use('mongodb', collection='terms')
+    db_weeks = Plugin.use('mongodb', collection='weeks')
 
     def setup(self):
         super(TermDates, self).setup()
 
         # If we have stuff in mongodb, we can just load it directly.
-        if self.db.terms.find_one():
+        if self.db_terms.find_one():
             self.initialised = True
-            self.terms = self.db.terms.find_one()
-            self.weeks = self.db.weeks.find_one()
+            self.terms = self.db_terms.find_one()
+            self.weeks = self.db_weeks.find_one()
             return
 
         # If no term dates have been set, the calendar is uninitialised and
@@ -176,8 +172,8 @@ class TermDates(Plugin):
         # Save to the database. As we don't touch the _id attribute in this
         # method, this will cause `save` to override the previously-loaded
         # entry (if there is one).
-        self.db.terms.save(self.terms)
-        self.db.weeks.save(self.weeks)
+        self.db_terms.save(self.terms)
+        self.db_weeks.save(self.weeks)
 
         # Finally, we're initialised!
         self.initialised = True
