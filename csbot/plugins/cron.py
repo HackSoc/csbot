@@ -41,6 +41,9 @@ class Cron(Plugin):
     def setup(self):
         super(Cron, self).setup()
 
+        # Schedule own events with the same API other plugins will use
+        self.cron = self.provide(self.plugin_name())
+
         # self.scheduler is a handle to the scheduler repeating task, and
         # self.scheduler_freq is how frequently it gets called. These need to
         # be set before anything is scheduled (like the repeated events).
@@ -64,28 +67,25 @@ class Cron(Plugin):
                           seconds=now.second,
                           microseconds=now.microsecond)
 
-        self.schedule(owner='cron',
-                      name='hourly',
-                      when=now + when + timedelta(hours=1),
-                      interval=timedelta(hours=1),
-                      callback='fire_event',
-                      args=['cron.hourly'])
+        self.cron.schedule(name='hourly',
+                           when=now + when + timedelta(hours=1),
+                           interval=timedelta(hours=1),
+                           callback='fire_event',
+                           args=['cron.hourly'])
 
         when -= timedelta(hours=now.hour)
-        self.schedule(owner='cron',
-                      name='daily',
-                      when=now + when + timedelta(days=1),
-                      interval=timedelta(days=1),
-                      callback='fire_event',
-                      args=['cron.daily'])
+        self.cron.schedule(name='daily',
+                           when=now + when + timedelta(days=1),
+                           interval=timedelta(days=1),
+                           callback='fire_event',
+                           args=['cron.daily'])
 
         when -= timedelta(days=now.weekday())
-        self.schedule(owner='cron',
-                      name='weekly',
-                      when=now + when + timedelta(weeks=1),
-                      interval=timedelta(weeks=1),
-                      callback='fire_event',
-                      args=['cron.weekly'])
+        self.cron.schedule(name='weekly',
+                           when=now + when + timedelta(weeks=1),
+                           interval=timedelta(weeks=1),
+                           callback='fire_event',
+                           args=['cron.weekly'])
 
     def fire_event(self, now, name):
         """
@@ -282,39 +282,46 @@ class PluginCron(object):
         self.cron = cron
         self.plugin = plugin
 
+    def schedule(self, name, when, interval=None, callback=None, args=None, kwargs=None):
+        """
+        Pass through to :meth:`Cron.schedule`, adding *owner* argument.
+        """
+
+        self.cron.schedule(self.plugin, name, when, interval, callback, args, kwargs)
+
     def after(self, name, delay, method_name, *args, **kwargs):
         """
         Schedule an event to occur after the timedelta delay has passed.
         """
 
-        self.cron.schedule(self.plugin, name,
-                           datetime.now() + delay,
-                           callback=method_name,
-                           args=args,
-                           kwargs=kwargs)
+        self.schedule(name,
+                      datetime.now() + delay,
+                      callback=method_name,
+                      args=args,
+                      kwargs=kwargs)
 
     def at(self, name, when, method_name, *args, **kwargs):
         """
         Schedule an event to occur at a given time.
         """
 
-        self.cron.schedule(self.plugin, name,
-                           when,
-                           callback=method_name,
-                           args=args,
-                           kwargs=kwargs)
+        self.schedule(name,
+                      when,
+                      callback=method_name,
+                      args=args,
+                      kwargs=kwargs)
 
     def every(self, name, freq, method_name, *args, **kwargs):
         """
         Schedule an event to occur every time the delay passes.
         """
 
-        self.cron.schedule(self.plugin, name,
-                           datetime.now() + freq,
-                           interval=freq,
-                           callback=method_name,
-                           args=args,
-                           kwargs=kwargs)
+        self.schedule(name,
+                      datetime.now() + freq,
+                      interval=freq,
+                      callback=method_name,
+                      args=args,
+                      kwargs=kwargs)
 
     def unschedule(self, name):
         """
