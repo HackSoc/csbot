@@ -107,6 +107,9 @@ class PluginManager(collections.Mapping):
         return iter(self.plugins)
 
 
+ProvidedByPlugin = collections.namedtuple('ProvidedByPlugin', ['plugin', 'kwargs'])
+
+
 class PluginMeta(type):
     """Metaclass for :class:`Plugin` that collects methods tagged with plugin
     feature decorators.
@@ -115,18 +118,23 @@ class PluginMeta(type):
         super(PluginMeta, cls).__init__(name, bases, dict)
 
         # Initialise plugin features
+        cls.PLUGIN_DEPENDS = set(cls.PLUGIN_DEPENDS)
         cls.plugin_hooks = collections.defaultdict(list)
         cls.plugin_cmds = []
         cls.plugin_integrations = []
+        cls.plugin_provide = []
 
         # Scan for decorated methods
-        for f in dict.itervalues():
-            for h in getattr(f, 'plugin_hooks', ()):
-                cls.plugin_hooks[h].append(f)
-            for cmd, metadata in getattr(f, 'plugin_cmds', ()):
-                cls.plugin_cmds.append((cmd, metadata, f))
-            if len(getattr(f, 'plugin_integrate_with', [])) > 0:
-                cls.plugin_integrations.append((f.plugin_integrate_with, f))
+        for name, attr in dict.iteritems():
+            for h in getattr(attr, 'plugin_hooks', ()):
+                cls.plugin_hooks[h].append(attr)
+            for cmd, metadata in getattr(attr, 'plugin_cmds', ()):
+                cls.plugin_cmds.append((cmd, metadata, attr))
+            if len(getattr(attr, 'plugin_integrate_with', [])) > 0:
+                cls.plugin_integrations.append((attr.plugin_integrate_with, attr))
+            if isinstance(attr, ProvidedByPlugin):
+                cls.PLUGIN_DEPENDS.add(attr.plugin)
+                cls.plugin_provide.append((name, attr))
 
 
 class Plugin(object):
@@ -232,17 +240,45 @@ class Plugin(object):
             return f
         return decorate
 
+    @staticmethod
+    def use(other, **kwargs):
+        """Create a property that will be provided by another plugin.
+
+        Returns a :class:`ProvidedByPlugin` instance.  :class:`PluginMeta` will
+        collect attributes of this type, and add *other* as an implicit plugin
+        dependency.  :meth:`setup` will replace it with a value acquired from
+        the plugin named by *other*.  For example::
+
+            class Foo(Plugin):
+                stuff = Plugin.use('mongodb', collection='stuff')
+
+        will cause :meth:`setup` to replace the ``stuff`` attribute with::
+
+            self.bot.plugins[other].provide(self.plugin_name(), **kwargs)
+        """
+        return ProvidedByPlugin(other, kwargs)
+
     def fire_hooks(self, event):
         """Execute all of this plugin's handlers for *event*."""
         for f in self.plugin_hooks.get(event.event_type, ()):
             f(self, event)
 
+    def provide(self, plugin_name, **kwarg):
+        """Provide a value for a :meth:`Plugin.use` usage."""
+        raise NotImplementedError
+
     def setup(self):
         """Plugin setup.
 
+        * Replace all :class:`ProvidedByPlugin` attributes.
         * Fire all plugin integration methods.
         * Register all commands provided by the plugin.
         """
+        for name, provided_by in self.plugin_provide:
+            other = self.bot.plugins[provided_by.plugin]
+            new_value = other.provide(self.plugin_name(), **provided_by.kwargs)
+            setattr(self, name, new_value)
+
         for plugin_names, f in self.plugin_integrations:
             plugins = [self.bot.plugins[p] for p in plugin_names
                        if p in self.bot.plugins]
