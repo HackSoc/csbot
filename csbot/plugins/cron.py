@@ -103,7 +103,7 @@ class Cron(Plugin):
 
     def schedule(self, owner, name, when,
                  interval=None, callback=None,
-                 args=[], kwargs={}):
+                 args=None, kwargs=None):
         """
         Schedule a new task.
 
@@ -128,14 +128,13 @@ class Cron(Plugin):
 
         # Create the new task
         secs = interval.total_seconds() if interval is not None else None
-        cb = name if callback is None else callback
         self.tasks.insert({'owner': owner,
                            'name': name,
                            'when': when,
                            'interval': secs,
-                           'callback': cb,
-                           'args': args,
-                           'kwargs': kwargs})
+                           'callback': callback or name,
+                           'args': args or [],
+                           'kwargs': kwargs or {}})
 
         # Call the scheduler immediately, as it may now need to be called
         # sooner than it had planned.
