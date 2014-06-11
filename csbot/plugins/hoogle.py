@@ -2,6 +2,7 @@ import requests
 import urllib
 
 from csbot.plugin import Plugin
+from csbot.util import simple_http_get
 
 
 class Hoogle(Plugin):
@@ -20,7 +21,7 @@ class Hoogle(Plugin):
 
         query = e['data']
         hurl = 'http://www.haskell.org/hoogle/?mode=json&hoogle=' + query
-        hresp = requests.get(hurl)
+        hresp = simple_http_get(hurl)
 
         if hresp.status_code != requests.codes.ok:
             self.log.warn(u'request failed for ' + hurl)

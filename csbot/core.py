@@ -372,20 +372,28 @@ class BotFactory(protocol.ClientFactory):
         reactor.stop()
 
 
-class ColorLogFilter(logging.Filter):
-    """Add ``color`` attribute with severity-relevant ANSI color code to log
-    records.
-    """
-    def filter(self, record):
-        formats = {
-            logging.DEBUG: '1;30',
-            logging.INFO: '',
-            logging.WARNING: '33',
-            logging.ERROR: '31',
-            logging.CRITICAL: '7;31',
-        }
-        record.color = formats.get(record.levelno, '')
-        return record
+class PrettyStreamHandler(logging.StreamHandler):
+    """A :class:`logging.StreamHandler` that wraps log messages with
+    severity-dependent ANSI colours."""
+    #: Mapping from logging levels to ANSI colours.
+    COLOURS = {
+        logging.DEBUG: '\033[36m',      # Cyan
+        logging.WARNING: '\033[33m',    # Yellow foreground
+        logging.ERROR: '\033[31m',      # Red foreground
+        logging.CRITICAL: '\033[31;7m'  # Red foreground, inverted
+    }
+    #: ANSI code for resetting the terminal to default colour.
+    COLOUR_END = '\033[0m'
+
+    def format(self, record):
+        """Call :meth:`logging.StreamHandler.format`, and apply a colour to the
+        message if output stream is a TTY."""
+        msg = super(PrettyStreamHandler, self).format(record)
+        if self.stream.isatty():
+            colour = self.COLOURS.get(record.levelno, '')
+            return colour + msg + self.COLOUR_END
+        else:
+            return msg
 
 
 def main(argv):
@@ -404,12 +412,10 @@ def main(argv):
     observer.start()
 
     # Log to stdout with ANSI color codes to indicate level
-    handler = logging.StreamHandler()
+    handler = PrettyStreamHandler()
     handler.setLevel(args.loglevel)
-    handler.addFilter(ColorLogFilter())
     handler.setFormatter(logging.Formatter(
-        ('\x1b[%(color)sm[%(asctime)s] (%(levelname).1s:%(name)s) '
-         '%(message)s\x1b[0m'),
+        '[%(asctime)s] (%(levelname).1s:%(name)s) %(message)s',
         '%Y/%m/%d %H:%M:%S'))
     rootlogger = logging.getLogger('')
     rootlogger.setLevel(args.loglevel)
