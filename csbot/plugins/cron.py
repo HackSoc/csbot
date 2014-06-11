@@ -58,7 +58,7 @@ class Cron(Plugin):
         #
         # Sadly this can't happen in the teardown, as we want to do
         # this even if the bot crashes unexpectedly.
-        self.tasks.remove({'owner': 'cron'})
+        self.cron.unschedule_all()
 
         # Add regular cron.hourly/daily/weekly events which plugins
         # can listen to.
@@ -101,6 +101,19 @@ class Cron(Plugin):
         """
         return PluginCron(self, plugin_name)
 
+    def match_task(self, owner, name=None, args=None, kwargs=None):
+        """
+        Create a MongoDB search for a task definition.
+        """
+        matcher = {'owner': owner}
+        if name is not None:
+            matcher['name'] = name
+        if args is not None:
+            matcher['args'] = args
+        if kwargs is not None:
+            matcher['kwargs'] = kwargs
+        return matcher
+
     def schedule(self, owner, name, when,
                  interval=None, callback=None,
                  args=None, kwargs=None):
@@ -140,17 +153,19 @@ class Cron(Plugin):
         # sooner than it had planned.
         self.event_runner()
 
-    def unschedule(self, owner, name):
+    def unschedule(self, owner, name=None, args=None, kwargs=None):
         """
-        Unschedule a named callback.
+        Unschedule a task.
+
+        Removes all existing tasks that match based on the criteria passed as
+        arguments (see :meth:`match_task`).
 
         This could result in the scheduler having nothing to do in its next
         call, but this isn't a problem as it's not a very intensive function,
         so there's no point in rescheduling it here.
         """
 
-        self.tasks.remove({'owner': owner,
-                           'name': name})
+        self.tasks.remove(self.match_task(owner, name, args, kwargs))
 
     def event_runner(self):
         """
@@ -323,10 +338,19 @@ class PluginCron(object):
                       args=args,
                       kwargs=kwargs)
 
-    def unschedule(self, name):
+    def unschedule(self, name, args=None, kwargs=None):
         """
-        Unschedule a named event which hasn't yet happened.
-        If the name doesn't exist, nothing happens.
+        Pass through to :meth:`Cron.unschedule`, adding *owner* argument.
         """
 
-        self.cron.unschedule(self.plugin, name)
+        self.cron.unschedule(self.plugin, name, args, kwargs)
+
+    def unschedule_all(self):
+        """
+        Unschedule all tasks for this plugin.
+
+        This could be supported by :meth:`unschedule`, but it's nice to
+        prevent code accidentally wiping all of a plugin's tasks.
+        """
+
+        self.cron.unschedule(self.plugin)
