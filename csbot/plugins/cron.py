@@ -297,28 +297,28 @@ class PluginCron(object):
         """Pass through to :meth:`Cron.schedule`, adding *owner* argument."""
         self.cron.schedule(self.plugin, name, when, interval, callback, args, kwargs)
 
-    def after(self, name, delay, method_name, *args, **kwargs):
+    def after(self, _delay, _name, _method_name, *args, **kwargs):
         """Schedule an event to occur after the timedelta delay has passed."""
-        self.schedule(name,
-                      datetime.now() + delay,
-                      callback=method_name,
+        self.schedule(_name,
+                      datetime.now() + _delay,
+                      callback=_method_name,
                       args=args,
                       kwargs=kwargs)
 
-    def at(self, name, when, method_name, *args, **kwargs):
+    def at(self, _when, _name, _method_name, *args, **kwargs):
         """Schedule an event to occur at a given time."""
-        self.schedule(name,
-                      when,
-                      callback=method_name,
+        self.schedule(_name,
+                      _when,
+                      callback=_method_name,
                       args=args,
                       kwargs=kwargs)
 
-    def every(self, name, freq, method_name, *args, **kwargs):
+    def every(self, _freq, _name, _method_name, *args, **kwargs):
         """Schedule an event to occur every time the delay passes."""
-        self.schedule(name,
-                      datetime.now() + freq,
-                      interval=freq,
-                      callback=method_name,
+        self.schedule(_name,
+                      datetime.now() + _freq,
+                      interval=_freq,
+                      callback=_method_name,
                       args=args,
                       kwargs=kwargs)
 
