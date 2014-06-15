@@ -114,51 +114,67 @@ class IRCCodec(codecs.Codec):
             return codecs.decode(input, 'cp1252', errors)
 
 
-class IRCProtocol(asyncio.Protocol):
-    """IRC streaming protocol.
+class IRCClient(asyncio.Protocol):
+    """Internet Relay Chat client protocol.
 
-    A line-oriented protocol for communicating with IRC servers.  Uses
-    :class:`IRCCodec` to attempt to gloss over encoding issues,  Calls
-    :meth:`IRCClient.line_received` on *client* when a full decoded line has
-    been received, and the client should use :meth:`write_line` to send messages
-    to the server.
+    A line-oriented protocol for communicating with IRC servers.  It handles
+    receiving data at several layers of abstraction:
+
+    * :meth:`data_received`: raw bytes
+    * :meth:`line_received`: decoded line
+    * :meth:`message_received`: parsed :class:`IRCMessage`
+    * ``irc_<COMMAND>(msg)``: called when ``msg.command == '<COMMAND>'``
+    * ``on_<event>(...)``: specific events with specific arguments,
+      e.g. ``on_quit(user, message)``
+
+    It also handles sending data at several layers of abstraction:
+
+    * :meth:`send_raw`: raw IRC command, e.g. ``self.send_raw('JOIN #cs-york-dev')``
+    * :meth:`send`: :class:`IRCMessage`, e.g.
+      ``self.send(IRCMessage.create('JOIN', params=['#cs-york-dev']))``
+    * ``<action>(...)``: e.g. ``self.join('#cs-york-dev')``.
     """
-    def __init__(self, client):
-        self.client = client
-        self.buffer = b''
-        self.codec = IRCCodec()
+    #: Codec for encoding/decoding IRC messages.
+    codec = IRCCodec()
+    #: Event loop the client is running on.
+    loop = asyncio.get_event_loop()
+
+    #: Generate a default configuration.  Easier to call this and update the
+    #: result than relying on ``dict.copy()``.
+    DEFAULTS = staticmethod(lambda: dict(
+        nick='csbot',
+        host='irc.freenode.net',
+        port=6667,
+    ))
+
+    def __init__(self, *configs, **more_config):
+        self.config = dict(self.DEFAULTS(), *configs, **more_config)
         self.transport = None
-        self.exiting = False
+        self._buffer = b''
+        self._exiting = False
+
+    def connect(self):
+        """Connect to the IRC server."""
+        LOG.debug('connecting to {host}:{port}...'.format(**self.config))
+        return asyncio.Task(self.loop.create_connection(
+            lambda: self, self.config['host'], self.config['port']))
+
+    def disconnect(self):
+        """Disconnect from the IRC server.
+
+        Use :meth:`quit` for a more graceful disconnect.
+        """
+        self._exiting = True
+        if self.transport is not None:
+            self.transport.close()
 
     def connection_made(self, transport):
-        """Callback for successful connection.
-
-        Save the transport object for sending data later.
-        """
+        """Callback for successful connection."""
         LOG.debug('connection made')
         self.transport = transport
-
-    def data_received(self, data):
-        """Callback for received data.
-
-        Turn received data into a sequence of un-terminated, decoded strings,
-        which are passed to the :class:`IRCClient`.
-        """
-        LOG.debug('data received: %s', data)
-        data = self.buffer + data
-        lines = data.split(b'\r\n')
-        self.buffer = lines.pop()
-        for line in lines:
-            self.client.line_received(self.codec.decode(line))
-
-    def write_line(self, data):
-        """Send a message to the server.
-
-        Encodes, terminates and sends *data* to the server.
-        """
-        data = self.codec.encode(data) + b'\r\n'
-        self.transport.write(data)
-        LOG.debug('data sent: %s', data)
+        self.send_raw('USER {nick} * * :{nick}'.format(**self.config))
+        self.send_raw('NICK {nick}'.format(**self.config))
+        self.send_raw('JOIN #cs-york-dev')
 
     def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
@@ -166,81 +182,50 @@ class IRCProtocol(asyncio.Protocol):
         Won't reconnect if the broken connection was deliberate (i.e.
         :meth:`close` was called).
         """
-        self.transport = None
-        if not self.exiting:
-            self.client.loop.call_later(5, self.client.create_connection)
         LOG.debug('connection lost: %r', exc)
+        self.transport = None
+        if not self._exiting:
+            self.loop.call_later(2, self.connect)
 
-    def close(self):
-        """Deliberately close the connection."""
-        self.exiting = True
-        if self.transport is not None:
-            self.transport.close()
-
-
-class IRCClient(object):
-    nick = ['csbot_irc']
-    realname = 'csbot'
-    userinfo = 'https://github.com/HackSoc/csbot'
-    host = 'irc.freenode.net'
-
-    def __init__(self, config=None):
-        self.loop = asyncio.get_event_loop()
-        self.protocol = None
-
-    def start(self, run_forever=True):
-        LOG.info('starting bot')
-        # Run bot setup()
-        self.create_connection()
-        self.loop.add_signal_handler(signal.SIGINT, self.stop)
-        if run_forever:
-            self.loop.run_forever()
-
-    def stop(self):
-        LOG.info('stopping bot')
-        # Run bot teardown()
-        self.protocol.close()
-        self.loop.stop()
-
-    def create_connection(self):
-        create_protocol = lambda: IRCProtocol(self)
-        t = asyncio.Task(self.loop.create_connection(create_protocol,
-                                                     'chat.freenode.net',
-                                                     6667))
-        t.add_done_callback(self.connection_made)
-
-    def connection_made(self, f):
-        if self.protocol is not None:
-            self.protocol.close()
-            self.protocol = None
-
-        # Get result of create_connection from Future
-        transport, self.protocol = f.result()
-
-        self.send_raw('USER csbot * * :csbot')
-        self.send_raw('NICK not_really_csbot')
-        self.send_raw('JOIN #cs-york-dev')
+    def data_received(self, data):
+        """Callback for received bytes."""
+        LOG.debug('data received: %s', data)
+        data = self._buffer + data
+        lines = data.split(b'\r\n')
+        self._buffer = lines.pop()
+        for line in lines:
+            self.line_received(self.codec.decode(line))
 
     def line_received(self, line):
+        """Callback for received raw IRC message."""
         LOG.debug('line received: %s', line)
         msg = IRCMessage.parse(line)
         LOG.debug('command parsed: %r', msg)
         self.message_received(msg)
 
     def message_received(self, msg):
+        """Callback for received parsed IRC message."""
         method_name = 'irc_' + msg.command_name
         method = getattr(self, method_name, None)
         if method is not None:
             method(msg)
 
-    def irc_PING(self, msg):
-        self.send(IRCMessage.create('PONG', trailing=msg.trailing))
+    def send_raw(self, data):
+        """Send a raw IRC message to the server.
+
+        Encodes, terminates and sends *data* to the server.
+        """
+        data = self.codec.encode(data) + b'\r\n'
+        self.transport.write(data)
+        LOG.debug('data sent: %s', data)
 
     def send(self, msg):
+        """Send an :class:`IRCMessage`."""
         self.send_raw(msg.raw)
 
-    def send_raw(self, line):
-        self.protocol.write_line(line)
+    def irc_PING(self, msg):
+        """IRC PING/PONG keepalive."""
+        self.send(IRCMessage.create('PONG', trailing=msg.trailing))
 
 
 def main():
@@ -249,8 +234,16 @@ def main():
     logging.getLogger('asyncio').setLevel(logging.INFO)
 
     loop = asyncio.get_event_loop()
-    bot = IRCClient()
-    bot.start()
+
+    bot = IRCClient(nick='not_really_csbot')
+    bot.connect()
+
+    def stop():
+        bot.disconnect()
+        loop.stop()
+    loop.add_signal_handler(signal.SIGINT, stop)
+
+    loop.run_forever()
     loop.close()
 
 
