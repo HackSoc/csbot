@@ -1,4 +1,5 @@
 from csbot.plugin import Plugin
+from csbot.util import nick
 
 
 class Whois(Plugin):
@@ -13,7 +14,7 @@ class Whois(Plugin):
         """Look up a user by nick, and return what data they have set for
         themselves (or an error message if there is no data)"""
 
-        nick = e['data'] or e['user'].split('!', 1)[0]
+        nick = e['data'] or nick(e['user'])
         user = self.whoisdb.find_one({'nick': nick,
                                       'channel': e['channel']})
 
@@ -26,8 +27,8 @@ class Whois(Plugin):
     def set(self, e):
         """Allow a user to associate data with themselves for this channel."""
 
-        self.whoisdb.remove({'nick': e['user'].split('!', 1)[0],
+        self.whoisdb.remove({'nick': nick(e['user']),
                              'channel': e['channel']})
-        self.whoisdb.insert({'nick': e['user'].split('!', 1)[0],
+        self.whoisdb.insert({'nick': nick(e['user']),
                              'channel': e['channel'],
                              'data': e['data']})
