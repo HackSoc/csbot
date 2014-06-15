@@ -7,9 +7,6 @@ class Whois(Plugin):
 
     whoisdb = Plugin.use('mongodb', collection='whois')
 
-    def setup(self):
-        super(Whois, self).setup()
-
     @Plugin.command('whois', help=('whois [nick]: show whois data for'
                                    ' a nick, or for yourself if omitted'))
     def whois(self, e):
