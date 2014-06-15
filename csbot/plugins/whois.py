@@ -6,6 +6,8 @@ class Whois(Plugin):
     """Associate data with a user and a channel. Users can update their own
     data, and it persists over nick changes."""
 
+    PLUGIN_DEPENDS = ['usertrack']
+
     whoisdb = Plugin.use('mongodb', collection='whois')
 
     @Plugin.command('whois', help=('whois [nick]: show whois data for'
