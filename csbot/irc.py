@@ -6,6 +6,7 @@ from collections import namedtuple
 import codecs
 
 from ._rfc import NUMERIC_REPLIES
+import csbot.util as util
 
 
 LOG = logging.getLogger('csbot.irc')
@@ -87,6 +88,21 @@ class IRCMessage(namedtuple('_IRCMessage',
         }
         return cls(**args)
 
+    @property
+    def pretty(self):
+        """Get a more readable version of the raw IRC message.
+
+        Pretty much identical to the raw IRC message, but numeric commands
+        that have names end up being ``NUMERIC/NAME``.
+        """
+        return ''.join([
+            (':' + self.prefix + ' ') if self.prefix else '',
+            self.command,
+            ('/' + self.command_name) if self.command != self.command_name else '',
+            (' ' + ' '.join(self.params)) if self.params else '',
+            (' :' + self.trailing) if self.trailing else '',
+        ])
+
 
 class IRCCodec(codecs.Codec):
     """The encoding scheme to use for IRC messages.
@@ -153,6 +169,8 @@ class IRCClient(asyncio.Protocol):
         self._buffer = b''
         self._exiting = False
 
+        self.nick = None
+
     def connect(self):
         """Connect to the IRC server."""
         LOG.debug('connecting to {host}:{port}...'.format(**self.config))
@@ -173,8 +191,7 @@ class IRCClient(asyncio.Protocol):
         LOG.debug('connection made')
         self.transport = transport
         self.send_raw('USER {nick} * * :{nick}'.format(**self.config))
-        self.send_raw('NICK {nick}'.format(**self.config))
-        self.send_raw('JOIN #cs-york-dev')
+        self.set_nick(self.config['nick'])
 
     def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
@@ -189,7 +206,6 @@ class IRCClient(asyncio.Protocol):
 
     def data_received(self, data):
         """Callback for received bytes."""
-        LOG.debug('data received: %s', data)
         data = self._buffer + data
         lines = data.split(b'\r\n')
         self._buffer = lines.pop()
@@ -198,9 +214,8 @@ class IRCClient(asyncio.Protocol):
 
     def line_received(self, line):
         """Callback for received raw IRC message."""
-        LOG.debug('line received: %s', line)
         msg = IRCMessage.parse(line)
-        LOG.debug('command parsed: %r', msg)
+        LOG.debug('>>> %s', msg.pretty)
         self.message_received(msg)
 
     def message_received(self, msg):
@@ -215,17 +230,57 @@ class IRCClient(asyncio.Protocol):
 
         Encodes, terminates and sends *data* to the server.
         """
+        LOG.debug('<<< %s', data)
         data = self.codec.encode(data) + b'\r\n'
         self.transport.write(data)
-        LOG.debug('data sent: %s', data)
 
     def send(self, msg):
         """Send an :class:`IRCMessage`."""
         self.send_raw(msg.raw)
 
+    # Specific commands for sending messages
+
+    def set_nick(self, nick):
+        """Ask the server to set our nick."""
+        self.send_raw('NICK {}'.format(nick))
+        self.on_nick_changed(nick)
+
+    def join(self, channel):
+        self.send_raw('JOIN {}'.format(channel))
+
+    # Messages received from the server
+
+    def irc_RPL_WELCOME(self, msg):
+        """Received welcome from server, now we can start communicating."""
+        self.on_welcome()
+
+    def irc_ERR_NICKNAMEINUSE(self, msg):
+        """Attempted nick is in use, try another."""
+        _, nick = msg.params
+        self.set_nick(nick + '_')
+
     def irc_PING(self, msg):
         """IRC PING/PONG keepalive."""
         self.send(IRCMessage.create('PONG', trailing=msg.trailing))
+
+    def irc_NICK(self, msg):
+        """Somebody's nick changed."""
+        nick = util.nick(msg.prefix)
+        if nick == self.nick:
+            self.on_nick_changed(nick)
+        else:
+            self.on_user_renamed(nick, msg.params[0])
+
+    # Client events
+
+    def on_welcome(self):
+        pass
+
+    def on_nick_changed(self, nick):
+        self.nick = nick
+
+    def on_user_renamed(self, oldnick, newnick):
+        pass
 
 
 def main():
@@ -236,6 +291,8 @@ def main():
     loop = asyncio.get_event_loop()
 
     bot = IRCClient(nick='not_really_csbot')
+    import types
+    bot.on_welcome = types.MethodType(lambda self: self.join('#cs-york-dev'), bot)
     bot.connect()
 
     def stop():
