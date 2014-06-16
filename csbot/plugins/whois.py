@@ -16,14 +16,14 @@ class Whois(Plugin):
         """Look up a user by nick, and return what data they have set for
         themselves (or an error message if there is no data)"""
 
-        nick = e['data'] or nick(e['user'])
-        ident = self.identify_user(nick, e['channel'])
+        nick_ = e['data'] or nick(e['user'])
+        ident = self.identify_user(nick_, e['channel'])
         user = self.whoisdb.find_one(ident)
 
         if user is None:
-            e.protocol.msg(e['reply_to'], u'No data for {}'.format(nick))
+            e.protocol.msg(e['reply_to'], u'No data for {}'.format(nick_))
         else:
-            e.protocol.msg(e['reply_to'], u'{}: {}'.format(nick, user['data']))
+            e.protocol.msg(e['reply_to'], u'{}: {}'.format(nick_, user['data']))
 
     @Plugin.command('whois.set')
     def set(self, e):
