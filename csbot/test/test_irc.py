@@ -19,9 +19,12 @@ class IRCClientTestCase(unittest.TestCase):
     def setUp(self):
         self.client = IRCClientMock(self.CLIENT_CONFIG)
 
-    def patch(self, attr):
-        """Shortcut for patching an attribute of the client."""
-        return mock.patch.object(self.client, attr)
+    def patch(self, attrs):
+        """Shortcut for patching attribute(s) of the client."""
+        if isinstance(attrs, str):
+            return mock.patch.object(self.client, attrs)
+        else:
+            return mock.patch.multiple(self.client, **{k: mock.DEFAULT for k in attrs})
 
     def receive_bytes(self, bytes):
         """Shortcut for pushing received data to the client."""
@@ -131,6 +134,39 @@ class TestIRCClientAutoRespond(IRCClientTestCase):
         self.receive(':a.server 433 * {} :Nickname is already in use.'.format(nick))
         self.assert_sent('NICK {}'.format(new_nick))
         self.assertEqual(self.client.nick, new_nick)
+
+
+class TestIRCClientEvents(IRCClientTestCase):
+    """Test that event methods are run as a consequence of raw messages.
+
+    The test cases describe raw IRC messages to receive, and the expected
+    outcome in terms of calls made to methods on the client.
+    """
+    TEST_CASES = [
+        (':nick!user@host PRIVMSG #channel :hello', {
+            'on_privmsg': [
+                mock.call(IRCUser.parse('nick!user@host'), '#channel', 'hello'),
+            ],
+        }),
+    ]
+
+    def test_all(self):
+        """Run every test case."""
+        self.connect()
+        # Iterate over test cases
+        for raw, calls in self.TEST_CASES:
+            # Inform unittest which test case we're running
+            with self.subTest(raw=raw):
+                # Patch every method that's expected to be called
+                with self.patch(calls.keys()) as mocks:
+                    # Handle the raw IRC message
+                    self.receive(raw)
+                    # Iterate over methods expected to be called
+                    for k, v in calls.items():
+                        # Inform unittest which part of the test case
+                        with self.subTest(method=k):
+                            # Assert that the declared calls happened
+                            mocks[k].assert_has_calls(v)
 
 
 class TestIRCMessage(unittest.TestCase):
