@@ -6,7 +6,6 @@ from collections import namedtuple
 import codecs
 
 from ._rfc import NUMERIC_REPLIES
-import csbot.util as util
 
 
 LOG = logging.getLogger('csbot.irc')
@@ -102,6 +101,25 @@ class IRCMessage(namedtuple('_IRCMessage',
             (' ' + ' '.join(self.params)) if self.params else '',
             (' :' + self.trailing) if self.trailing else '',
         ])
+
+
+class IRCUser(namedtuple('_IRCUser', 'raw nick user host')):
+    """Provide access to the parts of an IRC user string.
+
+    The following parts of the user string are available, set to *None* if that
+    part of the string is absent:
+
+    :param raw: Raw user string
+    :param nick: Nick of the user
+    :param user: Username of the user (excluding leading ``~``)
+    :param host: Hostname of the user
+    """
+    #: Username parsing regex.  Stripping out the "~" might be a
+    #: Freenode peculiarity...
+    REGEX = re.compile(r'(?P<raw>(?P<nick>[^!]+)(!~*(?P<user>[^@]+))?(@(?P<host>.+))?)')
+
+    def __new__(cls, raw):
+        return super().__new__(cls, **cls.REGEX.match(raw).groupdict())
 
 
 class IRCCodec(codecs.Codec):
@@ -265,21 +283,69 @@ class IRCClient(asyncio.Protocol):
 
     def irc_NICK(self, msg):
         """Somebody's nick changed."""
-        nick = util.nick(msg.prefix)
-        if nick == self.nick:
-            self.on_nick_changed(nick)
+        user = IRCUser(msg.prefix)
+        if user.nick == self.nick:
+            self.on_nick_changed(user.nick)
         else:
-            self.on_user_renamed(nick, msg.params[0])
+            self.on_user_renamed(user.nick, msg.params[0])
 
-    # Client events
+    def irc_PRIVMSG(self, msg):
+        """Received a ``PRIVMSG``.
+
+        TODO: Implement CTCP queries.
+        """
+        user = IRCUser(msg.prefix)
+        channel = msg.params[0]
+        message = msg.trailing
+        self.on_privmsg(user, channel, message)
+
+    def irc_NOTICE(self, msg):
+        """Received a ``NOTICE``.
+
+        TODO: Implement CTCP replies.
+        """
+        user = IRCUser(msg.prefix)
+        channel = msg.params[0]
+        message = msg.trailing
+        self.on_notice(user, channel, message)
+
+    # Events regarding self
 
     def on_welcome(self):
         pass
 
     def on_nick_changed(self, nick):
+        """Changed nick."""
         self.nick = nick
 
+    def on_privmsg(self, user, to, message):
+        """Received a message, either directly or in a channel.
+
+        :param user: User that sent the message
+        :type user: :class:`IRCUser`
+        :param to: Channel the message was sent to, *None* if direct
+        :type to: str or None
+        :param message: The message
+        :type message: str
+        """
+        pass
+
+    def on_notice(self, user, to, message):
+        """Received a notice, either directly or in a channel.
+
+        :param user: User that sent the notice
+        :type user: :class:`IRCUser`
+        :param to: Channel the notice was sent to, *None* if direct
+        :type to: str or None
+        :param message: The message
+        :type message: str
+        """
+        pass
+
+    # Events regarding other users
+
     def on_user_renamed(self, oldnick, newnick):
+        """User changed nick."""
         pass
 
 
