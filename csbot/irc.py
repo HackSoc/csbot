@@ -113,13 +113,23 @@ class IRCUser(namedtuple('_IRCUser', 'raw nick user host')):
     :param nick: Nick of the user
     :param user: Username of the user (excluding leading ``~``)
     :param host: Hostname of the user
+
+    >>> u = IRCUser.parse('my_nick!some_user@host.name')
+    >>> u.nick
+    'my_nick'
+    >>> u.user
+    'some_user'
+    >>> u.host
+    'host.name'
     """
     #: Username parsing regex.  Stripping out the "~" might be a
     #: Freenode peculiarity...
     REGEX = re.compile(r'(?P<raw>(?P<nick>[^!]+)(!~*(?P<user>[^@]+))?(@(?P<host>.+))?)')
 
-    def __new__(cls, raw):
-        return super().__new__(cls, **cls.REGEX.match(raw).groupdict())
+    @classmethod
+    def parse(cls, raw):
+        """Create an :class:`IRCUser` from a raw user string."""
+        return cls(**cls.REGEX.match(raw).groupdict())
 
 
 class IRCCodec(codecs.Codec):
@@ -182,7 +192,11 @@ class IRCClient(asyncio.Protocol):
     ))
 
     def __init__(self, *configs, **more_config):
-        self.config = dict(self.DEFAULTS(), *configs, **more_config)
+        self.config = self.DEFAULTS()
+        for config in configs:
+            self.config.update(config)
+        self.config.update(**more_config)
+
         self.transport = None
         self._buffer = b''
         self._exiting = False
@@ -283,7 +297,7 @@ class IRCClient(asyncio.Protocol):
 
     def irc_NICK(self, msg):
         """Somebody's nick changed."""
-        user = IRCUser(msg.prefix)
+        user = IRCUser.parse(msg.prefix)
         if user.nick == self.nick:
             self.on_nick_changed(user.nick)
         else:
@@ -294,7 +308,7 @@ class IRCClient(asyncio.Protocol):
 
         TODO: Implement CTCP queries.
         """
-        user = IRCUser(msg.prefix)
+        user = IRCUser.parse(msg.prefix)
         channel = msg.params[0]
         message = msg.trailing
         self.on_privmsg(user, channel, message)
@@ -304,7 +318,7 @@ class IRCClient(asyncio.Protocol):
 
         TODO: Implement CTCP replies.
         """
-        user = IRCUser(msg.prefix)
+        user = IRCUser.parse(msg.prefix)
         channel = msg.params[0]
         message = msg.trailing
         self.on_notice(user, channel, message)
