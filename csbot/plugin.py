@@ -303,7 +303,7 @@ class Plugin(object):
         Uses the ``[plugin_name]`` section of the configuration file, creating
         an empty section if it doesn't exist.
 
-        .. seealso:: :mod:`py3k:configparser`
+        .. seealso:: :mod:`configparser`
         """
         plugin = self.plugin_name()
         if plugin not in self.bot.config_root:

@@ -104,7 +104,7 @@ Configuration
 
 Basic string key/value configuration can be stored in an INI-style file.  A plugin's 
 :attr:`~.Plugin.config` attribute is a shortcut to a configuration section with the same name as the 
-plugin.  The Python 3 :mod:`py3k:configparser` is used instead of the Python 2 
+plugin.  The Python 3 :mod:`configparser` is used instead of the Python 2
 :mod:`python:ConfigParser` because it supports the mapping access protocol, i.e. it acts like a 
 dictionary in addition to supporting its own API.
 
