@@ -177,6 +177,19 @@ class IRCClient(asyncio.Protocol):
     * :meth:`send`: :class:`IRCMessage`, e.g.
       ``self.send(IRCMessage.create('JOIN', params=['#cs-york-dev']))``
     * ``<action>(...)``: e.g. ``self.join('#cs-york-dev')``.
+
+    The API and implementation is inspired by irc3_ and Twisted_.
+
+    .. _irc3: https://github.com/gawel/irc3
+    .. _Twisted: http://twistedmatrix.com/documents/14.0.0/api/twisted.words.protocols.irc.IRCClient.html
+
+    * TODO: limit send rate
+    * TODO: limit PRIVMSG/NOTICE send length
+    * TODO: NAMES
+    * TODO: MODE
+    * TODO: More sophisticated CTCP? (see Twisted_)
+    * TODO: MOTD?
+    * TODO: SSL
     """
     #: Codec for encoding/decoding IRC messages.
     codec = IRCCodec()
@@ -187,8 +200,10 @@ class IRCClient(asyncio.Protocol):
     #: result than relying on ``dict.copy()``.
     DEFAULTS = staticmethod(lambda: dict(
         nick='csbot',
+        username=None,
         host='irc.freenode.net',
         port=6667,
+        password=None,
     ))
 
     def __init__(self, *configs, **more_config):
@@ -219,11 +234,20 @@ class IRCClient(asyncio.Protocol):
             self.transport.close()
 
     def connection_made(self, transport):
-        """Callback for successful connection."""
+        """Callback for successful connection.
+
+        Register with the IRC server.
+        """
         LOG.debug('connection made')
         self.transport = transport
-        self.send_raw('USER {nick} * * :{nick}'.format(**self.config))
-        self.set_nick(self.config['nick'])
+
+        if self.config['password']:
+            self.send_raw('PASS {}'.format(self.config['password']))
+
+        nick = self.config['nick']
+        username = self.config['username'] or nick
+        self.set_nick(nick)
+        self.send_raw('USER {} * * :{}'.format(username, nick))
 
     def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
@@ -252,10 +276,7 @@ class IRCClient(asyncio.Protocol):
 
     def message_received(self, msg):
         """Callback for received parsed IRC message."""
-        method_name = 'irc_' + msg.command_name
-        method = getattr(self, method_name, None)
-        if method is not None:
-            method(msg)
+        self._dispatch_method('irc_' + msg.command_name, msg)
 
     def send_raw(self, data):
         """Send a raw IRC message to the server.
@@ -275,10 +296,56 @@ class IRCClient(asyncio.Protocol):
     def set_nick(self, nick):
         """Ask the server to set our nick."""
         self.send_raw('NICK {}'.format(nick))
+        self.nick = nick
         self.on_nick_changed(nick)
 
     def join(self, channel):
+        """Join a channel."""
         self.send_raw('JOIN {}'.format(channel))
+
+    def leave(self, channel, message=None):
+        """Leave a channel, with an optional message."""
+        if message:
+            self.send_raw('PART {} :{}'.format(channel, message))
+        else:
+            self.send_raw('PART {}'.format(channel))
+
+    def say(self, to, message):
+        """Send *message* to a channel/nick."""
+        self.send_raw('PRIVMSG {} :{}'.format(to, message))
+
+    def act(self, to, action):
+        """Send *action* as a CTCP ACTION to a channel/nick."""
+        self.ctcp_query(to, 'ACTION', action)
+
+    def notice(self, to, message):
+        """Send *message* as a NOTICE to a channel/nick."""
+        self.send_raw('NOTICE {} :{}'.format(to, message))
+
+    def set_topic(self, channel, topic):
+        """Try and set a channel's topic."""
+        self.send_raw('TOPIC {} :{}'.format(channel, topic))
+
+    def get_topic(self, channel):
+        """Ask server to send the topic for *channel*.
+
+        Will cause :meth:`on_topic_changed` at some point in the future.
+        """
+        self.send_raw('TOPIC {}'.format(channel))
+
+    def ctcp_query(self, to, command, data=None):
+        """Send CTCP query."""
+        msg = command
+        if data:
+            msg += ' ' + data
+        self.say(to, '\x01' + msg + '\x01')
+
+    def ctcp_reply(self, to, command, data=None):
+        """Send CTCP reply."""
+        msg = command
+        if data:
+            msg += ' ' + data
+        self.notice(to, '\x01' + msg + '\x01')
 
     # Messages received from the server
 
@@ -299,7 +366,8 @@ class IRCClient(asyncio.Protocol):
         """Somebody's nick changed."""
         user = IRCUser.parse(msg.prefix)
         if user.nick == self.nick:
-            self.on_nick_changed(msg.trailing)
+            self.nick = msg.trailing
+            self.on_nick_changed(self.nick)
         else:
             self.on_user_renamed(user.nick, msg.trailing)
 
@@ -311,6 +379,12 @@ class IRCClient(asyncio.Protocol):
         user = IRCUser.parse(msg.prefix)
         channel = msg.params[0]
         message = msg.trailing
+
+        if message.startswith('\x01') and message.endswith('\x01'):
+            command, _, data = message[1:-1].partition(' ')
+            self._dispatch_method('on_ctcp_query_' + command,
+                                  user, channel, data or None)
+
         self.on_privmsg(user, channel, message)
 
     def irc_NOTICE(self, msg):
@@ -321,46 +395,87 @@ class IRCClient(asyncio.Protocol):
         user = IRCUser.parse(msg.prefix)
         channel = msg.params[0]
         message = msg.trailing
+
+        if message.startswith('\x01') and message.endswith('\x01'):
+            command, _, data = message[1:-1].partition(' ')
+            self._dispatch_method('on_ctcp_reply_' + command,
+                                  user, channel, data or None)
+
         self.on_notice(user, channel, message)
+
+    # TODO: on_mode_changed
 
     # Events regarding self
 
     def on_welcome(self):
+        """Successfully signed on to the server."""
         pass
 
     def on_nick_changed(self, nick):
         """Changed nick."""
-        self.nick = nick
+        pass
+
+    def on_joined(self, channel):
+        """Joined a channel."""
+        pass
+
+    def on_left(self, channel):
+        """Left a channel."""
+        pass
+
+    def on_kicked(self, channel, by, reason):
+        """Kicked from a channel."""
+        pass
 
     def on_privmsg(self, user, to, message):
-        """Received a message, either directly or in a channel.
-
-        :param user: User that sent the message
-        :type user: :class:`IRCUser`
-        :param to: Channel the message was sent to, *None* if direct
-        :type to: str or None
-        :param message: The message
-        :type message: str
-        """
+        """Received a message, either directly or in a channel."""
         pass
 
     def on_notice(self, user, to, message):
-        """Received a notice, either directly or in a channel.
-
-        :param user: User that sent the notice
-        :type user: :class:`IRCUser`
-        :param to: Channel the notice was sent to, *None* if direct
-        :type to: str or None
-        :param message: The message
-        :type message: str
-        """
+        """Received a notice, either directly or in a channel."""
         pass
+
+    def on_action(self, user, to, action):
+        """Received CTCP ACTION.  Common enough to deserve its own event."""
+        pass
+
+    def on_ctcp_query_ACTION(self, user, to, data):
+        """Turn CTCP ACTION into :meth:`on_action` event."""
+        self.on_action(user, to, data)
 
     # Events regarding other users
 
     def on_user_renamed(self, oldnick, newnick):
         """User changed nick."""
         pass
+
+    def on_user_joined(self, user, channel):
+        """User joined a channel."""
+        pass
+
+    def on_user_left(self, user, channel, message):
+        """User left a channel."""
+        pass
+
+    def on_user_kicked(self, user, channel, by, reason):
+        """User kicked from a channel."""
+        pass
+
+    def on_user_quit(self, user, message):
+        """User disconnected."""
+        pass
+
+    # Events regarding channels
+
+    def on_topic_changed(self, user, channel, topic):
+        """*user* changed the topic of *channel* to *topic*."""
+        pass
+
+    def _dispatch_method(self, method_name, *args, **kwargs):
+        """Dispatch to *method* only if it exists."""
+        method = getattr(self, method_name, None)
+        if method is not None:
+            method(*args, **kwargs)
 
 
 def main():
@@ -372,7 +487,10 @@ def main():
 
     bot = IRCClient(nick='not_really_csbot')
     import types
-    bot.on_welcome = types.MethodType(lambda self: self.join('#cs-york-dev'), bot)
+    def on_welcome(self):
+        self.join('#cs-york-dev')
+        self.act('#cs-york-dev', 'arrives')
+    bot.on_welcome = types.MethodType(on_welcome, bot)
     bot.connect()
 
     def stop():
