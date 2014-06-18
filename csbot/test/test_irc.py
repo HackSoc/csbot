@@ -137,36 +137,41 @@ class TestIRCClientAutoRespond(IRCClientTestCase):
 
 
 class TestIRCClientEvents(IRCClientTestCase):
-    """Test that event methods are run as a consequence of raw messages.
+    """Test that particular methods are run as a consequence of messages."""
+    def test_message_routing(self):
+        """Test that a message gets routed to ``irc_COMMAND``."""
+        with self.patch('irc_PRIVMSG') as m:
+            msg = ':nick!user@host PRIVMSG #channel :hello'
+            self.receive(msg)
+            m.assert_called_once_with(IRCMessage.parse(msg))
 
-    The test cases describe raw IRC messages to receive, and the expected
-    outcome in terms of calls made to methods on the client.
-    """
-    TEST_CASES = [
-        (':nick!user@host PRIVMSG #channel :hello', {
-            'on_privmsg': [
-                mock.call(IRCUser.parse('nick!user@host'), '#channel', 'hello'),
-            ],
-        }),
+    def test_message_routing_numeric(self):
+        """Test that a message with a numeric comamnd gets routed correctly."""
+        with self.patch('irc_RPL_WELCOME') as m:
+            msg = ':a.server 001 nick :Welcome to the server'
+            self.receive(msg)
+            m.assert_called_once_with(IRCMessage.parse(msg))
+
+    TEST_EVENTS = [
+        (':nick!user@host PRIVMSG #channel :hello',
+         'on_privmsg', [IRCUser.parse('nick!user@host'), '#channel', 'hello'], {}),
+        (':csbot!user@host NICK :csbot2', 'on_nick_changed', ['csbot2'], {}),
+        (':nick!user@host NICK :nick2', 'on_user_renamed', ['nick', 'nick2'], {}),
     ]
 
-    def test_all(self):
-        """Run every test case."""
+    def test_all_events(self):
+        """Run every event test case."""
         self.connect()
         # Iterate over test cases
-        for raw, calls in self.TEST_CASES:
+        for raw, method, args, kwargs in self.TEST_EVENTS:
             # Inform unittest which test case we're running
-            with self.subTest(raw=raw):
-                # Patch every method that's expected to be called
-                with self.patch(calls.keys()) as mocks:
+            with self.subTest(raw=raw, method=method):
+                # Patch the expected method
+                with self.patch(method) as m:
                     # Handle the raw IRC message
                     self.receive(raw)
-                    # Iterate over methods expected to be called
-                    for k, v in calls.items():
-                        # Inform unittest which part of the test case
-                        with self.subTest(method=k):
-                            # Assert that the declared calls happened
-                            mocks[k].assert_has_calls(v)
+                    # Check for the call
+                    m.assert_called_once_with(*args, **kwargs)
 
 
 class TestIRCMessage(unittest.TestCase):

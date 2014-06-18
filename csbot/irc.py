@@ -299,9 +299,9 @@ class IRCClient(asyncio.Protocol):
         """Somebody's nick changed."""
         user = IRCUser.parse(msg.prefix)
         if user.nick == self.nick:
-            self.on_nick_changed(user.nick)
+            self.on_nick_changed(msg.trailing)
         else:
-            self.on_user_renamed(user.nick, msg.params[0])
+            self.on_user_renamed(user.nick, msg.trailing)
 
     def irc_PRIVMSG(self, msg):
         """Received a ``PRIVMSG``.
