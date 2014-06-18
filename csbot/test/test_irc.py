@@ -19,12 +19,13 @@ class IRCClientTestCase(unittest.TestCase):
     def setUp(self):
         self.client = IRCClientMock(self.CLIENT_CONFIG)
 
-    def patch(self, attrs):
+    def patch(self, attrs, create=False):
         """Shortcut for patching attribute(s) of the client."""
         if isinstance(attrs, str):
-            return mock.patch.object(self.client, attrs)
+            return mock.patch.object(self.client, attrs, create=create)
         else:
-            return mock.patch.multiple(self.client, **{k: mock.DEFAULT for k in attrs})
+            return mock.patch.multiple(self.client, create=create,
+                                       **{k: mock.DEFAULT for k in attrs})
 
     def receive_bytes(self, bytes):
         """Shortcut for pushing received data to the client."""
@@ -138,32 +139,74 @@ class TestIRCClientAutoRespond(IRCClientTestCase):
 
 class TestIRCClientEvents(IRCClientTestCase):
     """Test that particular methods are run as a consequence of messages."""
-    def test_message_routing(self):
-        """Test that a message gets routed to ``irc_COMMAND``."""
-        with self.patch('irc_PRIVMSG') as m:
-            msg = ':nick!user@host PRIVMSG #channel :hello'
-            self.receive(msg)
-            m.assert_called_once_with(IRCMessage.parse(msg))
-
-    def test_message_routing_numeric(self):
-        """Test that a message with a numeric comamnd gets routed correctly."""
-        with self.patch('irc_RPL_WELCOME') as m:
-            msg = ':a.server 001 nick :Welcome to the server'
-            self.receive(msg)
-            m.assert_called_once_with(IRCMessage.parse(msg))
-
-    TEST_EVENTS = [
+    TEST_ROUTING = [
+        # Generic message routing to irc_COMMAND
         (':nick!user@host PRIVMSG #channel :hello',
-         'on_privmsg', [IRCUser.parse('nick!user@host'), '#channel', 'hello'], {}),
-        (':csbot!user@host NICK :csbot2', 'on_nick_changed', ['csbot2'], {}),
-        (':nick!user@host NICK :nick2', 'on_user_renamed', ['nick', 'nick2'], {}),
+         'irc_PRIVMSG', [IRCMessage.parse(':nick!user@host PRIVMSG #channel :hello')], {}),
+        # Generic message routing for known numeric commands
+        (':a.server 001 nick :Welcome to the server',
+         'irc_RPL_WELCOME', [IRCMessage.parse(':a.server 001 nick :Welcome to the server')], {}),
+        # Generic message routing for unknown numeric commands
+        (':a.server 999 arg1 :trailing',
+         'irc_999', [IRCMessage.parse(':a.server 999 arg1 :trailing')], {}),
+        # Routing for CTCP queries
+        (':nick!user@host PRIVMSG #channel :\x01FOO bar\x01',
+         'on_ctcp_query_FOO', [IRCUser.parse('nick!user@host'), '#channel', 'bar'], {}),
+        # Routing for CTCP replies
+        (':nick!user@host NOTICE #channel :\x01FOO bar\x01',
+         'on_ctcp_reply_FOO', [IRCUser.parse('nick!user@host'), '#channel', 'bar'], {}),
     ]
 
-    def test_all_events(self):
+    def test_routing(self):
+        """Run every routing test case."""
+        self.connect()
+        # Iterate over test cases
+        for raw, method, args, kwargs in self.TEST_ROUTING:
+            # Inform unittest which test case we're running
+            with self.subTest(raw=raw, method=method):
+                # Patch the expected method (creating it if necessary)
+                with self.patch(method, create=True) as m:
+                    # Handle the raw IRC message
+                    self.receive(raw)
+                    # Check for the call
+                    m.assert_called_once_with(*args, **kwargs)
+
+    ME = IRCUser.parse('csbot!bot@robot.land')
+    USER = IRCUser.parse('nick!person@their.server')
+    #: Some common test parameters for substituting in test cases
+    VALUES = {
+        'me': ME,
+        'user': USER,
+    }
+
+    TEST_EVENTS = [
+        # Welcome/signed on
+        (':a.server 001 {me.nick} :Welcome to the server', 'on_welcome', [], {}),
+        # Our nick changed by the server
+        (':{me.raw} NICK :csbot2', 'on_nick_changed', ['csbot2'], {}),
+        # (Change our nick back for the rest of the tests)
+        (':csbot2!user@host NICK :{me.nick}', 'on_nick_changed', [ME.nick], {}),
+        # Somebody else's nick changed
+        (':{user.raw} NICK :nick2', 'on_user_renamed', [USER.nick, 'nick2'], {}),
+        # We joined a channel
+        (':{me.raw} JOIN #channel', 'on_joined', ['#channel'], {}),
+        # Somebody else joined a channel
+        (':{user.raw} JOIN #channel', 'on_user_joined', [USER, '#channel'], {}),
+        # We left a channel
+        (':{me.raw} PART #channel :"goodbye"', 'on_left', ['#channel'], {}),
+        # Somebody else left a channel
+        (':{user.raw} PART #channel :"goodbye"', 'on_user_left', [USER, '#channel', '"goodbye"'], {}),
+        # Received a message
+        (':{user.raw} PRIVMSG #channel :hello', 'on_privmsg', [USER, '#channel', 'hello'], {})
+    ]
+
+    def test_events(self):
         """Run every event test case."""
         self.connect()
         # Iterate over test cases
         for raw, method, args, kwargs in self.TEST_EVENTS:
+            # Perform substitutions
+            raw = raw.format(**self.VALUES)
             # Inform unittest which test case we're running
             with self.subTest(raw=raw, method=method):
                 # Patch the expected method
