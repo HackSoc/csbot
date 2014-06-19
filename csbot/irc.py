@@ -378,6 +378,43 @@ class IRCClient(asyncio.Protocol):
         else:
             self.on_user_renamed(user.nick, msg.trailing)
 
+    def irc_JOIN(self, msg):
+        """Somebody joined a channel."""
+        user = IRCUser.parse(msg.prefix)
+        channel = msg.params[0]
+        if user.nick == self.nick:
+            self.on_joined(channel)
+        else:
+            self.on_user_joined(user, channel)
+
+    def irc_PART(self, msg):
+        """Somebody left a channel."""
+        user = IRCUser.parse(msg.prefix)
+        channel = msg.params[0]
+        if user.nick == self.nick:
+            self.on_left(channel)
+        else:
+            self.on_user_left(user, channel, msg.trailing)
+
+    def irc_KICK(self, msg):
+        """Somebody was kicked from a channel."""
+        user = IRCUser.parse(msg.prefix)
+        channel, nick = msg.params
+        reason = msg.trailing
+        if nick == self.nick:
+            self.on_kicked(channel, user, reason)
+        else:
+            self.on_user_kicked(IRCUser.parse(nick), channel, user, reason)
+
+    def irc_QUIT(self, msg):
+        """Somebody quit the server."""
+        self.on_user_quit(IRCUser.parse(msg.prefix), msg.trailing)
+
+    def irc_TOPIC(self, msg):
+        """A channel's topic changed."""
+        user = IRCUser.parse(msg.prefix)
+        self.on_topic_changed(user, msg.params[0], msg.trailing)
+
     def irc_PRIVMSG(self, msg):
         """Received a ``PRIVMSG``.
 
