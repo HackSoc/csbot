@@ -344,7 +344,7 @@ class IRCClient(asyncio.Protocol):
         self._exiting = not reconnect
         self.send_raw('QUIT :{}'.format(message or ''))
 
-    def say(self, to, message):
+    def msg(self, to, message):
         """Send *message* to a channel/nick."""
         self.send_raw('PRIVMSG {} :{}'.format(to, message))
 
@@ -372,7 +372,7 @@ class IRCClient(asyncio.Protocol):
         msg = command
         if data:
             msg += ' ' + data
-        self.say(to, '\x01' + msg + '\x01')
+        self.msg(to, '\x01' + msg + '\x01')
 
     def ctcp_reply(self, to, command, data=None):
         """Send CTCP reply."""

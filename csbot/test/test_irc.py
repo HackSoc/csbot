@@ -337,10 +337,10 @@ class TestIRCClientCommands(IRCClientTestCase):
             self.client.connection_lost(None)
             self.assertTrue(m.called)
 
-    def test_say(self):
-        self.client.say('#channel', 'a message')
+    def test_msg(self):
+        self.client.msg('#channel', 'a message')
         self.assert_sent('PRIVMSG #channel :a message')
-        self.client.say('a_nick', 'another message')
+        self.client.msg('a_nick', 'another message')
         self.assert_sent('PRIVMSG a_nick :another message')
 
     def test_act(self):
