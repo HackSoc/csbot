@@ -251,6 +251,9 @@ class TestIRCClientEvents(IRCClientTestCase):
         # Channel topic changed
         (':{user.raw} TOPIC #channel :new topic',
          'on_topic_changed', [USER, '#channel', 'new topic'], {}),
+        # Channel topic unset
+        (':{user.raw} TOPIC #channel',
+         'on_topic_changed', [USER, '#channel', None], {}),
     ]
 
     def test_events(self):
@@ -278,8 +281,7 @@ class TestIRCMessage(unittest.TestCase):
         self.assertEqual(m.prefix, None)
         self.assertEqual(m.command, 'PING')
         self.assertEqual(m.command_name, 'PING')
-        self.assertEqual(m.params, [])
-        self.assertEqual(m.trailing, 'i.am.a.server')
+        self.assertEqual(m.params, ['i.am.a.server'])
 
     def test_RPL_WELCOME(self):
         """Parse a more complex command, which also involves a numeric reply."""
@@ -287,5 +289,4 @@ class TestIRCMessage(unittest.TestCase):
         self.assertEqual(m.prefix, 'a.server')
         self.assertEqual(m.command, '001')
         self.assertEqual(m.command_name, 'RPL_WELCOME')
-        self.assertEqual(m.params, ['nick'])
-        self.assertEqual(m.trailing, 'Welcome to the server')
+        self.assertEqual(m.params, ['nick', 'Welcome to the server'])

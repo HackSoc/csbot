@@ -16,7 +16,7 @@ class IRCParseError(Exception):
 
 
 class IRCMessage(namedtuple('_IRCMessage',
-                            'prefix command params trailing command_name raw')):
+                            'prefix command params command_name raw')):
     """Represents an IRC message.
 
     The IRC message format, paraphrased and simplified from RFC2812, is::
@@ -29,10 +29,8 @@ class IRCMessage(namedtuple('_IRCMessage',
     :type prefix: str or None
     :param command: IRC command
     :type command: str
-    :param params: List of command parameters
+    :param params: List of command parameters (including trailing)
     :type params: list of str
-    :param trailing: Trailing data
-    :type trailing: str or None
     :param command_name: Name of IRC command (see below)
     :type command_name: str
     :param raw: The raw IRC message
@@ -59,6 +57,10 @@ class IRCMessage(namedtuple('_IRCMessage',
             groups['raw'] = line
             # Split space-separated parameters
             groups['params'] = groups['params'].split()
+            # Trailing is really just another parameter
+            if groups['trailing']:
+                groups['params'].append(groups['trailing'])
+            del groups['trailing']
             # Create command_name, which is either the RFC2812 name for a
             # numeric command, or just the received command.
             groups['command_name'] = NUMERIC_REPLIES.get(groups['command'],
@@ -66,7 +68,7 @@ class IRCMessage(namedtuple('_IRCMessage',
             return cls(**groups)
 
     @classmethod
-    def create(cls, command, params=None, trailing=None, prefix=None):
+    def create(cls, command, params=None, prefix=None):
         """Create an :class:`IRCMessage` from its core components.
 
         The *raw* and *command_name* attributes will be generated based on the
@@ -76,13 +78,11 @@ class IRCMessage(namedtuple('_IRCMessage',
             'prefix': prefix or None,
             'command': command,
             'params': params or [],
-            'trailing': trailing or None,
             'command_name': NUMERIC_REPLIES.get(command, command),
             'raw': ''.join([
                 (':' + prefix + ' ') if prefix else '',
                 command,
-                (' ' + ' '.join(params)) if params else '',
-                (' :' + trailing) if trailing else '',
+                cls._raw_params(params or []),
             ]),
         }
         return cls(**args)
@@ -98,9 +98,37 @@ class IRCMessage(namedtuple('_IRCMessage',
             (':' + self.prefix + ' ') if self.prefix else '',
             self.command,
             ('/' + self.command_name) if self.command != self.command_name else '',
-            (' ' + ' '.join(self.params)) if self.params else '',
-            (' :' + self.trailing) if self.trailing else '',
+            self._raw_params(self.params),
         ])
+
+    def pad_params(self, length, default=None):
+        """Pad parameters to *length* with *default*.
+
+        Useful when a command has optional parameters:
+
+        >>> msg = IRCMessage.parse(':nick!user@host KICK #channel other')
+        >>> channel, nick, reason = msg.params
+        Traceback (most recent call last):
+          ...
+        ValueError: need more than 2 values to unpack
+        >>> channel, nick, reason = msg.pad_params(3)
+        """
+        return self.params + [default] * (length - len(self.params))
+
+    @staticmethod
+    def _raw_params(params):
+        if len(params) > 0 and ' ' in params[-1]:
+            trailing = params[-1]
+            params = params[:-1]
+        else:
+            trailing = None
+
+        raw = ''
+        if len(params) > 0:
+            raw += ' ' + ' '.join(params)
+        if trailing is not None:
+            raw += ' :' + trailing
+        return raw
 
 
 class IRCUser(namedtuple('_IRCUser', 'raw nick user host')):
@@ -375,7 +403,7 @@ class IRCClient(asyncio.Protocol):
         Adds an underscore to the end of the current nick.  If the server
         truncated the nick, replaces the last non-underscore with an underscore.
         """
-        _, nick = msg.params
+        _, nick = msg.params[:2]
 
         # If the failed nick doesn't match the one we tried, it was probably
         # truncated and just adding more characters will leave us stuck in a
@@ -391,16 +419,17 @@ class IRCClient(asyncio.Protocol):
 
     def irc_PING(self, msg):
         """IRC PING/PONG keepalive."""
-        self.send(IRCMessage.create('PONG', trailing=msg.trailing))
+        self.send_raw('PONG :{}'.format(msg.params[-1]))
 
     def irc_NICK(self, msg):
         """Somebody's nick changed."""
         user = IRCUser.parse(msg.prefix)
+        new_nick = msg.params[-1]
         if user.nick == self.nick:
-            self.nick = msg.trailing
-            self.on_nick_changed(self.nick)
+            self.nick = new_nick
+            self.on_nick_changed(new_nick)
         else:
-            self.on_user_renamed(user.nick, msg.trailing)
+            self.on_user_renamed(user.nick, new_nick)
 
     def irc_JOIN(self, msg):
         """Somebody joined a channel."""
@@ -414,17 +443,16 @@ class IRCClient(asyncio.Protocol):
     def irc_PART(self, msg):
         """Somebody left a channel."""
         user = IRCUser.parse(msg.prefix)
-        channel = msg.params[0]
+        channel, message = msg.pad_params(2)
         if user.nick == self.nick:
             self.on_left(channel)
         else:
-            self.on_user_left(user, channel, msg.trailing)
+            self.on_user_left(user, channel, message)
 
     def irc_KICK(self, msg):
         """Somebody was kicked from a channel."""
         user = IRCUser.parse(msg.prefix)
-        channel, nick = msg.params
-        reason = msg.trailing
+        channel, nick, reason = msg.pad_params(3)
         if nick == self.nick:
             self.on_kicked(channel, user, reason)
         else:
@@ -432,12 +460,14 @@ class IRCClient(asyncio.Protocol):
 
     def irc_QUIT(self, msg):
         """Somebody quit the server."""
-        self.on_user_quit(IRCUser.parse(msg.prefix), msg.trailing)
+        (message,) = msg.pad_params(1)
+        self.on_user_quit(IRCUser.parse(msg.prefix), message)
 
     def irc_TOPIC(self, msg):
         """A channel's topic changed."""
         user = IRCUser.parse(msg.prefix)
-        self.on_topic_changed(user, msg.params[0], msg.trailing)
+        channel, new_topic = msg.pad_params(2)
+        self.on_topic_changed(user, channel, new_topic)
 
     def irc_PRIVMSG(self, msg):
         """Received a ``PRIVMSG``.
@@ -445,8 +475,7 @@ class IRCClient(asyncio.Protocol):
         TODO: Implement CTCP queries.
         """
         user = IRCUser.parse(msg.prefix)
-        channel = msg.params[0]
-        message = msg.trailing
+        channel, message = msg.params
 
         if message.startswith('\x01') and message.endswith('\x01'):
             command, _, data = message[1:-1].partition(' ')
@@ -461,8 +490,7 @@ class IRCClient(asyncio.Protocol):
         TODO: Implement CTCP replies.
         """
         user = IRCUser.parse(msg.prefix)
-        channel = msg.params[0]
-        message = msg.trailing
+        channel, message = msg.params
 
         if message.startswith('\x01') and message.endswith('\x01'):
             command, _, data = message[1:-1].partition(' ')
