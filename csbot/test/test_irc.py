@@ -123,6 +123,14 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
 
 
 class TestIRCClientBehaviour(IRCClientTestCase):
+    @unittest.skip
+    def test_auto_reconnec(self):
+        pass
+
+    @unittest.skip
+    def test_disconnect(self):
+        pass
+
     def test_PING_PONG(self):
         self.connect()
         self.receive('PING :i.am.a.server')
@@ -271,6 +279,81 @@ class TestIRCClientEvents(IRCClientTestCase):
                     self.receive(raw)
                     # Check for the call
                     m.assert_called_once_with(*args, **kwargs)
+
+
+class TestIRCClientCommands(IRCClientTestCase):
+    """Test that calling various commands causes the appropriate messages to be
+    sent to the server."""
+    def setUp(self):
+        super().setUp()
+        # All of these tests send things, so connect the mock transport
+        self.client.connect()
+
+    def test_set_nick(self):
+        with self.patch('on_nick_changed') as m:
+            self.client.set_nick('new_nick')
+            self.assert_sent('NICK new_nick')
+            self.assertEqual(self.client.nick, 'new_nick')
+            m.assert_called_once_with('new_nick')
+
+    def test_join(self):
+        self.client.join('#foo')
+        self.assert_sent('JOIN #foo')
+
+    def test_leave(self):
+        self.client.leave('#foo')
+        self.assert_sent('PART #foo :')
+        self.client.leave('#foo', 'just because')
+        self.assert_sent('PART #foo :just because')
+
+    def test_quit(self):
+        self.client.quit()
+        self.assert_sent('QUIT :')
+        self.client.quit('reason')
+        self.assert_sent('QUIT :reason')
+
+    @unittest.skip
+    def test_quit_reconnect(self):
+        # TOOD: Test that quit(reconnect=True) causes connect() to be called.
+        #       This requires the ability to test that tasks get scheduled and
+        #       triggered in the future - painful asyncio mocking ahoy!
+        pass
+
+    def test_say(self):
+        self.client.say('#channel', 'a message')
+        self.assert_sent('PRIVMSG #channel :a message')
+        self.client.say('a_nick', 'another message')
+        self.assert_sent('PRIVMSG a_nick :another message')
+
+    def test_act(self):
+        self.client.act('#channel', 'bounces')
+        self.assert_sent('PRIVMSG #channel :\x01ACTION bounces\x01')
+
+    def test_notice(self):
+        self.client.notice('#channel', 'a notice')
+        self.assert_sent('NOTICE #channel :a notice')
+
+    def test_set_topic(self):
+        self.client.set_topic('#channel', 'new topic')
+        self.assert_sent('TOPIC #channel :new topic')
+        self.client.set_topic('#channel', '')
+        self.assert_sent('TOPIC #channel :')
+
+    def test_get_topic(self):
+        self.client.get_topic('#channel')
+        self.assert_sent('TOPIC #channel')
+
+    def test_ctcp_query(self):
+        self.client.ctcp_query('#channel', 'VERSION')
+        self.assert_sent('PRIVMSG #channel :\x01VERSION\x01')
+        self.client.ctcp_query('a_nick', 'FOO', 'bar')
+        self.assert_sent('PRIVMSG a_nick :\x01FOO bar\x01')
+
+    def test_ctcp_reply(self):
+        self.client.ctcp_reply('a_nick', 'PONG')
+        self.assert_sent('NOTICE a_nick :\x01PONG\x01')
+        self.client.ctcp_reply('a_nick', 'VERSION', '1.0')
+        self.assert_sent('NOTICE a_nick :\x01VERSION 1.0\x01')
 
 
 class TestIRCMessage(unittest.TestCase):
