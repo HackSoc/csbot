@@ -107,7 +107,7 @@ class Bot(SpecialPlugin):
                                 'with wrong tag {}').format(cmd, tag))
 
     def unregister_commands(self, tag):
-        delcmds = [c for c, (_, _, t) in self.commands.iteritems() if t == tag]
+        delcmds = [c for c, (_, _, t) in self.commands.items() if t == tag]
         for cmd in delcmds:
             f, _, tag = self.commands[cmd]
             del self.commands[cmd]
@@ -115,7 +115,8 @@ class Bot(SpecialPlugin):
 
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
-        map(event.protocol.join, self.config_get('channels').split())
+        for c in self.config_get('channels').split():
+            event.protocol.join(c)
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
@@ -204,7 +205,7 @@ class BotProtocol(irc.IRCClient):
 
     def sendLine(self, line):
         # Encode unicode strings with utf-8
-        if isinstance(line, unicode):
+        if isinstance(line, str):
             line = line.encode('utf-8')
         irc.IRCClient.sendLine(self, line)
         self.emit_new('core.raw.sent', {'message': line})
@@ -313,7 +314,7 @@ class BotProtocol(irc.IRCClient):
 
         # Get a mapping from status characters to mode flags
         prefixes = self.supported.getFeature('PREFIX')
-        inverse_prefixes = dict((v[0], k) for k, v in prefixes.iteritems())
+        inverse_prefixes = dict((v[0], k) for k, v in prefixes.items())
 
         # Get mode characters from name prefix
         def f(name):
@@ -321,7 +322,7 @@ class BotProtocol(irc.IRCClient):
                 return (name[1:], set(inverse_prefixes[name[0]]))
             else:
                 return (name, set())
-        names = map(f, raw_names)
+        names = list(map(f, raw_names))
 
         # Fire the event
         self.names(channel, names, raw_names)

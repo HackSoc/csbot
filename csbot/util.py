@@ -69,7 +69,7 @@ def parse_arguments(raw):
     ValueError: No closing quotation
     """
     # Work around shlex's broken unicode handling in Python <= 2.7.2
-    if isinstance(raw, unicode):
+    if isinstance(raw, str):
         raw = raw.encode('utf-8')
     # Start with a shlex instance similar to shlex.split
     lex = shlex.shlex(raw, posix=True)
