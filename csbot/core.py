@@ -399,6 +399,10 @@ def main(argv):
     rootlogger.setLevel(args.loglevel)
     rootlogger.addHandler(handler)
 
+    # Make the bot quieter
+    logging.getLogger('asyncio').setLevel(logging.INFO)
+    logging.getLogger('csbot.irc').setLevel(logging.INFO)
+
     # Create bot and run setup functions
     try:
         config = open(args.config, 'r')

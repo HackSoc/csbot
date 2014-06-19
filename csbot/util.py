@@ -68,9 +68,6 @@ def parse_arguments(raw):
       File "<stdin>", line 1, in ?
     ValueError: No closing quotation
     """
-    # Work around shlex's broken unicode handling in Python <= 2.7.2
-    if isinstance(raw, str):
-        raw = raw.encode('utf-8')
     # Start with a shlex instance similar to shlex.split
     lex = shlex.shlex(raw, posix=True)
     lex.whitespace_split = True
