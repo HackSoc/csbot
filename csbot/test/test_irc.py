@@ -9,6 +9,17 @@ class IRCClientMock(IRCClient):
         super().__init__(*args, **kwargs)
         self.send_raw = mock.Mock(wraps=self.send_raw)
 
+        # Mock an asyncio event loop where delayed calls are immediate
+        self.loop = mock.Mock()
+        def call_soon(func, *args):
+            func(*args)
+            return asyncio.Handle(func, args, None)
+        self.loop.call_soon = call_soon
+        def call_later(delay, func, *args):
+            return call_soon(func, *args)
+        self.loop.call_later = call_later
+        self.loop.time.return_value = 100.0
+
     def connect(self):
         self.connection_made(mock.Mock())
 
@@ -123,13 +134,15 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
 
 
 class TestIRCClientBehaviour(IRCClientTestCase):
-    @unittest.skip
-    def test_auto_reconnec(self):
-        pass
+    def test_auto_reconnect(self):
+        with self.patch('connect') as m:
+            self.client.connection_lost(None)
+            m.assert_called_once_with()
 
-    @unittest.skip
     def test_disconnect(self):
-        pass
+        with self.patch('connect') as m:
+            self.client.disconnect()
+            self.assertFalse(m.called)
 
     def test_PING_PONG(self):
         self.connect()
@@ -312,12 +325,17 @@ class TestIRCClientCommands(IRCClientTestCase):
         self.client.quit('reason')
         self.assert_sent('QUIT :reason')
 
-    @unittest.skip
+    def test_quit_no_reconnect(self):
+        with self.patch('connect') as m:
+            self.client.quit(reconnect=False)
+            self.client.connection_lost(None)
+            self.assertFalse(m.called)
+
     def test_quit_reconnect(self):
-        # TOOD: Test that quit(reconnect=True) causes connect() to be called.
-        #       This requires the ability to test that tasks get scheduled and
-        #       triggered in the future - painful asyncio mocking ahoy!
-        pass
+        with self.patch('connect') as m:
+            self.client.quit(reconnect=True)
+            self.client.connection_lost(None)
+            self.assertTrue(m.called)
 
     def test_say(self):
         self.client.say('#channel', 'a message')
