@@ -338,8 +338,8 @@ class IRCClient(asyncio.Protocol):
     def quit(self, message=None, reconnect=False):
         """Leave the server.
 
-        If *reconnect* is False, then the client will not attempt to reconnnect
-        afetr the server closes the connection.
+        If *reconnect* is False, then the client will not attempt to reconnect
+        after the server closes the connection.
         """
         self._exiting = not reconnect
         self.send_raw('QUIT :{}'.format(message or ''))
