@@ -469,6 +469,12 @@ class IRCClient(asyncio.Protocol):
         channel, new_topic = msg.pad_params(2)
         self.on_topic_changed(user, channel, new_topic)
 
+    def irc_RPL_TOPIC(self, msg):
+        """Topic notification, usually after joining a channel."""
+        user = IRCUser.parse(msg.prefix)
+        _, channel, topic = msg.pad_params(3)
+        self.on_topic_changed(user, channel, topic)
+
     def irc_PRIVMSG(self, msg):
         """Received a ``PRIVMSG``.
 

@@ -269,6 +269,9 @@ class TestIRCClientEvents(IRCClientTestCase):
         # Received an action
         (':{user.raw} PRIVMSG #channel :\x01ACTION bounces\x01',
          'on_action', [USER, '#channel', 'bounces'], {}),
+        # Channel topic reported after JOIN
+        (':a.server 332 {me.nick} #channel :channel topic',
+         'on_topic_changed', [IRCUser.parse('a.server'), '#channel', 'channel topic'], {}),
         # Channel topic changed
         (':{user.raw} TOPIC #channel :new topic',
          'on_topic_changed', [USER, '#channel', 'new topic'], {}),
