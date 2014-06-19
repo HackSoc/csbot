@@ -185,6 +185,7 @@ class IRCClient(asyncio.Protocol):
 
     * TODO: limit send rate
     * TODO: limit PRIVMSG/NOTICE send length
+    * TODO: limit nick length (16 chars on freenode)
     * TODO: NAMES
     * TODO: MODE
     * TODO: More sophisticated CTCP? (see Twisted_)
@@ -305,10 +306,16 @@ class IRCClient(asyncio.Protocol):
 
     def leave(self, channel, message=None):
         """Leave a channel, with an optional message."""
-        if message:
-            self.send_raw('PART {} :{}'.format(channel, message))
-        else:
-            self.send_raw('PART {}'.format(channel))
+        self.send_raw('PART {} :{}'.format(channel, message or ''))
+
+    def quit(self, message=None, reconnect=False):
+        """Leave the server.
+
+        If *reconnect* is False, then the client will not attempt to reconnnect
+        afetr the server closes the connection.
+        """
+        self._exiting = not reconnect
+        self.send_raw('QUIT :{}'.format(message or ''))
 
     def say(self, to, message):
         """Send *message* to a channel/nick."""
@@ -485,7 +492,7 @@ def main():
 
     loop = asyncio.get_event_loop()
 
-    bot = IRCClient(nick='not_really_csbot')
+    bot = IRCClient(nick='csbot_py3')
     import types
     def on_welcome(self):
         self.join('#cs-york-dev')

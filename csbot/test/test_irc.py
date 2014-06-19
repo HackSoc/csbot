@@ -196,8 +196,28 @@ class TestIRCClientEvents(IRCClientTestCase):
         (':{me.raw} PART #channel :"goodbye"', 'on_left', ['#channel'], {}),
         # Somebody else left a channel
         (':{user.raw} PART #channel :"goodbye"', 'on_user_left', [USER, '#channel', '"goodbye"'], {}),
+        (':{user.raw} PART #channel', 'on_user_left', [USER, '#channel', None], {}),
+        # We were kicked from a channel
+        (':{user.raw} KICK #channel {me.nick} :reason', 'on_kicked', ['#channel', USER, 'reason'], {}),
+        (':{user.raw} KICK #channel {me.nick}', 'on_kicked', ['#channel', USER, None], {}),
+        # Somebody else was kicked from a channel
+        (':{user.raw} KICK #channel somebody :reason',
+         'on_user_kicked', [IRCUser.parse('somebody'), '#channel', USER, 'reason'], {}),
+        (':{user.raw} KICK #channel somebody',
+         'on_user_kicked', [IRCUser.parse('somebody'), '#channel', USER, None], {}),
+        # Somebody quit the server
+        (':{user.raw} QUIT :goodbye', 'on_user_quit', [USER, 'goodbye'], {}),
+        (':{user.raw} QUIT', 'on_user_quit', [USER, None], {}),
         # Received a message
-        (':{user.raw} PRIVMSG #channel :hello', 'on_privmsg', [USER, '#channel', 'hello'], {})
+        (':{user.raw} PRIVMSG #channel :hello', 'on_privmsg', [USER, '#channel', 'hello'], {}),
+        # Received a notice
+        (':{user.raw} NOTICE #channel :hello', 'on_notice', [USER, '#channel', 'hello'], {}),
+        # Received an action
+        (':{user.raw} PRIVMSG #channel :\x01ACTION bounces\x01',
+         'on_action', [USER, '#channel', 'bounces'], {}),
+        # Channel topic changed
+        (':{user.raw} TOPIC #channel :new topic',
+         'on_topic_changed', [USER, '#channel', 'new topic'], {}),
     ]
 
     def test_events(self):
