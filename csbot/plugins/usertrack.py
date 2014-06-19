@@ -83,7 +83,7 @@ class UserTrack(Plugin):
         account = self.get_user(nick_)['account']
         if account is None:
             e.protocol.msg(e['reply_to'],
-                           u'{} is not authenticated'.format(nick_))
+                           '{} is not authenticated'.format(nick_))
         else:
             e.protocol.msg(e['reply_to'],
-                           u'{} is authenticated as {}'.format(nick_, account))
+                           '{} is authenticated as {}'.format(nick_, account))
