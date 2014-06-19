@@ -122,19 +122,52 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
         self.assert_bytes_sent(b'PRIVMSG #channel :\xe0\xb2\xa0_\xe0\xb2\xa0\r\n')
 
 
-class TestIRCClientAutoRespond(IRCClientTestCase):
+class TestIRCClientBehaviour(IRCClientTestCase):
     def test_PING_PONG(self):
         self.connect()
         self.receive('PING :i.am.a.server')
         self.assert_sent('PONG :i.am.a.server')
 
+    def test_RPL_WELCOME_nick_truncated(self):
+        """IRC server might truncate the requested nick at sign-on, this should
+        be reflected by the client's behaviour."""
+        self.connect()
+        with self.patch('on_nick_changed') as m:
+            self.client.set_nick('foo_bar')
+            self.assertEqual(self.client.nick, 'foo_bar')
+            self.receive(':a.server 001 foo_b :Welcome to the server')
+            self.assertEqual(self.client.nick, 'foo_b')
+            # Check events were fired for both nick changes (the initial request
+            # and the truncated nick)
+            m.assert_has_calls([mock.call('foo_bar'), mock.call('foo_b')])
+
     def test_ERR_NICKNAMEINUSE(self):
+        """If nick is in use, try another one."""
         self.connect()
         nick = self.client.nick
         new_nick = nick + '_'
         self.receive(':a.server 433 * {} :Nickname is already in use.'.format(nick))
         self.assert_sent('NICK {}'.format(new_nick))
         self.assertEqual(self.client.nick, new_nick)
+
+    def test_ERR_NICKNAMEINUSE_truncated(self):
+        """IRC server might truncate requested nicks, so we should use a
+        different strategy to resolve nick collisions if that happened."""
+        self.connect()
+        self.client.set_nick('a_very_long_nick')
+        self.receive(':a.server 433 * a_very_long_nick :Nickname is already in use.')
+        # Should have triggered the same behaviour as above, appending _
+        self.assertEqual(self.client.nick, 'a_very_long_nick_')
+        # Except oops, server truncated it to the same in-use nick!
+        self.receive(':a.server 433 * a_very_long_nick :Nickname is already in use.')
+        # Next nick tried should be the same length with some _ replacements
+        self.assertEqual(self.client.nick, 'a_very_long_nic_')
+        # Not stateful, so if this in use it'll try append first
+        self.receive(':a.server 433 * a_very_long_nic_ :Nickname is already in use.')
+        self.assertEqual(self.client.nick, 'a_very_long_nic__')
+        # But yet again, if that request got truncated, it'll replace a character
+        self.receive(':a.server 433 * a_very_long_nic_ :Nickname is already in use.')
+        self.assertEqual(self.client.nick, 'a_very_long_ni__')
 
 
 class TestIRCClientEvents(IRCClientTestCase):

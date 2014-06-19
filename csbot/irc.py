@@ -185,7 +185,6 @@ class IRCClient(asyncio.Protocol):
 
     * TODO: limit send rate
     * TODO: limit PRIVMSG/NOTICE send length
-    * TODO: limit nick length (16 chars on freenode)
     * TODO: NAMES
     * TODO: MODE
     * TODO: More sophisticated CTCP? (see Twisted_)
@@ -357,13 +356,38 @@ class IRCClient(asyncio.Protocol):
     # Messages received from the server
 
     def irc_RPL_WELCOME(self, msg):
-        """Received welcome from server, now we can start communicating."""
+        """Received welcome from server, now we can start communicating.
+
+        Welcome should include the accepted nick as the first parameter.  This
+        may be different to the nick we requested (e.g. truncated to a maximum
+        length); if this is the case we store the new nick and fire the
+        :meth:`on_nick_changed` event.
+        """
+        nick = msg.params[0]
+        if nick != self.nick:
+            self.nick = nick
+            self.on_nick_changed(self.nick)
         self.on_welcome()
 
     def irc_ERR_NICKNAMEINUSE(self, msg):
-        """Attempted nick is in use, try another."""
+        """Attempted nick is in use, try another.
+
+        Adds an underscore to the end of the current nick.  If the server
+        truncated the nick, replaces the last non-underscore with an underscore.
+        """
         _, nick = msg.params
-        self.set_nick(nick + '_')
+
+        # If the failed nick doesn't match the one we tried, it was probably
+        # truncated and just adding more characters will leave us stuck in a
+        # loop.  To avoid this we start replacing non-underscores at the end of
+        # the nick with underscores.
+        if nick != self.nick:
+            stripped = nick.rstrip('_')[:-1]
+            new_nick = stripped + '_' * (len(nick) - len(stripped))
+        else:
+            new_nick = nick + '_'
+
+        self.set_nick(new_nick)
 
     def irc_PING(self, msg):
         """IRC PING/PONG keepalive."""
