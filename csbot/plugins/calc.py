@@ -35,7 +35,9 @@ def calc_eval(node):
     """
     Actually do the calculation.
     """
-    if isinstance(node, ast.Load):  # <constant>
+    if isinstance(node, ast.Expr):  # Top level expression
+        return calc_eval(node.value)
+    elif isinstance(node, ast.Load):  # <constant>
         return
     elif isinstance(node, ast.Name):  # (actual) <constant>
         if str(node.id) in constants:
@@ -67,7 +69,7 @@ class Calc(Plugin):
         if not calc_str:
             return "You want to calculate something? Type in an expression then, silly!"
         try:
-            return str(calc_eval(ast.parse(calc_str).body[0].value))
+            return str(calc_eval(ast.parse(calc_str).body[0]))
         except ValueError as ex:
             x, y = ex.args
             return "Error, {}**{} is too big".format(x, y)
