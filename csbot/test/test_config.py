@@ -1,6 +1,5 @@
-from StringIO import StringIO
-
-from twisted.trial import unittest
+import unittest
+from io import StringIO
 
 from csbot.test.helpers import TempEnvVars
 import csbot.core

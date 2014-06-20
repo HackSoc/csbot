@@ -1,11 +1,9 @@
+import unittest
 import os
-from StringIO import StringIO
+from io import StringIO
 from textwrap import dedent
 
-from twisted.trial import unittest
-from twisted.test import proto_helpers
-
-from csbot.core import Bot, BotProtocol
+from csbot.core import Bot, BotClient
 
 
 class TempEnvVars(object):
@@ -16,14 +14,14 @@ class TempEnvVars(object):
         self.restore = {}
 
     def __enter__(self):
-        for k, v in self.changes.iteritems():
+        for k, v in self.changes.items():
             if k in os.environ:
                 self.restore[k] = os.environ[k]
             os.environ[k] = v
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        for k, v in self.changes.iteritems():
+        for k, v in self.changes.items():
             if k in self.restore:
                 os.environ[k] = self.restore[k]
             else:
