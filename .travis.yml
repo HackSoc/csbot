@@ -1,8 +1,8 @@
 language: python
 python:
-- 2.7
+- 3.4
 install: pip install -r requirements-dev.txt --use-mirrors
-script: trial csbot
+script: ./run_tests.sh
 notifications:
   irc:
     channels:
