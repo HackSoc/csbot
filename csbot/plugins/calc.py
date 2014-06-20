@@ -40,8 +40,8 @@ def calc_eval(node):
     elif isinstance(node, ast.Load):  # <constant>
         return
     elif isinstance(node, ast.Name):  # (actual) <constant>
-        if str(node.id) in constants:
-            return constants[str(node.id)]
+        if node.id in constants:
+            return constants[node.id]
         else:
             raise NotImplementedError(node.id)
     elif isinstance(node, ast.Num):  # <number>
@@ -76,7 +76,7 @@ class Calc(Plugin):
         except ZeroDivisionError:  # "1 / 0"
             return "Silly, you cannot divide by 0"
         except NotImplementedError as ex:  # "sgdsdg + 3"
-            return "Unknown or invalid constant \"{}\"".format(ex.args)
+            return "Unknown or invalid constant \"{}\"".format(str(ex))
         except (TypeError, SyntaxError):  # "1 +"
             return "Error, \"{}\" is not a valid calculation".format(calc_str)
 

@@ -25,6 +25,7 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("1 / 0"), "Silly, you cannot divide by 0")
         self.assertEqual(self.calc._calc("1 + "), "Error, \"1 + \" is not a valid calculation")
         self.assertEqual(self.calc._calc("e = 1"), "Error, \"e = 1\" is not a valid calculation")
+        self.assertEqual(self.calc._calc("sgdsdg + 3"), "Unknown or invalid constant \"sgdsdg\"")
 
 
 
