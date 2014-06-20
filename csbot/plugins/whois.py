@@ -21,9 +21,9 @@ class Whois(Plugin):
         user = self.whoisdb.find_one(ident)
 
         if user is None:
-            e.protocol.msg(e['reply_to'], u'No data for {}'.format(nick_))
+            e.protocol.msg(e['reply_to'], 'No data for {}'.format(nick_))
         else:
-            e.protocol.msg(e['reply_to'], u'{}: {}'.format(nick_, user['data']))
+            e.protocol.msg(e['reply_to'], '{}: {}'.format(nick_, user['data']))
 
     @Plugin.command('whois.set')
     def set(self, e):

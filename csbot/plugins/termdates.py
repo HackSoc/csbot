@@ -157,7 +157,7 @@ class TermDates(Plugin):
 
             # Log for informational purposes
             if not term_start == real_start:
-                self.log.info(u'Computed real_start as {} (from {})'.format(
+                self.log.info('Computed real_start as {} (from {})'.format(
                     repr(real_start), repr(term_start)))
 
             term_end = real_start + timedelta(days=4, weeks=9)
