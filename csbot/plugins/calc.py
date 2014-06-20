@@ -5,7 +5,8 @@ from csbot.plugin import Plugin
 
 # Available operators
 operators = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
-             ast.Div: op.truediv, ast.Pow: None, ast.BitXor: op.xor}
+             ast.Div: op.truediv, ast.Pow: None, ast.BitXor: op.xor,
+             ast.UAdd: op.pos, ast.USub: op.neg}
 
 def limited_power(a, b):
     """
@@ -24,8 +25,10 @@ def calc_eval(node):
     """
     if isinstance(node, ast.Num):  # <number>
         return node.n
-    elif isinstance(node, ast.operator):  # <operator>
+    elif isinstance(node, ast.operator) or isinstance(node, ast.unaryop):  # <operator>
         return operators[type(node)]
+    elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
+        return calc_eval(node.op)(calc_eval(node.operand))
     elif isinstance(node, ast.BinOp):  # <left> <operator> <right>
         return calc_eval(node.op)(calc_eval(node.left), calc_eval(node.right))
     elif isinstance(node, ast.Name):

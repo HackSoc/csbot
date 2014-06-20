@@ -1,34 +1,15 @@
 import unittest
 from unittest import mock
 
+from .helpers import mock_client
 from ..irc import *
-
-
-class IRCClientMock(IRCClient):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.send_raw = mock.Mock(wraps=self.send_raw)
-
-        # Mock an asyncio event loop where delayed calls are immediate
-        self.loop = mock.Mock()
-        def call_soon(func, *args):
-            func(*args)
-            return asyncio.Handle(func, args, None)
-        self.loop.call_soon = call_soon
-        def call_later(delay, func, *args):
-            return call_soon(func, *args)
-        self.loop.call_later = call_later
-        self.loop.time.return_value = 100.0
-
-    def connect(self):
-        self.connection_made(mock.Mock())
 
 
 class IRCClientTestCase(unittest.TestCase):
     CLIENT_CONFIG = {}
 
     def setUp(self):
-        self.client = IRCClientMock(self.CLIENT_CONFIG)
+        self.client = mock_client(IRCClient, self.CLIENT_CONFIG)
 
     def patch(self, attrs, create=False):
         """Shortcut for patching attribute(s) of the client."""
@@ -76,9 +57,7 @@ class IRCClientTestCase(unittest.TestCase):
         traces of the on-connect messages."""
         self.client.connect()
         if silent:
-            self.client.transport.write.reset_mock()
-            self.client.send_raw.reset_mock()
-
+            self.client.reset_mock()
 
 class TestIRCClientLineProtocol(IRCClientTestCase):
     def test_buffer(self):
