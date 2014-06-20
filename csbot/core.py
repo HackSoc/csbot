@@ -263,12 +263,12 @@ class BotClient(IRCClient):
             self.on_joined(channel)
         else:
             self.emit_new('core.user.identified', {
-                'user': user,
+                'user': user.raw,
                 'account': None if account == '*' else account,
             })
             self.emit_new('core.channel.joined', {
                 'channel': channel,
-                'user': user,
+                'user': user.raw,
             })
 
     def on_user_left(self, user, channel, message):
