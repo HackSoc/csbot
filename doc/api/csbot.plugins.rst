@@ -10,7 +10,6 @@ Submodules
    csbot.plugins.calc
    csbot.plugins.cron
    csbot.plugins.csyork
-   csbot.plugins.example
    csbot.plugins.helix
    csbot.plugins.hoogle
    csbot.plugins.imgur
@@ -20,6 +19,7 @@ Submodules
    csbot.plugins.termdates
    csbot.plugins.topic
    csbot.plugins.usertrack
+   csbot.plugins.whois
 
 Module contents
 ---------------
