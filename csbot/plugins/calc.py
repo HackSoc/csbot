@@ -75,7 +75,7 @@ class Calc(Plugin):
             return "Error, {}**{} is too big".format(x, y)
         except ZeroDivisionError:  # "1 / 0"
             return "Silly, you cannot divide by 0"
-        except NotImplementedError as ex:  # "pi + 3"
+        except NotImplementedError as ex:  # "sgdsdg + 3"
             return "Unknown or invalid constant \"{}\"".format(ex.args)
         except (TypeError, SyntaxError):  # "1 +"
             return "Error, \"{}\" is not a valid calculation".format(calc_str)
