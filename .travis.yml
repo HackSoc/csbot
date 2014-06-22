@@ -1,7 +1,7 @@
 language: python
 python:
 - 3.4
-install: pip install -r requirements-dev.txt --use-mirrors
+install: pip install -r requirements.txt
 script: ./run_tests.sh
 notifications:
   irc:
