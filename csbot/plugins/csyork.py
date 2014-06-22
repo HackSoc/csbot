@@ -10,5 +10,5 @@ class CSYork(Plugin):
         # Completes an ASCII stick man started with `\o/`.
         if e['message'].strip() == '\o/':
             spaces = e['message'].find('\\')
-            e.protocol.msg(e['reply_to'], u' ' * spaces + ' |')
-            e.protocol.msg(e['reply_to'], u' ' * spaces + '/ \\')
+            e.protocol.msg(e['reply_to'], ' ' * spaces + ' |')
+            e.protocol.msg(e['reply_to'], ' ' * spaces + '/ \\')

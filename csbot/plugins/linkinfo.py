@@ -1,6 +1,6 @@
 import os.path
 import re
-from urlparse import urlparse
+from urllib.parse import urlparse
 import collections
 import datetime
 
@@ -94,7 +94,7 @@ class LinkInfo(Plugin):
             prefix, link_nsfw, message = reply
             self._respond(e, prefix, nsfw or link_nsfw, message)
         else:
-            e.protocol.msg(e['reply_to'], u"Couldn't fetch info for " + url)
+            e.protocol.msg(e['reply_to'], "Couldn't fetch info for " + url)
 
     @Plugin.hook('core.message.privmsg')
     def scan_privmsg(self, e):
@@ -141,13 +141,13 @@ class LinkInfo(Plugin):
             # Check that the URL hasn't been excluded
             for f in self.excludes:
                 if f(url):
-                    self.log.debug(u'ignored URL: ' + original_url)
+                    self.log.debug('ignored URL: ' + original_url)
                     return None
             # Invoke the default handler
             else:
                 reply = self.scrape_html_title(url)
                 if reply is None:
-                    self.log.debug(u'URL not handled: ' + original_url)
+                    self.log.debug('URL not handled: ' + original_url)
                 return reply
 
     def scrape_html_title(self, url):
@@ -157,10 +157,10 @@ class LinkInfo(Plugin):
         r = simple_http_get(url.geturl())
         # Only bother with 200 OK
         if r.status_code != requests.codes.ok:
-            self.log.debug(u'request failed for ' + url.geturl())
+            self.log.debug('request failed for ' + url.geturl())
             return None
         if 'html' not in r.headers['Content-Type']:
-            self.log.debug(u'Content-Type not HTML-ish ({}): {}'
+            self.log.debug('Content-Type not HTML-ish ({}): {}'
                            .format(r.headers['Content-Type'], url.geturl()))
             return None
 
@@ -175,7 +175,7 @@ class LinkInfo(Plugin):
         title = html.find('.//title')
 
         if title is None:
-            self.log.debug(u'failed to find <title>: ' + url.geturl())
+            self.log.debug('failed to find <title>: ' + url.geturl())
             return None
 
         # Normalise title whitespace
@@ -187,7 +187,7 @@ class LinkInfo(Plugin):
             return None
 
         # Return the scraped title
-        return 'Title', nsfw, u'"{}"'.format(title)
+        return 'Title', nsfw, '"{}"'.format(title)
 
     def _filter_title_in_url(self, url, title):
         """See if *title* is represented in *url*.
@@ -209,13 +209,13 @@ class LinkInfo(Plugin):
 
         # Attempt 0: is the title actually just the domain name?
         if title in url.netloc.lower():
-            self.log.debug(u'title "{}" matches domain name "{}"'.format(
+            self.log.debug('title "{}" matches domain name "{}"'.format(
                 title, url.netloc))
             return True
 
         # Attempt 1: is the slugified title entirely within the URL path?
         if title in path:
-            self.log.debug(u'title "{}" in "{}"'.format(title, path))
+            self.log.debug('title "{}" in "{}"'.format(title, path))
             return True
 
         # Attempt 2: is some part of the URL path the start of the title?
@@ -224,7 +224,7 @@ class LinkInfo(Plugin):
             ratio = float(len(part)) / float(len(title))
             if (len(part) >= slug_length and title.startswith(part) and
                     ratio >= float(self.config_get('minimum_path_match'))):
-                self.log.debug(u'path part "{}" matches title "{}"'.format(
+                self.log.debug('path part "{}" matches title "{}"'.format(
                     part, title))
                 return True
 
@@ -235,7 +235,7 @@ class LinkInfo(Plugin):
         """A helper function for responding to link information requests in a
         consistent format.
         """
-        e.protocol.msg(e['reply_to'], u'{}: {}{}'.format(
+        e.protocol.msg(e['reply_to'], '{}: {}{}'.format(
             prefix, '[NSFW] ' if nsfw else '', message,
         ))
 

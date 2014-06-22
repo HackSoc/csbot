@@ -1,5 +1,5 @@
 import requests
-import urllib
+import urllib.parse
 
 from csbot.plugin import Plugin
 from csbot.util import simple_http_get
@@ -24,7 +24,7 @@ class Hoogle(Plugin):
         hresp = simple_http_get(hurl)
 
         if hresp.status_code != requests.codes.ok:
-            self.log.warn(u'request failed for ' + hurl)
+            self.log.warn('request failed for ' + hurl)
             return
 
         # The Hoogle response JSON is of the following format:
@@ -43,22 +43,22 @@ class Hoogle(Plugin):
         maxresults = int(self.config_get('results'))
 
         if hresp.json is None:
-            self.log.warn(u'invalid JSON received from Hoogle')
+            self.log.warn('invalid JSON received from Hoogle')
             return
 
-        allresults = hresp.json[u'results']
+        allresults = hresp.json()['results']
         totalresults = len(allresults)
         results = allresults[0:maxresults]
         niceresults = []
 
         for result in results:
-            niceresults.append(result[u'self'])
+            niceresults.append(result['self'])
 
-        encqry = urllib.quote(query.encode('utf-8'))
+        encqry = urllib.parse.quote(query.encode('utf-8'))
         fullurl = 'http://www.haskell.org/hoogle/?hoogle=' + encqry
 
         e.protocol.msg(
-            e['reply_to'], u'Showing {} of {} results: {} ({})'.format(
+            e['reply_to'], 'Showing {} of {} results: {} ({})'.format(
                 maxresults if maxresults < totalresults else totalresults,
                 totalresults,
                 '; '.join(niceresults),

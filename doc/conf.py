@@ -244,8 +244,7 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    'python': ('http://docs.python.org/', None),
-    'py3k': ('http://docs.python.org/py3k/', None),
+    'python': ('http://docs.python.org/3/', None),
     'pymongo': ('http://api.mongodb.org/python/current/', None),
 }
 

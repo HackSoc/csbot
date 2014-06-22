@@ -1,9 +1,5 @@
-from StringIO import StringIO
+import unittest
 
-from twisted.trial import unittest
-
-
-from csbot.core import Bot
 from csbot.plugins.auth import Auth, PermissionDB
 
 
