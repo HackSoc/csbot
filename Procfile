@@ -1,1 +1,1 @@
-worker: python run_csbot.py -c csbot.deploy.cfg
+worker: python run_csbot.py csbot.deploy.cfg
