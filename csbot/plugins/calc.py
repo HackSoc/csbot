@@ -24,12 +24,12 @@ operators[ast.Pow] = limited_power
 constants = {
     "e": math.e,
     "pi": math.pi,
-    u"π": math.pi,
-    "F": 1.2096,  # Barrucadu's Constant (microfortnights in a second)
-    "c": 299792458,  # m*(s**-1)
-    "G": 6.6738480*10**-11,  # (m**3)*(kg**-1)*(s**-2)
-    "h": 6.6260695729*10**-34,  # J*s
-    "N": 6.0221412927*10**23  # mol**-1
+    "π": math.pi,
+    "F": 1.2096,            # Barrucadu's Constant (microfortnights in a second)
+    "c": 299792458,         # m s-1
+    "G": 6.6738480e-11,     # m3 kg-1 s-2
+    "h": 6.6260695729e-34,  # J s
+    "N": 6.0221412927e23,   # mol-1
 }
 
 def calc_eval(node):
