@@ -116,7 +116,7 @@ class Last(Plugin):
         if message is None:
             event.protocol.msg(event['reply_to'],
                                'Nothing recorded for {}'.format(thenick))
-        elif message['type'] == 'message':
+        elif message['type'] in ['message', 'command']:
             event.protocol.msg(event['reply_to'],
                                '[{}] <{}> {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
                                                      thenick,
