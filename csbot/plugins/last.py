@@ -12,7 +12,7 @@ class Last(Plugin):
 
     db = Plugin.use('mongodb', collection='last')
 
-    def provide(self):
+    def provide(self, plugin_name):
         """Return a reference to the plugin, allowing other plugins to
         use it."""
 
