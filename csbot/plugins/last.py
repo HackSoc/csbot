@@ -18,62 +18,41 @@ class Last(Plugin):
 
         return self
 
-    def last(self, nick, channel=None):
+    def last(self, nick, channel=None, msgtype=None):
         """Get the last thing said (including actions) by a given
         nick, optionally filtering by channel.
         """
 
-        if channel is None:
-            return self.db.find_one({'nick': nick},
-                                    sort=[('when', pymongo.DESCENDING)])
-        else:
-            return self.db.find_one({'nick': nick,
-                                     'channel': channel},
-                                    sort=[('when', pymongo.DESCENDING)])
+        search = {'nick': nick}
+
+        if channel is not None:
+            search['channel'] = channel
+
+        if msgtype is not None:
+            search['type'] = msgtype
+
+        return self.db.find_one(search, sort=[('when', pymongo.DESCENDING)])
 
     def last_message(self, nick, channel=None):
         """Get the last message sent by a nick, optionally filtering
         by channel.
         """
 
-        if channel is None:
-            return self.db.find_one({'nick': nick,
-                                     'type': 'message'},
-                                    sort=[('when', pymongo.DESCENDING)])
-        else:
-            return self.db.find_one({'nick': nick,
-                                     'channel': channel,
-                                     'type': 'message'},
-                                    sort=[('when', pymongo.DESCENDING)])
+        return self.last(nick, channel=channel, msgtype='message')
 
     def last_action(self, nick, channel=None):
         """Get the last action sent by a nick, optionally filtering
         by channel.
         """
 
-        if channel is None:
-            return self.db.find_one({'nick': nick,
-                                     'type': 'action'},
-                                    sort=[('when', pymongo.DESCENDING)])
-        else:
-            return self.db.find_one({'nick': nick,
-                                     'channel': channel,
-                                     'type': 'action'},
-                                    sort=[('when', pymongo.DESCENDING)])
+        return self.last(nick, channel=channel, msgtype='action')
+
     def last_command(self, nick, channel=None):
         """Get the last command sent by a nick, optionally filtering
         by channel.
         """
 
-        if channel is None:
-            return self.db.find_one({'nick': nick,
-                                     'type': 'command'},
-                                    sort=[('when', pymongo.DESCENDING)])
-        else:
-            return self.db.find_one({'nick': nick,
-                                     'channel': channel,
-                                     'type': 'command'},
-                                    sort=[('when', pymongo.DESCENDING)])
+        return self.last(nick, channel=channel, msgtype='command')
 
     @Plugin.hook('core.message.privmsg')
     def record_message(self, event):
