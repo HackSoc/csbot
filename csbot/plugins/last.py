@@ -68,7 +68,6 @@ class Last(Plugin):
 
         # Check if this is an action
         if event['message'][:7] == '\x01ACTION':
-            print("Action")
             return
 
         self.db.remove({'nick': nick(event['user']),
