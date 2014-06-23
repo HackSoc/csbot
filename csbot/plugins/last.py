@@ -66,6 +66,11 @@ class Last(Plugin):
         """Record the receipt of a new message.
         """
 
+        # Check if this is an action
+        if event['message'][:7] == '\x01ACTION':
+            print("Action")
+            return
+
         self.db.remove({'nick': nick(event['user']),
                         'channel': event['channel'],
                         'type': 'message'})
