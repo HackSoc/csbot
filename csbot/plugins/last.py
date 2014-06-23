@@ -60,6 +60,20 @@ class Last(Plugin):
                                      'channel': channel,
                                      'type': 'action'},
                                     sort=[('when', pymongo.DESCENDING)])
+    def last_command(self, nick, channel=None):
+        """Get the last command sent by a nick, optionally filtering
+        by channel.
+        """
+
+        if channel is None:
+            return self.db.find_one({'nick': nick,
+                                     'type': 'command'},
+                                    sort=[('when', pymongo.DESCENDING)])
+        else:
+            return self.db.find_one({'nick': nick,
+                                     'channel': channel,
+                                     'type': 'command'},
+                                    sort=[('when', pymongo.DESCENDING)])
 
     @Plugin.hook('core.message.privmsg')
     def record_message(self, event):
@@ -81,6 +95,24 @@ class Last(Plugin):
         self.db.insert({'nick': nick(event['user']),
                         'channel': event['channel'],
                         'type': 'message',
+                        'when': datetime.now(),
+                        'message': event['message']})
+
+    @Plugin.hook('core.message.privmsg')
+    def record_command(self, event):
+        """Record the receipt of a new command.
+        """
+
+        if event['message'][0] != self.bot.config_get('command_prefix'):
+            return
+
+        self.db.remove({'nick': nick(event['user']),
+                        'channel': event['channel'],
+                        'type': 'command'})
+
+        self.db.insert({'nick': nick(event['user']),
+                        'channel': event['channel'],
+                        'type': 'command',
                         'when': datetime.now(),
                         'message': event['message']})
 
