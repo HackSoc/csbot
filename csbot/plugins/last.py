@@ -67,15 +67,8 @@ class Last(Plugin):
         if event['message'][0] == self.bot.config_get('command_prefix'):
             return
 
-        self.db.remove({'nick': nick(event['user']),
-                        'channel': event['channel'],
-                        'type': 'message'})
-
-        self.db.insert({'nick': nick(event['user']),
-                        'channel': event['channel'],
-                        'type': 'message',
-                        'when': datetime.now(),
-                        'message': event['message']})
+        self.record(nick(event['user']), event['channel'], 'message',
+                    event['message'])
 
     @Plugin.hook('core.message.privmsg')
     def record_command(self, event):
@@ -85,30 +78,30 @@ class Last(Plugin):
         if event['message'][0] != self.bot.config_get('command_prefix'):
             return
 
-        self.db.remove({'nick': nick(event['user']),
-                        'channel': event['channel'],
-                        'type': 'command'})
-
-        self.db.insert({'nick': nick(event['user']),
-                        'channel': event['channel'],
-                        'type': 'command',
-                        'when': datetime.now(),
-                        'message': event['message']})
+        self.record(nick(event['user']), event['channel'], 'command',
+                    event['message'])
 
     @Plugin.hook('core.message.action')
     def record_action(self, event):
         """Record the receipt of a new action.
         """
 
-        self.db.remove({'nick': nick(event['user']),
-                        'channel': event['channel'],
-                        'type': 'action'})
+        self.record(nick(event['user']), event['channel'], 'action',
+                    event['message'])
 
-        self.db.insert({'nick': nick(event['user']),
-                        'channel': event['channel'],
-                        'type': 'action',
+    def record(self, nick, channel, msgtype, msg):
+        """Record a new message, of a given type.
+        """
+
+        self.db.remove({'nick': nick,
+                        'channel': channel,
+                        'type': msgtype})
+
+        self.db.insert({'nick': nick,
+                        'channel': channel,
+                        'type': msgtype,
                         'when': datetime.now(),
-                        'message': event['message']})
+                        'message': msg})
 
     @Plugin.command('last', help=('last nick: show the last thing'
                                   ' said by a nick in this channel'))
