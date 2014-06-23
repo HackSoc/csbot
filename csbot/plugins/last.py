@@ -107,11 +107,11 @@ class Last(Plugin):
                                'Nothing recorded for {}'.format(thenick))
         elif message['type'] == 'message':
             event.protocol.msg(event['reply_to'],
-                               '[{}] <{}> {}'.format(message['when'],
+                               '[{}] <{}> {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
                                                      thenick,
                                                      message['message']))
         else:
             event.protocol.msg(event['reply_to'],
-                               '[{}] * {} {}'.format(message['when'],
+                               '[{}] * {} {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
                                                      thenick,
                                                      message['message']))
