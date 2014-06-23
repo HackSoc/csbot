@@ -111,6 +111,12 @@ class Last(Plugin):
         splitted = event['data'].split()
         thenick = splitted[0]
         msgtype = splitted[1] if len(splitted) > 1 else None
+
+        if msgtype not in ['message', 'command', 'action', None]:
+            event.protocol.msg(event['reply_to'],
+                               'Bad filter: {}. Accepted are "message", "command", and "action".'.format(msgtype))
+            return
+
         message = self.last(thenick, channel=event['channel'], msgtype=msgtype)
 
         if message is None:
