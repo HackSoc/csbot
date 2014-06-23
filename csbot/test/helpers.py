@@ -1,29 +1,65 @@
+import unittest
+from unittest import mock
+import asyncio
 import os
-from StringIO import StringIO
+from io import StringIO
 from textwrap import dedent
 
-from twisted.trial import unittest
-from twisted.test import proto_helpers
+from csbot.core import Bot, BotClient
 
-from csbot.core import Bot, BotProtocol
+
+def mock_client(cls, *args, **kwargs):
+    """Create an instance of a mocked subclass of *cls*.
+
+    *cls* should be :class:`IRCClient` or a subclass of it.  The event loop and
+    transport are mocked, and a :meth:`reset_mock` method is added for resetting
+    all mocks on the client.
+    """
+    class MockIRCClient(cls):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.send_raw = mock.Mock(wraps=self.send_raw)
+
+            # Mock an asyncio event loop where delayed calls are immediate
+            self.loop = mock.Mock()
+            def call_soon(func, *args):
+                func(*args)
+                return asyncio.Handle(func, args, None)
+            self.loop.call_soon = call_soon
+            def call_later(delay, func, *args):
+                return call_soon(func, *args)
+            self.loop.call_later = call_later
+            self.loop.time.return_value = 100.0
+
+        def connect(self):
+            # Connect to a mock transport
+            self.connection_made(mock.Mock())
+
+        def reset_mock(self):
+            self.send_raw.reset_mock()
+            self.loop.reset_mock()
+            if self.transport is not None:
+                self.transport.reset_mock()
+
+    return MockIRCClient(*args, **kwargs)
 
 
 class TempEnvVars(object):
-    """A context manager for temporarily changing the values of enviroment
+    """A context manager for temporarily changing the values of environment
     variables."""
     def __init__(self, changes):
         self.changes = changes
         self.restore = {}
 
     def __enter__(self):
-        for k, v in self.changes.iteritems():
+        for k, v in self.changes.items():
             if k in os.environ:
                 self.restore[k] = os.environ[k]
             os.environ[k] = v
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        for k, v in self.changes.iteritems():
+        for k, v in self.changes.items():
             if k in self.restore:
                 os.environ[k] = self.restore[k]
             else:
@@ -46,9 +82,10 @@ class BotTestCase(unittest.TestCase):
         # possible/likely plugin names
         self.bot_ = Bot(StringIO(dedent(self.CONFIG)))
         self.bot_.bot_setup()
-        self.transport_ = proto_helpers.StringTransport()
-        self.protocol_ = BotProtocol(self.bot_)
-        self.protocol_.transport = self.transport_
+        self.protocol_ = mock_client(BotClient, self.bot_)
+        self.protocol_.connect()
+        self.protocol_.reset_mock()
+        self.transport_ = self.protocol_.transport
 
         for p in self.PLUGINS:
             setattr(self, p, self.bot_.plugins[p])

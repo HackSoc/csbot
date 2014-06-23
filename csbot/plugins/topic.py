@@ -73,7 +73,7 @@ class Topic(Plugin):
     def _set_topic(self, e, topic):
         if not self.bot.plugins['auth'].check_or_error(e, 'topic', e['channel']):
             return False
-        e.protocol.topic(e['channel'], topic)
+        e.protocol.set_topic(e['channel'], topic)
         return True
 
     @Plugin.hook('core.channel.topic')

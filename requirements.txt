@@ -1,7 +1,13 @@
 # Requirements for deployment
-Twisted>=12.0.0
+docopt>=0.6.2
 straight.plugin==1.4.0-post-1
 pymongo>=2.4.0
-configparser>=3.2
-requests>=0.14.0,<1.0.0
+requests>=2.3.0,<3.0.0
 lxml>=2.3.5
+
+# Requirements for unit testing
+httpretty>=0.5.4,!=0.8.1
+
+# Requirements for documentation
+# (commented out to save build time)
+#sphinx

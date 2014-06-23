@@ -1,5 +1,5 @@
 from csbot.plugin import Plugin
-import urlparse
+import urllib.parse as urlparse
 
 
 class Imgur(Plugin):

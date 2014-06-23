@@ -1,9 +1,7 @@
 import logging
 import collections
+import signal
 
-from twisted.words.protocols import irc
-from twisted.internet import reactor, protocol
-from twisted.python import log
 import configparser
 import straight.plugin
 
@@ -11,7 +9,8 @@ from csbot.plugin import Plugin, SpecialPlugin
 from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
-from csbot.util import nick
+
+from .irc import IRCClient, IRCUser
 
 
 class Bot(SpecialPlugin):
@@ -107,7 +106,7 @@ class Bot(SpecialPlugin):
                                 'with wrong tag {}').format(cmd, tag))
 
     def unregister_commands(self, tag):
-        delcmds = [c for c, (_, _, t) in self.commands.iteritems() if t == tag]
+        delcmds = [c for c, (_, _, t) in self.commands.items() if t == tag]
         for cmd in delcmds:
             f, _, tag = self.commands[cmd]
             del self.commands[cmd]
@@ -115,7 +114,8 @@ class Bot(SpecialPlugin):
 
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
-        map(event.protocol.join, self.config_get('channels').split())
+        for c in self.config_get('channels').split():
+            event.protocol.join(c)
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
@@ -162,20 +162,24 @@ class PluginError(Exception):
     pass
 
 
-class BotProtocol(irc.IRCClient):
+class BotClient(IRCClient):
+    # TODO: use IRCUser instances instead of raw user string
+
     log = logging.getLogger('csbot.protocol')
 
     _WHO_IDENTIFY = ('1', '%na')
 
     def __init__(self, bot):
+        # Initialise IRCClient from Bot configuration
+        super().__init__(
+            nick=bot.config_get('nickname'),
+            username=bot.config_get('username'),
+            host=bot.config_get('irc_host'),
+            port=bot.config_get('irc_port'),
+            password=bot.config_get('password'),
+        )
+
         self.bot = bot
-        # Get IRCClient configuration from the Bot
-        self.nickname = bot.config_get('nickname')
-        self.password = bot.config_get('password')
-        self.username = bot.config_get('username')
-        self.realname = bot.config_get('realname')
-        self.sourceURL = bot.config_get('sourceURL')
-        self.lineRate = int(bot.config_get('lineRate'))
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -193,92 +197,84 @@ class BotProtocol(irc.IRCClient):
         """
         self.bot.post_event(event)
 
-    def connectionMade(self):
-        irc.IRCClient.connectionMade(self)
-        self.sendLine('CAP REQ :account-notify extended-join')
+    def connection_made(self, transport):
+        super().connection_made(transport)
+        # TODO: do this in on_welcome() instead?
+        self.send_raw('CAP REQ :account-notify extended-join')
         self.emit_new('core.raw.connected')
 
-    def connectionLost(self, reason):
-        irc.IRCClient.connectionLost(self, reason)
-        self.emit_new('core.raw.disconnected', {'reason': reason})
+    def connection_lost(self, exc):
+        super().connection_lost(exc)
+        self.emit_new('core.raw.disconnected', {'reason': repr(exc)})
 
-    def sendLine(self, line):
-        # Encode unicode strings with utf-8
-        if isinstance(line, unicode):
-            line = line.encode('utf-8')
-        irc.IRCClient.sendLine(self, line)
+    def send_raw(self, line):
+        super().send_raw(line)
         self.emit_new('core.raw.sent', {'message': line})
 
-    def lineReceived(self, line):
-        # Attempt to decode incoming strings; if they are neither UTF-8 or
-        # CP1252 they will get mangled as whatever CP1252 thinks they are.
-        try:
-            line = line.decode('utf-8')
-        except UnicodeDecodeError:
-            line = line.decode('cp1252')
+    def line_received(self, line):
         self.emit_new('core.raw.received', {'message': line})
-        irc.IRCClient.lineReceived(self, line)
+        super().line_received(line)
 
-    def signedOn(self):
+    def on_welcome(self):
         self.emit_new('core.self.connected')
 
-    def joined(self, channel):
+    def on_joined(self, channel):
         self.identify(channel)
         self.emit_new('core.self.joined', {'channel': channel})
 
-    def left(self, channel):
+    def on_left(self, channel):
         self.emit_new('core.self.left', {'channel': channel})
 
-    def privmsg(self, user, channel, message):
+    def on_privmsg(self, user, channel, message):
         self.emit_new('core.message.privmsg', {
             'channel': channel,
-            'user': user,
+            'user': user.raw,
             'message': message,
-            'is_private': channel == self.nickname,
-            'reply_to': nick(user) if channel == self.nickname else channel,
+            'is_private': channel == self.nick,
+            'reply_to': user.nick if channel == self.nick else channel,
         })
 
-    def noticed(self, user, channel, message):
+    def on_notice(self, user, channel, message):
         self.emit_new('core.message.notice', {
             'channel': channel,
-            'user': user,
+            'user': user.raw,
             'message': message,
-            'is_private': channel == self.nickname,
-            'reply_to': nick(user) if channel == self.nickname else channel,
+            'is_private': channel == self.nick,
+            'reply_to': user.nick if channel == self.nick else channel,
         })
 
-    def action(self, user, channel, message):
+    def on_action(self, user, channel, message):
         self.emit_new('core.message.action', {
             'channel': channel,
-            'user': user,
+            'user': user.raw,
             'message': message,
-            'is_private': channel == self.nickname,
-            'reply_to': nick(user) if channel == self.nickname else channel,
+            'is_private': channel == self.nick,
+            'reply_to': user.nick if channel == self.nick else channel,
         })
 
-    def irc_JOIN(self, prefix, params):
+    def irc_JOIN(self, msg):
         """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
         """
-        user = prefix
-        nick_ = nick(user)
-        channel, account, _ = params
+        user = IRCUser.parse(msg.prefix)
+        nick = user.nick
+        channel, account, _ = msg.params
 
-        if nick_ == self.nickname:
-            self.joined(channel)
+        if nick == self.nick:
+            self.on_joined(channel)
         else:
             self.emit_new('core.user.identified', {
-                'user': user,
+                'user': user.raw,
                 'account': None if account == '*' else account,
             })
             self.emit_new('core.channel.joined', {
                 'channel': channel,
-                'user': user,
+                'user': user.raw,
             })
 
-    def userLeft(self, user, channel):
+    def on_user_left(self, user, channel, message):
         self.emit_new('core.channel.left', {
             'channel': channel,
-            'user': user,
+            'user': user.raw,
         })
 
     def names(self, channel, names, raw_names):
@@ -290,155 +286,69 @@ class BotProtocol(irc.IRCClient):
             'raw_names': raw_names,
         })
 
-    def userQuit(self, user, message):
+    def on_user_quit(self, user, message):
         self.emit_new('core.user.quit', {
-            'user': user,
+            'user': user.raw,
             'message': message,
         })
 
-    def userRenamed(self, oldnick, newnick):
+    def on_user_renamed(self, oldnick, newnick):
         self.emit_new('core.user.renamed', {
             'oldnick': oldnick,
             'newnick': newnick,
         })
 
-    def irc_RPL_NAMREPLY(self, prefix, params):
-        channel = params[2]
-        self.names_accumulator[channel].extend(params[3].split())
+    def irc_RPL_NAMREPLY(self, msg):
+        channel = msg.params[2]
+        self.names_accumulator[channel].extend(msg.params[3].split())
 
-    def irc_RPL_ENDOFNAMES(self, prefix, params):
+    def irc_RPL_ENDOFNAMES(self, msg):
         # Get channel and raw names list
-        channel = params[1]
+        channel = msg.params[1]
         raw_names = self.names_accumulator.pop(channel, [])
 
+        # TODO: restore this functionality
         # Get a mapping from status characters to mode flags
-        prefixes = self.supported.getFeature('PREFIX')
-        inverse_prefixes = dict((v[0], k) for k, v in prefixes.iteritems())
+        #prefixes = self.supported.getFeature('PREFIX')
+        #inverse_prefixes = dict((v[0], k) for k, v in prefixes.items())
 
         # Get mode characters from name prefix
+        #def f(name):
+        #    if name[0] in inverse_prefixes:
+        #        return (name[1:], set(inverse_prefixes[name[0]]))
+        #    else:
+        #        return (name, set())
         def f(name):
-            if name[0] in inverse_prefixes:
-                return (name[1:], set(inverse_prefixes[name[0]]))
-            else:
-                return (name, set())
-        names = map(f, raw_names)
+            return name.lstrip('@+'), set()
+        names = list(map(f, raw_names))
 
         # Fire the event
         self.names(channel, names, raw_names)
 
-    def topicUpdated(self, user, channel, newtopic):
+    def on_topic_changed(self, user, channel, topic):
         self.emit_new('core.channel.topic', {
             'channel': channel,
-            'author': user,     # might be server name or nick
-            'topic': newtopic,
+            'author': user.raw,     # might be server name or nick
+            'topic': topic,
         })
 
     def identify(self, target):
         """Find the account for a user or all users in a channel."""
         tag, query = self._WHO_IDENTIFY
-        self.sendLine('WHO {} {}t,{}'.format(target, query, tag))
-        pass
+        self.send_raw('WHO {} {}t,{}'.format(target, query, tag))
 
-    def irc_354(self, prefix, params):
+    def irc_354(self, msg):
         """Handle "formatted WHO" responses."""
-        tag = params[1]
+        tag = msg.params[1]
         if tag == self._WHO_IDENTIFY[0]:
             self.emit_new('core.user.identified', {
-                'user': params[2],
-                'account': None if params[3] == '0' else params[3],
+                'user': msg.params[2],
+                'account': None if msg.params[3] == '0' else msg.params[3],
             })
 
-    def irc_ACCOUNT(self, prefix, params):
+    def irc_ACCOUNT(self, msg):
         """Account change notification from ``account-notify`` capability."""
         self.emit_new('core.user.identified', {
-            'user': prefix,
-            'account': None if params[0] == '*' else params[0],
+            'user': msg.prefix,
+            'account': None if msg.params[0] == '*' else msg.params[0],
         })
-
-
-class BotFactory(protocol.ClientFactory):
-    def __init__(self, bot):
-        self.bot = bot
-
-    def buildProtocol(self, addr):
-        p = BotProtocol(self.bot)
-        p.factory = self
-        return p
-
-    def clientConnectionLost(self, connector, reason):
-        connector.connect()
-
-    def clientConnectionFailed(self, connector, reason):
-        reactor.stop()
-
-
-class PrettyStreamHandler(logging.StreamHandler):
-    """A :class:`logging.StreamHandler` that wraps log messages with
-    severity-dependent ANSI colours."""
-    #: Mapping from logging levels to ANSI colours.
-    COLOURS = {
-        logging.DEBUG: '\033[36m',      # Cyan
-        logging.WARNING: '\033[33m',    # Yellow foreground
-        logging.ERROR: '\033[31m',      # Red foreground
-        logging.CRITICAL: '\033[31;7m'  # Red foreground, inverted
-    }
-    #: ANSI code for resetting the terminal to default colour.
-    COLOUR_END = '\033[0m'
-
-    def format(self, record):
-        """Call :meth:`logging.StreamHandler.format`, and apply a colour to the
-        message if output stream is a TTY."""
-        msg = super(PrettyStreamHandler, self).format(record)
-        if self.stream.isatty():
-            colour = self.COLOURS.get(record.levelno, '')
-            return colour + msg + self.COLOUR_END
-        else:
-            return msg
-
-
-def main(argv):
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', default='csbot.cfg',
-                        help='Configuration file [default: %(default)s]')
-    parser.add_argument('-d', '--debug', dest='loglevel', default=logging.INFO,
-                        action='store_const', const=logging.DEBUG,
-                        help='Debug output [default: off]')
-    args = parser.parse_args(argv[1:])
-
-    # Connect Twisted logging to Python logging
-    observer = log.PythonLoggingObserver('twisted')
-    observer.start()
-
-    # Log to stdout with ANSI color codes to indicate level
-    handler = PrettyStreamHandler()
-    handler.setLevel(args.loglevel)
-    handler.setFormatter(logging.Formatter(
-        '[%(asctime)s] (%(levelname).1s:%(name)s) %(message)s',
-        '%Y/%m/%d %H:%M:%S'))
-    rootlogger = logging.getLogger('')
-    rootlogger.setLevel(args.loglevel)
-    rootlogger.addHandler(handler)
-
-    # Create bot and run setup functions
-    try:
-        config = open(args.config, 'r')
-    except IOError:
-        config = None
-
-    bot = Bot(config)
-
-    if config is not None:
-        config.close()
-
-    bot.bot_setup()
-
-    # Connect and enter the reactor loop
-    reactor.connectTCP(bot.config_get('irc_host'),
-                       int(bot.config_get('irc_port')),
-                       BotFactory(bot))
-    reactor.run()
-
-    # Run teardown functions before exiting
-    bot.bot_teardown()

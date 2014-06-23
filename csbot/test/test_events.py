@@ -1,8 +1,8 @@
+import unittest
 import datetime
 
-from twisted.trial import unittest
-
 import csbot.events
+import collections
 
 
 class TestImmediateEventRunner(unittest.TestCase):
@@ -18,7 +18,7 @@ class TestImmediateEventRunner(unittest.TestCase):
         """Record objects passed through the event handler in order.  If they
         are callable, call them."""
         self.handled_events.append(event)
-        if callable(event):
+        if isinstance(event, collections.Callable):
             event()
 
     def test_values(self):
@@ -116,7 +116,7 @@ class TestEvent(unittest.TestCase):
         if datetime:
             self.assertEqual(e1.datetime, e2.datetime)
         if data:
-            for k in e1.keys() + e2.keys():
+            for k in list(e1.keys()) + list(e2.keys()):
                 self.assertEqual(e1[k], e2[k])
 
     def test_create(self):
@@ -137,7 +137,7 @@ class TestEvent(unittest.TestCase):
         self.assertIs(e.bot, bot)
         self.assertEqual(e.event_type, 'event.type')
         for k, v in data.items():
-            self.assertEquals(e[k], v)
+            self.assertEqual(e[k], v)
 
         # Check that .bot really is a shortcut to .protocol.bot
         broken_protocol = self.DummyProtocol()
@@ -241,11 +241,11 @@ class TestCommandEvent(unittest.TestCase):
 
         # Test unicode
         ## Unicode prefix
-        self._check_valid_command(u'\u0CA0test', u'\u0CA0', 'test', '')
+        self._check_valid_command('\u0CA0test', '\u0CA0', 'test', '')
         ## Shouldn't match part of a UTF8 multibyte sequence: \u0CA0 = \xC2\xA3
-        self._check_invalid_command(u'\u0CA0test', u'\xC2')
+        self._check_invalid_command('\u0CA0test', '\xC2')
         ## Unicode command
-        self._check_valid_command(u'!\u0CA0_\u0CA0', '!', u'\u0CA0_\u0CA0', '')
+        self._check_valid_command('!\u0CA0_\u0CA0', '!', '\u0CA0_\u0CA0', '')
 
     def test_arguments(self):
         """Test argument grouping/parsing.  These tests are pretty much just

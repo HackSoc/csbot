@@ -34,10 +34,10 @@ class Helix(Plugin):
 
     def _answer(self, message):
         # The almighty helix accepts only cleansed queries
-        worshippers_question = filter(lambda x: x.isalpha(), message).lower()
+        worshippers_question = ''.join(filter(lambda x: x.isalpha(), message)).lower()
 
         # Recieve and demystify the almighty helix's answer
-        answer = hashlib.sha1(worshippers_question)
+        answer = hashlib.sha1(worshippers_question.encode('utf-8'))
         answer = int(answer.hexdigest(), 16)
         return self.outcomes[answer % len(self.outcomes)]
 
@@ -48,4 +48,4 @@ class Helix(Plugin):
         """
         answer = self._answer(e["data"])
         e.protocol.msg(e['reply_to'],
-                       u'The Helix Fossil says: "{}"'.format(answer))
+                       'The Helix Fossil says: "{}"'.format(answer))

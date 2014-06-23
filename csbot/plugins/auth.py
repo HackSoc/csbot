@@ -99,7 +99,7 @@ class Auth(Plugin):
         for entity, permissions in self.config.items():
             self._permissions.process(entity, permissions)
 
-        for e, p in self._permissions.iteritems():
+        for e, p in self._permissions.items():
             self.log.debug((e, p))
 
     def check(self, nick, perm, channel=None):

@@ -1,6 +1,6 @@
 from csbot.plugin import Plugin
 from csbot.events import Event
-from twisted.internet import task
+import asyncio
 from datetime import datetime, timedelta
 import pymongo
 
@@ -44,11 +44,10 @@ class Cron(Plugin):
         # Schedule own events with the same API other plugins will use
         self.cron = self.provide(self.plugin_name())
 
-        # self.scheduler is a handle to the scheduler repeating task, and
-        # self.scheduler_freq is how frequently it gets called. These need to
-        # be set before anything is scheduled (like the repeated events).
+        # An asyncio.Handle for the event runner delayed call
         self.scheduler = None
-        self.scheduler_freq = -1
+        # The datetime of the next task, which self.scheduler was created for
+        self.scheduler_next = None
 
         # Now we need to remove the hourly, daily, and weekly events
         # (if there are any), because the scheduler just runs things
@@ -86,6 +85,11 @@ class Cron(Plugin):
                            interval=timedelta(weeks=1),
                            callback='fire_event',
                            args=['cron.weekly'])
+
+    def teardown(self):
+        super().teardown()
+        if self.scheduler is not None:
+            self.scheduler.cancel()
 
     def fire_event(self, now, name):
         """Fire off a regular event.
@@ -149,9 +153,8 @@ class Cron(Plugin):
         # If we made it this far, save the task
         self.tasks.insert(task)
 
-        # Call the scheduler immediately, as it may now need to be called
-        # sooner than it had planned.
-        self.event_runner()
+        # Reschedule the event runner in case it now needs to happen earlier
+        self.schedule_event_runner()
 
     def unschedule(self, owner, name=None, args=None, kwargs=None):
         """Unschedule a task.
@@ -165,6 +168,30 @@ class Cron(Plugin):
         """
         self.tasks.remove(self.match_task(owner, name, args, kwargs))
 
+    def schedule_event_runner(self):
+        """Schedule the event runner.
+
+        Set up a delayed call for :meth:`event_runner` to happen no sooner than
+        is required by the next scheduled task.  If a different call already
+        exists it is replaced.
+        """
+        now = datetime.now()
+        # There will always be at least one event remaining because we
+        # have three repeating ones, so this is safe.
+        remaining_tasks = self.tasks.find().sort('when', pymongo.ASCENDING)
+        next_run = remaining_tasks[0]['when']
+
+        if self.scheduler_next is None or next_run != self.scheduler_next:
+            if self.scheduler is not None:
+                self.scheduler.cancel()
+            delay = (next_run - now).total_seconds()
+            self.log.debug('calling event runner in %s seconds', delay)
+            # TODO: need a better API for using the bot's event loop
+            self.scheduler = asyncio.get_event_loop().call_later(delay, self.event_runner)
+            self.scheduler_next = next_run
+        else:
+            self.log.debug('already scheduled for %s', self.scheduler_next)
+
     def event_runner(self):
         """Run pending tasks.
 
@@ -172,6 +199,7 @@ class Cron(Plugin):
         reschedule self to run in time for the next task.
         """
         now = datetime.now()
+        self.log.debug('running event runner at %s', now)
 
         # Find and run every task from before now
         for taskdef in self.tasks.find({'when': {'$lt': now}}):
@@ -235,32 +263,8 @@ class Cron(Plugin):
                         task_name,
                         type(e), e.args))
 
-        # Schedule the event runner to happen no sooner than is required by the
-        # next scheduled task.
-        #
-        # There will always be at least one event remaining because we
-        # have three repeating ones, so this is safe.
-        remaining_tasks = self.tasks.find().sort('when', pymongo.ASCENDING)
-        next_run = remaining_tasks[0]['when']
-
-        # We use a looping call for the scheduler, rather than a
-        # deferred task, because the expected behaviour is that cron
-        # won't actually have that much to do. In fact, it wouldn't
-        # surprise me if the most frequent events were the cron.hourly
-        # ones. As it's likely that cron will end up running at a
-        # mostly constant frequency anyway, using a looping call is
-        # less work compared to rescheduling it every single time.
-        freq = (next_run - now).total_seconds()
-
-        if freq != self.scheduler_freq:
-            # The first time this runs we won't actually have a
-            # scheduler handle, so we have to check.
-            if self.scheduler is not None:
-                self.scheduler.stop()
-
-            self.scheduler = task.LoopingCall(self.event_runner)
-            self.scheduler.start(freq, now=False)
-            self.scheduler_freq = freq
+        # Schedule the event runner for the next task
+        self.schedule_event_runner()
 
 
 class DuplicateTaskError(Exception):

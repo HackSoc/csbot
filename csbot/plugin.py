@@ -91,7 +91,7 @@ class PluginManager(collections.Mapping):
             raise AttributeError
 
         def f(*args):
-            for p in self.plugins.itervalues():
+            for p in self.plugins.values():
                 getattr(p, name)(*args)
         return f
 
@@ -125,7 +125,7 @@ class PluginMeta(type):
         cls.plugin_provide = []
 
         # Scan for decorated methods
-        for name, attr in dict.iteritems():
+        for name, attr in dict.items():
             for h in getattr(attr, 'plugin_hooks', ()):
                 cls.plugin_hooks[h].append(attr)
             for cmd, metadata in getattr(attr, 'plugin_cmds', ()):
@@ -137,14 +137,13 @@ class PluginMeta(type):
                 cls.plugin_provide.append((name, attr))
 
 
-class Plugin(object):
+class Plugin(object, metaclass=PluginMeta):
     """Bot plugin base class.
 
     All bot plugins should inherit from this class.  It provides convenience
     methods for hooking events, registering commands, accessing MongoDB and
     manipulating the configuration file.
     """
-    __metaclass__ = PluginMeta
 
     #: Default configuration values, used automatically by :meth:`config_get`.
     CONFIG_DEFAULTS = {}
@@ -303,7 +302,7 @@ class Plugin(object):
         Uses the ``[plugin_name]`` section of the configuration file, creating
         an empty section if it doesn't exist.
 
-        .. seealso:: :mod:`py3k:configparser`
+        .. seealso:: :mod:`configparser`
         """
         plugin = self.plugin_name()
         if plugin not in self.bot.config_root:
