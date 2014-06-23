@@ -103,11 +103,15 @@ class Last(Plugin):
                         'when': datetime.now(),
                         'message': msg})
 
-    @Plugin.command('last', help=('last nick: show the last thing'
-                                  ' said by a nick in this channel'))
+    @Plugin.command('last', help=('last nick [type]: show the last thing'
+                                  ' said by a nick in this channel, optionally'
+                                  ' filtering by type: message, action,'
+                                  ' or command.'))
     def show_last(self, event):
-        thenick = event['data']
-        message = self.last(thenick, channel=event['channel'])
+        splitted = event['data'].split()
+        thenick = splitted[0]
+        msgtype = splitted[1] if len(splitted) > 1 else None
+        message = self.last(thenick, channel=event['channel'], msgtype=msgtype)
 
         if message is None:
             event.protocol.msg(event['reply_to'],
