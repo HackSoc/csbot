@@ -132,3 +132,17 @@ class Last(Plugin):
                                '[{}] * {} {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
                                                      thenick,
                                                      message['message']))
+
+    @Plugin.command('seen', help=('seen nick: report when that nick was last'
+                                  ' seen in this channel.'))
+    def show_seen(self, event):
+        thenick = nick(event['data'])
+        message = self.last(thenick, channel=event['channel'])
+
+        if message is None:
+            event.protocol.msg(event['reply_to'],
+                               '{} has never been seen in this channel.'.format(thenick))
+        else:
+            event.protocol.msg(event['reply_to'],
+                               '{} was last seen at {}.'.format(thenick,
+                                                                message['when'].strftime("%Y-%m-%d %H:%M:%S")))
