@@ -48,11 +48,13 @@ def main(argv=None):
 
     # Set logging level for the bot
     rootlogger.setLevel(logging.DEBUG if args['--debug'] else logging.INFO)
-    # Set logging level for other things
+    # Set logging level for IRCClient
     logging.getLogger('csbot.irc').setLevel(
         logging.DEBUG if args['--debug-irc'] else logging.INFO)
+    # Set logging level for asyncio - default is WARNING because "poll took x
+    # seconds" messages are annoying
     logging.getLogger('asyncio').setLevel(
-        logging.DEBUG if args['--debug-asyncio'] else logging.INFO)
+        logging.DEBUG if args['--debug-asyncio'] else logging.WARNING)
 
     # Create and initialise the bot
     with open(args['<config>'], 'r') as f:
