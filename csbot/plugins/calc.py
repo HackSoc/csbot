@@ -1,14 +1,22 @@
-# -*- coding: utf-8 -*-
 import ast
 import operator as op
 import math
 
 from csbot.plugin import Plugin
+from csbot.util import pairwise
 
 # Available operators
-operators = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
-             ast.Div: op.truediv, ast.Pow: None, ast.BitXor: op.xor,
-             ast.UAdd: op.pos, ast.USub: op.neg}
+operators = {ast.And: op.and_, ast.Or: op.or_,  # boolop
+             ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
+             ast.Div: op.truediv, ast.Mod: op.mod, ast.LShift: op.lshift,
+             ast.RShift: op.rshift, ast.BitOr: op.or_, ast.BitXor: op.xor,
+             ast.BitAnd: op.and_, ast.FloorDiv: op.floordiv,  # operator
+             ast.Invert: op.inv, ast.Not: op.not_, ast.UAdd: op.pos,
+             ast.USub: op.neg,  # unaryop
+             ast.Eq: op.eq, ast.NotEq: op.ne, ast.Lt: op.lt, ast.LtE: op.le,
+             ast.Gt: op.gt, ast.GtE: op.ge, ast.Is: op.is_,
+             ast.IsNot: op.is_not  # cmpop
+}
 
 def limited_power(a, b):
     """
@@ -38,21 +46,31 @@ def calc_eval(node):
     """
     if isinstance(node, ast.Expr):  # Top level expression
         return calc_eval(node.value)
-    elif isinstance(node, ast.Load):  # <constant>
+    elif isinstance(node, ast.Load):  # ignore
         return
-    elif isinstance(node, ast.Name):  # (actual) <constant>
+    elif isinstance(node, ast.Name):  # <constant>
         if node.id in constants:
             return constants[node.id]
         else:
             raise NotImplementedError(node.id)
+    elif isinstance(node, ast.NameConstant):
+        return node.value
     elif isinstance(node, ast.Num):  # <number>
         return node.n
-    elif isinstance(node, ast.operator) or isinstance(node, ast.unaryop):  # <operator>
-        return operators[type(node)]
+    elif (isinstance(node, ast.operator) or
+          isinstance(node, ast.unaryop) or
+          isinstance(node, ast.cmpop)):  # <operator>
+        if type(node) in operators:
+            return operators[type(node)]
+        else:
+            raise KeyError(type(node).__name__)
     elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
         return calc_eval(node.op)(calc_eval(node.operand))
     elif isinstance(node, ast.BinOp):  # <left> <operator> <right>
         return calc_eval(node.op)(calc_eval(node.left), calc_eval(node.right))
+    elif isinstance(node, ast.Compare):  # boolean comparisons are more tricky
+        comparisons = zip(node.ops, pairwise([node.left] + node.comparators))
+        return all(calc_eval(op)(calc_eval(left), calc_eval(right)) for op, (left, right) in comparisons)
     else:
         raise TypeError(node)
 
@@ -73,7 +91,9 @@ class Calc(Plugin):
             return "You want to calculate something? Type in an expression then, silly!"
         try:
             return str(calc_eval(ast.parse(calc_str).body[0]))
-        except ValueError as ex:
+        except KeyError as ex:
+            return "Unknown operator {}".format(str(ex))
+        except ValueError as ex:  # "6 ** 10000"
             x, y = ex.args
             return "Error, {}**{} is too big".format(x, y)
         except ZeroDivisionError:  # "1 / 0"
