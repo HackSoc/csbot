@@ -70,6 +70,10 @@ class Last(Plugin):
         if event['message'][:7] == '\x01ACTION':
             return
 
+        # Check if this is a command
+        if event['message'][0] == self.bot.config_get('command_prefix'):
+            return
+
         self.db.remove({'nick': nick(event['user']),
                         'channel': event['channel'],
                         'type': 'message'})
