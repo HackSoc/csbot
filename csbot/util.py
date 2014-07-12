@@ -1,4 +1,5 @@
 import shlex
+from itertools import tee
 
 import requests
 
@@ -86,3 +87,10 @@ def simple_http_get(url):
     """
     headers = {'User-Agent': 'csbot/0.1'}
     return requests.get(url, verify=False, headers=headers)
+
+def pairwise(iterable):
+    """Pairs elements of an iterable together,
+    e.g. s -> (s0,s1), (s1,s2), (s2, s3), ..."""
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
