@@ -13,9 +13,7 @@ def fix_json_unicode(data):
         if type(data[tag]) != str or is_ascii(data[tag]):
             continue
         try:
-            # Yes, this may need to be done more than once -_-
-            for _ in range(1, 5):
-                data[tag] = data[tag].encode("latin-1").decode("utf-8")
+            data[tag] = data[tag].encode("latin-1").decode("utf-8")
         except (UnicodeEncodeError, UnicodeDecodeError):
             pass
     return data
@@ -30,11 +28,12 @@ def get_info(number=None):
     else:
         url = "http://xkcd.com/info.0.json"
 
-    data = simple_http_get(url)
-    if data.status_code != requests.codes.ok:
+    httpdata = simple_http_get(url)
+    if httpdata.status_code != requests.codes.ok:
         return None
 
-    data = json.loads(data.text)
+    # Only care about part of the data
+    data = {key: httpdata.json()[key] for key in ["title", "alt", "num"]}
 
     # Unfuck up unicode strings
     data = fix_json_unicode(data)
