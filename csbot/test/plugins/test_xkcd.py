@@ -4,7 +4,7 @@ from ..helpers import BotTestCase
 
 
 #: Tests are (number, url, content-type, body, expected)
-encoding_test_cases = [
+json_test_cases = [
     # (These test case are copied from the actual URLs, without the lengthy transcripts)
 
     # "Latest"
@@ -52,7 +52,7 @@ encoding_test_cases = [
         "259",
         "http://xkcd.com/259/info.0.json",
         "application/json; charset=utf-8",
-        (b'{',
+        (b'{'
            b'"month": "5", '
            b'"num": 259, '
            b'"link": "", '
@@ -119,19 +119,11 @@ class TestXKCDPlugin(BotTestCase):
 
     @httprettified
     def test_correct(self):
-        num, url, content_type, body, expected = encoding_test_cases[2]
-        HTTPretty.register_uri(HTTPretty.GET, url, body=body, content_type=content_type)
-        with self.subTest(url=url):
-            result = self.xkcd._xkcd(num)
-            self.assertEqual(result, expected, url)
-
-
-        return
-        for _, url, content_type, body, _ in encoding_test_cases:
+        for _, url, content_type, body, _ in json_test_cases:
             HTTPretty.register_uri(HTTPretty.GET, url, body=body,
                                    content_type=content_type)
 
-        for num, url, _, _, expected in encoding_test_cases:
+        for num, url, _, _, expected in json_test_cases:
             with self.subTest(url=url):
                 result = self.xkcd._xkcd(num)
                 self.assertEqual(result, expected, url)
@@ -139,7 +131,7 @@ class TestXKCDPlugin(BotTestCase):
     @httprettified
     def test_error(self):
         # Still need to overrride the "latest"
-        _, url, content_type, body, _ = encoding_test_cases[0]
+        _, url, content_type, body, _ = json_test_cases[0]
         HTTPretty.register_uri(HTTPretty.GET, url, body=body,
                                content_type=content_type)
 
