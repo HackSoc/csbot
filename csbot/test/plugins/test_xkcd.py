@@ -119,14 +119,6 @@ class TestXKCDPlugin(BotTestCase):
 
     @httprettified
     def test_correct(self):
-        num, url, content_type, body, expected = encoding_test_cases[2]
-        HTTPretty.register_uri(HTTPretty.GET, url, body=body, content_type=content_type)
-        with self.subTest(url=url):
-            result = self.xkcd._xkcd(num)
-            self.assertEqual(result, expected, url)
-
-
-        return
         for _, url, content_type, body, _ in encoding_test_cases:
             HTTPretty.register_uri(HTTPretty.GET, url, body=body,
                                    content_type=content_type)
