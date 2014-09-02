@@ -1,6 +1,6 @@
 from httpretty import httprettified, HTTPretty
 
-from . import BotTestCase
+from . import BotTestCase, read_fixture_file
 
 
 #: Tests are (number, url, content-type, body, expected)
@@ -12,19 +12,7 @@ json_test_cases = [
         "0",  # 0 is latest
         "http://xkcd.com/info.0.json",
         "application/json; charset=utf-8",
-        (b'{'
-           b'"month": "7", '
-           b'"num": 1399, '
-           b'"link": "", '
-           b'"year": "2014", '
-           b'"news": "", '
-           b'"safe_title": "Chaos", '
-           b'"alt": "Although the oral exam for the doctorate was just \'can you do that weird laugh?\'", '
-           b'"img": "http:\\/\\/imgs.xkcd.com\\/comics\\/chaos.png", '
-           b'"title": "Chaos", '
-           b'"day": "25"'
-         b'}'
-        ),
+        'xkcd_1399.json',
         ('http://xkcd.com/1399', 'Chaos', 'Although the oral exam for the doctorate was just \'can you do that weird laugh?\'')
     ),
 
@@ -33,17 +21,7 @@ json_test_cases = [
         "1",
         "http://xkcd.com/1/info.0.json",
         "application/json; charset=utf-8",
-        (b'{'
-           b'"month": "1", '
-           b'"num": 1, '
-           b'"link": "", '
-           b'"year": "2006", '
-           b'"news": "", '
-           b'"safe_title": "Barrel - Part 1", '
-           b'"alt": "Don\'t we all.", '
-           b'"img": "http:\\/\\/imgs.xkcd.com\\/comics\\/barrel_cropped_(1).jpg", '
-           b'"title": "Barrel - Part 1", "day": "1"'
-         b'}'),
+        'xkcd_1.json',
         ('http://xkcd.com/1', 'Barrel - Part 1', 'Don\'t we all.')
     ),
 
@@ -52,18 +30,7 @@ json_test_cases = [
         "259",
         "http://xkcd.com/259/info.0.json",
         "application/json; charset=utf-8",
-        (b'{'
-           b'"month": "5", '
-           b'"num": 259, '
-           b'"link": "", '
-           b'"year": "2007", '
-           b'"news": "", '
-           b'"safe_title": "Clichd Exchanges", '
-           b'"alt": "It\'s like they say, you gotta fight fire with clich&eacute;s.", '
-           b'"img": "http:\\/\\/imgs.xkcd.com\\/comics\\/cliched_exchanges.png", '
-           b'"title": "Clich&eacute;d Exchanges", '
-           b'"day": "9"'
-         b'}'),
+        'xkcd_259.json',
         ('http://xkcd.com/259', 'Clichéd Exchanges', 'It\'s like they say, you gotta fight fire with clichés.')
     ),
 
@@ -72,18 +39,7 @@ json_test_cases = [
         "403",
         "http://xkcd.com/403/info.0.json",
         "application/json; charset=utf-8",
-        (b'{'
-           b'"month": "3", '
-           b'"num": 403, '
-           b'"link": "", '
-           b'"year": "2008", '
-           b'"news": "", '
-           b'"safe_title": "Convincing Pickup Line", '
-           b'"alt": "Check it out; I\'ve had sex with someone who\'s had sex with someone who\'s written a paper with Paul Erd\\u00c5\\u0091s!", '
-           b'"img": "http:\\/\\/imgs.xkcd.com\\/comics\\/convincing_pickup_line.png", '
-           b'"title": "Convincing Pickup Line", '
-           b'"day": "31"'
-         b'}'),
+        'xkcd_403.json',
         ('http://xkcd.com/403', 'Convincing Pickup Line', 'Check it out; I\'ve had sex with someone who\'s had sex with someone who\'s written a paper with Paul Erdős!')
     ),
 
@@ -92,18 +48,7 @@ json_test_cases = [
         "1363",
         "http://xkcd.com/1363/info.0.json",
         "application/json; charset=utf-8",
-        (b'{'
-           b'"month": "5", '
-           b'"num": 1363, '
-           b'"link": "", '
-           b'"year": "2014", '
-           b'"news": "", '
-           b'"safe_title": "xkcd Phone", '
-           b'"alt": "Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, LifeStyles, and the US Chamber of Commerce. Manufactured on equipment which also processes peanuts. Price includes 2-year Knicks contract. Phone may extinguish nearby birthday candles. If phone ships with Siri, return immediately; do not speak to her and ignore any instructions she gives. Do not remove lead casing. Phone may attract\\/trap insects; this is normal. Volume adjustable (requires root). If you experience sudden tingling, nausea, or vomiting, perform a factory reset immediately. Do not submerge in water; phone will drown. Exterior may be frictionless. Prolonged use can cause mood swings, short-term memory loss, and seizures. Avert eyes while replacing battery. Under certain circumstances, wireless transmitter may control God.", '
-           b'"img": "http:\\/\\/imgs.xkcd.com\\/comics\\/xkcd_phone.png", '
-           b'"title": "xkcd Phone", '
-           b'"day": "2"'
-         b'}'),
+        'xkcd_1363.json',
         ('http://xkcd.com/1363', 'xkcd Phone', 'Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, LifeStyles, and the US Chamber of Commerce. M...')
     )
 ]
@@ -119,8 +64,9 @@ class TestXKCDPlugin(BotTestCase):
 
     @httprettified
     def test_correct(self):
-        for _, url, content_type, body, _ in json_test_cases:
-            HTTPretty.register_uri(HTTPretty.GET, url, body=body,
+        for _, url, content_type, fixture, _ in json_test_cases:
+            HTTPretty.register_uri(HTTPretty.GET, url,
+                                   body=read_fixture_file(fixture),
                                    content_type=content_type)
 
         for num, url, _, _, expected in json_test_cases:
@@ -134,8 +80,9 @@ class TestXKCDPlugin(BotTestCase):
     @httprettified
     def test_error(self):
         # Still need to overrride the "latest" and the 404 page
-        _, url, content_type, body, _ = json_test_cases[0]
-        HTTPretty.register_uri(HTTPretty.GET, url, body=body,
+        _, url, content_type, fixture, _ = json_test_cases[0]
+        HTTPretty.register_uri(HTTPretty.GET, url,
+                               body=read_fixture_file(fixture),
                                content_type=content_type)
         HTTPretty.register_uri(HTTPretty.GET, "http://xkcd.com/404/info.0.json",
                                body="404 - Not Found",
@@ -157,8 +104,9 @@ class TestXKCDLinkInfoIntegration(BotTestCase):
 
     @httprettified
     def test_integration(self):
-        for _, url, content_type, body, _ in json_test_cases:
-            HTTPretty.register_uri(HTTPretty.GET, url, body=body,
+        for _, url, content_type, fixture, _ in json_test_cases:
+            HTTPretty.register_uri(HTTPretty.GET, url,
+                                   body=read_fixture_file(fixture),
                                    content_type=content_type)
 
         for num, _, _, _, (_, title, alt) in json_test_cases:

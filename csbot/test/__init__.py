@@ -97,3 +97,14 @@ class BotTestCase(unittest.TestCase):
         self.protocol_ = None
         for p in self.PLUGINS:
             setattr(self, p, None)
+
+
+def fixture_file(*path):
+    """Get the path to a fixture file."""
+    return os.path.join(os.path.dirname(__file__), 'fixtures', *path)
+
+
+def read_fixture_file(*path, mode='rb'):
+    """Read the contents of a fixture file."""
+    with open(fixture_file(*path), mode) as f:
+        return f.read()
