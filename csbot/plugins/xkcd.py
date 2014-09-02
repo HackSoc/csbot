@@ -33,7 +33,8 @@ def get_info(number=None):
         return None
 
     # Only care about part of the data
-    data = {key: httpdata.json()[key] for key in ["title", "alt", "num"]}
+    httpjson = httpdata.json()
+    data = {key: httpjson[key] for key in ["title", "alt", "num"]}
 
     # Unfuck up unicode strings
     data = fix_json_unicode(data)
@@ -58,31 +59,26 @@ class xkcd(Plugin):
 
         latest_num = latest["num"]
 
-        if not user_str:
+        if user_str is None or user_str in {'0', 'latest', 'current', 'newest'}:
             requested = latest
-
-        elif user_str.isdigit():
-            num = int(user_str)
-            if num > latest_num:
-                return ("Comic #{} is invalid. "
-                        "The latest is #{}").format(num, latest_num)
-            elif num == 0:
-                requested = latest
-            else:
-                requested = get_info(num)
-
-        elif user_str.lower() in ["rand", "random"]:
+        elif user_str in {'rand', 'random'}:
             requested = get_info(random.randint(1, latest_num))
-
-        elif user_str.lower() in ["latest", "current", "newest"]:
-            requested = latest
         else:
-            # Todo: google search?
-            return "Invalid comic number"
+            try:
+                num = int(user_str)
+                if 1 <= num <= latest_num:
+                    requested = get_info(num)
+                else:
+                    return ("Comic #{} is invalid. "
+                            "The latest is #{}").format(num, latest_num)
+            except ValueError:
+                # TODO: google search?
+                return "Invalid comic number"
 
         # Only happens for invalid comics (like 404)
         if not requested:
             return "So. It has come to this"
+
         return "{} [{} - \"{}\"]".format(requested["url"], requested["title"],
                                          cap_string(requested["alt"], 120))
 

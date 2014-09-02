@@ -137,7 +137,8 @@ class TestXKCDPlugin(BotTestCase):
 
         self.assertEqual(self.xkcd._xkcd("flibble"), "Invalid comic number")
         self.assertEqual(self.xkcd._xkcd("404"), "So. It has come to this")  # Missing comic
-        self.assertEqual(self.xkcd._xkcd("-5"), "Invalid comic number")
+        self.assertEqual(self.xkcd._xkcd("-5"),
+                         "Comic #-5 is invalid. The latest us #1399")
         self.assertEqual(self.xkcd._xkcd("1000000"),
                          "Comic #1000000 is invalid. The latest is #1399")  # Testing "latest"
 
