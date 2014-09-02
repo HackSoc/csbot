@@ -55,6 +55,8 @@ class xkcd(Plugin):
     Based on williebot xkcd plugin.
     """
 
+    class XKCDError(Exception): pass
+
     def _xkcd(self, user_str):
         """Get the url and title stuff.
         Returns a string of the response.
@@ -62,7 +64,7 @@ class xkcd(Plugin):
 
         latest = get_info()
         if not latest:
-            return "Error getting comics"
+            return self.XKCDError("Error getting comics")
 
         latest_num = latest["num"]
 
@@ -76,21 +78,47 @@ class xkcd(Plugin):
                 if 1 <= num <= latest_num:
                     requested = get_info(num)
                 else:
-                    return ("Comic #{} is invalid. "
-                            "The latest is #{}").format(num, latest_num)
+                    raise self.XKCDError(("Comic #{} is invalid. "
+                            "The latest is #{}").format(num, latest_num))
             except ValueError:
                 # TODO: google search?
-                return "Invalid comic number"
+                raise self.XKCDError("Invalid comic number")
 
         # Only happens for invalid comics (like 404)
         if not requested:
-            return "So. It has come to this"
+            raise self.XKCDError("So. It has come to this")
 
-        return "{} [{} - \"{}\"]".format(requested["url"], requested["title"],
-                                         cap_string(requested["alt"], 120))
+        return (requested["url"], requested["title"],
+                cap_string(requested["alt"], 120))
+
+    @Plugin.integrate_with('linkinfo')
+    def linkinfo_integrate(self, linkinfo):
+        """Handle recognised xkcd urls."""
+
+        def page_handler(url, match):
+            """Use the main _xkcd function, then modify
+            the result (if success) so it looks nicer.
+            """
+
+            # Remove leading and trailing '/'
+            try:
+                response = self._xkcd(url.path.strip('/'))
+                return ("xkcd.com", False, '{1} - "{2}"'.format(*response))
+            except self.XKCDError:
+                return None
+
+
+        linkinfo.register_handler(lambda url: url.netloc == "xkcd.com",
+                                  page_handler)
+
+        linkinfo.register_exclude(lambda url: url.netloc == "xkcd.com")
 
     @Plugin.command('xkcd')
     def randall_is_awesome(self, e):
         """Well, Randall sucks at unicode actually :(
         """
-        e.protocol.msg(e["reply_to"], self._xkcd(e["data"]))
+        try:
+            e.protocol.msg(e["reply_to"],
+                           "{} [{} - \"{}\"]".format(self._xkcd(e["data"])))
+        except self.XKCDError as ex:
+            e.protocol.msg(e["reply_to"], str(ex))

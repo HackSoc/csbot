@@ -25,7 +25,7 @@ json_test_cases = [
            b'"day": "25"'
          b'}'
         ),
-        'http://xkcd.com/1399 [Chaos - "Although the oral exam for the doctorate was just \'can you do that weird laugh?\'"]'
+        ('http://xkcd.com/1399', 'Chaos', 'Although the oral exam for the doctorate was just \'can you do that weird laugh?\'')
     ),
 
     # Normal
@@ -44,7 +44,7 @@ json_test_cases = [
            b'"img": "http:\\/\\/imgs.xkcd.com\\/comics\\/barrel_cropped_(1).jpg", '
            b'"title": "Barrel - Part 1", "day": "1"'
          b'}'),
-        'http://xkcd.com/1 [Barrel - Part 1 - "Don\'t we all."]'
+        ('http://xkcd.com/1', 'Barrel - Part 1', 'Don\'t we all.')
     ),
 
     # HTML Entities
@@ -64,7 +64,7 @@ json_test_cases = [
            b'"title": "Clich&eacute;d Exchanges", '
            b'"day": "9"'
          b'}'),
-        'http://xkcd.com/259 [Clichéd Exchanges - "It\'s like they say, you gotta fight fire with clichés."]'
+        ('http://xkcd.com/259', 'Clichéd Exchanges', 'It\'s like they say, you gotta fight fire with clichés.')
     ),
 
     # Unicode
@@ -84,7 +84,7 @@ json_test_cases = [
            b'"title": "Convincing Pickup Line", '
            b'"day": "31"'
          b'}'),
-        'http://xkcd.com/403 [Convincing Pickup Line - "Check it out; I\'ve had sex with someone who\'s had sex with someone who\'s written a paper with Paul Erdős!"]'
+        ('http://xkcd.com/403', 'Convincing Pickup Line', 'Check it out; I\'ve had sex with someone who\'s had sex with someone who\'s written a paper with Paul Erdős!')
     ),
 
     # Long alt text
@@ -104,7 +104,7 @@ json_test_cases = [
            b'"title": "xkcd Phone", '
            b'"day": "2"'
          b'}'),
-        'http://xkcd.com/1363 [xkcd Phone - "Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, LifeStyles, and the US Chamber of Commerce. M..."]'
+        ('http://xkcd.com/1363', 'xkcd Phone', 'Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, LifeStyles, and the US Chamber of Commerce. M...')
     )
 ]
 
@@ -128,6 +128,9 @@ class TestXKCDPlugin(BotTestCase):
                 result = self.xkcd._xkcd(num)
                 self.assertEqual(result, expected, url)
 
+        # Also test the empty string
+        self.assertEqual(self.xkcd._xkcd(""), json_test_cases[0][4])
+
     @httprettified
     def test_error(self):
         # Still need to overrride the "latest" and the 404 page
@@ -138,11 +141,9 @@ class TestXKCDPlugin(BotTestCase):
                                body="404 - Not Found",
                                content_type="text/html", status=404)
 
-        self.assertEqual(self.xkcd._xkcd("flibble"), "Invalid comic number")
-        self.assertEqual(self.xkcd._xkcd("404"), "So. It has come to this")  # Missing comic
-        self.assertEqual(self.xkcd._xkcd("-5"),
-                         "Comic #-5 is invalid. The latest is #1399")
-        self.assertEqual(self.xkcd._xkcd("1000000"),
-                         "Comic #1000000 is invalid. The latest is #1399")  # Testing "latest"
+        self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "flibble")
+        self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "404")  # Missing comic
+        self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "-5")
+        self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "1000000")  # Testing "latest"
 
 
