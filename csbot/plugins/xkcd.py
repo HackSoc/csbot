@@ -66,7 +66,7 @@ class xkcd(Plugin):
 
         latest_num = latest["num"]
 
-        if user_str is None or user_str in {'0', 'latest', 'current', 'newest'}:
+        if not user_str or user_str in {'0', 'latest', 'current', 'newest'}:
             requested = latest
         elif user_str in {'rand', 'random'}:
             requested = get_info(random.randint(1, latest_num))
