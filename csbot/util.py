@@ -90,7 +90,22 @@ def simple_http_get(url):
 
 def pairwise(iterable):
     """Pairs elements of an iterable together,
-    e.g. s -> (s0,s1), (s1,s2), (s2, s3), ..."""
+    e.g. s -> (s0,s1), (s1,s2), (s2, s3), ...
+    """
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
+
+def cap_string(s, l):
+    """If a string is longer than a particular length,
+    it gets truncated and has '...' added to the end.
+    """
+    if len(s) <= l:
+        return s
+
+    return s[0:l-3] + "..."
+
+def is_ascii(s):
+    """Returns true if all characters in a string can be represented in ASCII.
+    """
+    return all(ord(c) < 128 for c in s)
