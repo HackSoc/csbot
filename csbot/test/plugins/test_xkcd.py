@@ -134,7 +134,7 @@ class TestXKCDPlugin(BotTestCase):
         _, url, content_type, body, _ = json_test_cases[0]
         HTTPretty.register_uri(HTTPretty.GET, url, body=body,
                                content_type=content_type)
-        HTTPretty.register_uri(HTTPretty.GET, "http://xkcd.com/404",
+        HTTPretty.register_uri(HTTPretty.GET, "http://xkcd.com/404/info.0.json",
                                body="404 - Not Found",
                                content_type="text/html", status=404)
 
