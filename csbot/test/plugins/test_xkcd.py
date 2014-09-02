@@ -64,7 +64,7 @@ json_test_cases = [
            b'"title": "Clich&eacute;d Exchanges", '
            b'"day": "9"'
          b'}'),
-        'http://xkcd.com/259 [Clichéd Exchanges - "It\'s like they say, you gotta fight fire with clichés."'
+        'http://xkcd.com/259 [Clichéd Exchanges - "It\'s like they say, you gotta fight fire with clichés."]'
     ),
 
     # Unicode
@@ -130,10 +130,13 @@ class TestXKCDPlugin(BotTestCase):
 
     @httprettified
     def test_error(self):
-        # Still need to overrride the "latest"
+        # Still need to overrride the "latest" and the 404 page
         _, url, content_type, body, _ = json_test_cases[0]
         HTTPretty.register_uri(HTTPretty.GET, url, body=body,
                                content_type=content_type)
+        HTTPretty.register_uri(HTTPretty.GET, "http://xkcd.com/404",
+                               body="404 - Not Found",
+                               content_type="text/html", status=404)
 
         self.assertEqual(self.xkcd._xkcd("flibble"), "Invalid comic number")
         self.assertEqual(self.xkcd._xkcd("404"), "So. It has come to this")  # Missing comic
