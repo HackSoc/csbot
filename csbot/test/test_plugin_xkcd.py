@@ -3,7 +3,7 @@ from httpretty import httprettified, HTTPretty
 from . import BotTestCase, read_fixture_file
 
 
-#: Tests are (number, url, content-type, body, expected)
+#: Tests are (number, url, content-type, fixture, expected)
 json_test_cases = [
     # (These test case are copied from the actual URLs, without the lengthy transcripts)
 
