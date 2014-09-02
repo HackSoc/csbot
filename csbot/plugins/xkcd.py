@@ -1,6 +1,7 @@
 import json
 import random
 import requests
+import lxml.html
 
 from csbot.plugin import Plugin
 from csbot.util import simple_http_get, cap_string, is_ascii
@@ -10,7 +11,13 @@ def fix_json_unicode(data):
     """Fixes the unicode silliness that is included in the json data.
     Why Randall, Why?"""
     for tag in data:
-        if type(data[tag]) != str or is_ascii(data[tag]):
+        if type(data[tag]) != str:
+            continue
+
+        # Remove HTML escape characters
+        data[tag] = lxml.html.fromstring(data[tag]).text
+
+        if is_ascii(data[tag]):
             continue
         try:
             data[tag] = data[tag].encode("latin-1").decode("utf-8")

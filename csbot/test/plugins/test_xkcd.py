@@ -64,7 +64,7 @@ json_test_cases = [
            b'"title": "Clich&eacute;d Exchanges", '
            b'"day": "9"'
          b'}'),
-        'htpd'
+        'http://xkcd.com/259 [Clichéd Exchanges - "It\'s like they say, you gotta fight fire with clichés."'
     ),
 
     # Unicode
@@ -138,7 +138,7 @@ class TestXKCDPlugin(BotTestCase):
         self.assertEqual(self.xkcd._xkcd("flibble"), "Invalid comic number")
         self.assertEqual(self.xkcd._xkcd("404"), "So. It has come to this")  # Missing comic
         self.assertEqual(self.xkcd._xkcd("-5"),
-                         "Comic #-5 is invalid. The latest us #1399")
+                         "Comic #-5 is invalid. The latest is #1399")
         self.assertEqual(self.xkcd._xkcd("1000000"),
                          "Comic #1000000 is invalid. The latest is #1399")  # Testing "latest"
 
