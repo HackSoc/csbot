@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-from .helpers import mock_client
+from . import mock_client
 from ..irc import *
 
 

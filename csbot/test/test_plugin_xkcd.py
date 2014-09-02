@@ -1,6 +1,6 @@
 from httpretty import httprettified, HTTPretty
 
-from ..helpers import BotTestCase
+from . import BotTestCase
 
 
 #: Tests are (number, url, content-type, body, expected)

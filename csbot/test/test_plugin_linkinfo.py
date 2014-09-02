@@ -2,7 +2,7 @@
 from httpretty import httprettified, HTTPretty
 from lxml.etree import LIBXML_VERSION
 
-from ..helpers import BotTestCase
+from . import BotTestCase
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)

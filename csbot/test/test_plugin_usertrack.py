@@ -1,6 +1,4 @@
-import unittest
-
-from ..helpers import BotTestCase
+from . import BotTestCase
 
 
 class TestUserTrackPlugin(BotTestCase):

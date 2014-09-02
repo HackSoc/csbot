@@ -1,4 +1,4 @@
-from ..helpers import BotTestCase
+from . import BotTestCase
 
 
 class TestCalcPlugin(BotTestCase):
