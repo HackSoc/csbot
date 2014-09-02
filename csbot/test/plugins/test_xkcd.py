@@ -147,3 +147,23 @@ class TestXKCDPlugin(BotTestCase):
         self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "1000000")  # Testing "latest"
 
 
+class TestXKCDLinkInfoIntegration(BotTestCase):
+    CONFIG = """\
+    [@bot]
+    plugins = linkinfo xkcd
+    """
+
+    PLUGINS = ['linkinfo', 'xkcd']
+
+    @httprettified
+    def test_integration(self):
+        for _, url, content_type, body, _ in json_test_cases:
+            HTTPretty.register_uri(HTTPretty.GET, url, body=body,
+                                   content_type=content_type)
+
+        for num, _, _, _, (_, title, alt) in json_test_cases:
+            with self.subTest(num=num):
+                url = 'http://xkcd.com/{}'.format(num)
+                _, _, linkinfo_title = self.linkinfo.get_link_info(url)
+                self.assertIn(title, linkinfo_title)
+                self.assertIn(alt, linkinfo_title)

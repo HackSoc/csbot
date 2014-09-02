@@ -55,7 +55,8 @@ class xkcd(Plugin):
     Based on williebot xkcd plugin.
     """
 
-    class XKCDError(Exception): pass
+    class XKCDError(Exception):
+        pass
 
     def _xkcd(self, user_str):
         """Get the url and title stuff.
@@ -78,8 +79,8 @@ class xkcd(Plugin):
                 if 1 <= num <= latest_num:
                     requested = get_info(num)
                 else:
-                    raise self.XKCDError(("Comic #{} is invalid. "
-                            "The latest is #{}").format(num, latest_num))
+                    raise self.XKCDError("Comic #{} is invalid. The latest is #{}"
+                                         .format(num, latest_num))
             except ValueError:
                 # TODO: google search?
                 raise self.XKCDError("Invalid comic number")
@@ -103,10 +104,9 @@ class xkcd(Plugin):
             # Remove leading and trailing '/'
             try:
                 response = self._xkcd(url.path.strip('/'))
-                return ("xkcd.com", False, '{1} - "{2}"'.format(*response))
+                return "xkcd.com", False, '{1} - "{2}"'.format(*response)
             except self.XKCDError:
                 return None
-
 
         linkinfo.register_handler(lambda url: url.netloc == "xkcd.com",
                                   page_handler)
