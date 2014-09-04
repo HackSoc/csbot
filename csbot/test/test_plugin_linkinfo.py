@@ -1,5 +1,5 @@
 # coding=utf-8
-from httpretty import httprettified, HTTPretty
+import responses
 from lxml.etree import LIBXML_VERSION
 
 from . import BotTestCase
@@ -106,11 +106,11 @@ class TestLinkInfoPlugin(BotTestCase):
 
     PLUGINS = ['linkinfo']
 
-    @httprettified
+    @responses.activate
     def test_encoding_handling(self):
         for url, content_type, body, _ in encoding_test_cases:
-            HTTPretty.register_uri(HTTPretty.GET, url, body=body,
-                                   content_type=content_type)
+            responses.add(responses.GET, url, body=body,
+                          content_type=content_type)
 
         for url, _, _, expected_title in encoding_test_cases:
             with self.subTest(url=url):

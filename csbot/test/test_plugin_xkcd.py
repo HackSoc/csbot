@@ -1,4 +1,4 @@
-from httpretty import httprettified, HTTPretty
+import responses
 
 from . import BotTestCase, read_fixture_file
 
@@ -62,12 +62,11 @@ class TestXKCDPlugin(BotTestCase):
 
     PLUGINS = ['xkcd']
 
-    @httprettified
+    @responses.activate
     def test_correct(self):
         for _, url, content_type, fixture, _ in json_test_cases:
-            HTTPretty.register_uri(HTTPretty.GET, url,
-                                   body=read_fixture_file(fixture),
-                                   content_type=content_type)
+            responses.add(responses.GET, url, body=read_fixture_file(fixture),
+                          content_type=content_type)
 
         for num, url, _, _, expected in json_test_cases:
             with self.subTest(url=url):
@@ -77,16 +76,15 @@ class TestXKCDPlugin(BotTestCase):
         # Also test the empty string
         self.assertEqual(self.xkcd._xkcd(""), json_test_cases[0][4])
 
-    @httprettified
+    @responses.activate
     def test_error(self):
         # Still need to overrride the "latest" and the 404 page
         _, url, content_type, fixture, _ = json_test_cases[0]
-        HTTPretty.register_uri(HTTPretty.GET, url,
-                               body=read_fixture_file(fixture),
-                               content_type=content_type)
-        HTTPretty.register_uri(HTTPretty.GET, "http://xkcd.com/404/info.0.json",
-                               body="404 - Not Found",
-                               content_type="text/html", status=404)
+        responses.add(responses.GET, url, body=read_fixture_file(fixture),
+                      content_type=content_type)
+        responses.add(responses.GET, "http://xkcd.com/404/info.0.json",
+                      body="404 - Not Found", content_type="text/html",
+                      status=404)
 
         self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "flibble")
         self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "404")  # Missing comic
@@ -102,12 +100,11 @@ class TestXKCDLinkInfoIntegration(BotTestCase):
 
     PLUGINS = ['linkinfo', 'xkcd']
 
-    @httprettified
+    @responses.activate
     def test_integration(self):
         for _, url, content_type, fixture, _ in json_test_cases:
-            HTTPretty.register_uri(HTTPretty.GET, url,
-                                   body=read_fixture_file(fixture),
-                                   content_type=content_type)
+            responses.add(responses.GET, url, body=read_fixture_file(fixture),
+                          content_type=content_type)
 
         for num, _, _, _, (_, title, alt) in json_test_cases:
             with self.subTest(num=num):
