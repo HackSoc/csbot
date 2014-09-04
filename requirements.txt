@@ -6,7 +6,7 @@ requests>=2.3.0,<3.0.0
 lxml>=2.3.5
 
 # Requirements for unit testing
-httpretty>=0.5.4,!=0.8.1
+responses
 
 # Requirements for documentation
 # (commented out to save build time)
