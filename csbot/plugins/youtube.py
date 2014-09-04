@@ -21,10 +21,11 @@ def get_yt_json(vid_id):
 
 
 def get_yt_id(url):
+    """Gets the video ID from a urllib ParseResult object."""
     if url.netloc == "":
         # Must have been passed the video id
         return url.geturl()
-    if url.netloc == "youtu.be":
+    elif url.netloc == "youtu.be":
         return url.path.strip('/')
     elif "/v/" in url.path:
         # Unusual youtube.com/v/<id> fullscreen urls
@@ -34,12 +35,15 @@ def get_yt_id(url):
         params = urlparse.parse_qs(url.query)
         if 'v' in params:
             return params['v'][0]
+    return None
 
 
 class Youtube(Plugin):
     """A plugin that does some youtube things.
     Based on williebot youtube plugin.
     """
+    RESPONSE = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}]'
+    CMD_RESPONSE = RESPONSE + ' | {link}'
 
     def _yt(self, url):
         """Builds a nicely formatted version of youtube's own internal JSON"""
@@ -114,14 +118,12 @@ class Youtube(Plugin):
     def linkinfo_integrate(self, linkinfo):
         """Handle recognised youtube urls."""
 
-        format_str = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}]'
         def page_handler(url, match):
-            """
-            """
+            """Handles privmsg urls."""
             response = self._yt(url)
             if not response:
                 return None
-            return url.netloc, False, format_str.format(**response)
+            return url.netloc, False, self.RESPONSE.format(**response)
 
         linkinfo.register_handler(lambda url: url.netloc in {"m.youtube.com", "www.youtube.com", "youtu.be"},
                                   page_handler)
@@ -132,10 +134,8 @@ class Youtube(Plugin):
     def all_hail_our_google_overlords(self, e):
         """I for one, welcome our Google overlords."""
 
-        format_str = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}] | {link}'
-
         response = self._yt(urlparse.urlparse(e["data"]))
         if not response:
             e.protocol.msg(e["reply_to"], "Invalid video ID")
         else:
-            e.protocol.msg(e["reply_to"], format_str.format(**response))
+            e.protocol.msg(e["reply_to"], self.CMD_RESPONSE.format(**response))
