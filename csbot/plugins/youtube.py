@@ -19,18 +19,22 @@ def get_yt_json(vid_id):
 
     return httpdata.json()["entry"]
 
+
 def get_yt_id(url):
     if url.netloc == "":
         # Must have been passed the video id
-        return url
+        return url.geturl()
     if url.netloc == "youtu.be":
         return url.path.strip('/')
     elif "/v/" in url.path:
         # Unusual youtube.com/v/<id> fullscreen urls
         return url.path.split('/')[-1]
     elif "details" in url.path or "watch" in url.path:
-        partial = url.query.split("v=")[1]
-        return partial.split('&')[0]
+        # Must be a 'v' parameter
+        params = urlparse.parse_qs(url.query)
+        if 'v' in params:
+            return params['v'][0]
+
 
 class Youtube(Plugin):
     """A plugin that does some youtube things.
@@ -39,27 +43,25 @@ class Youtube(Plugin):
 
     def _yt(self, url):
         """Builds a nicely formatted version of youtube's own internal JSON"""
-        vid_info = {"link": "N/A"}
 
-        print(url)
         vid_id = get_yt_id(url)
         if not vid_id:
-            return vid_info
+            return None
         try:
             json = get_yt_json(vid_id)
             if json is None:
-                return vid_info
-        except KeyError:
-            return vid_info
+                return None
+        except (KeyError, ValueError):
+            return None
 
+        vid_info = {}
         try:
             # Last part of the ID format is the actual ID
             vid_id = json["id"]["$t"].split(':')[-1]
             vid_info["link"] = "http://youtu.be/" + vid_id
         except KeyError:
-            vid_info["link"] = "N/A"
             # No point getting any more info if we don't have a valid link
-            return vid_info
+            return None
 
         try:
             vid_info["title"] = json["title"]["$t"]
@@ -117,7 +119,7 @@ class Youtube(Plugin):
             """
             """
             response = self._yt(url)
-            if response["link"] == "N/A":
+            if not response:
                 return None
             return url.netloc, False, format_str.format(**response)
 
@@ -133,7 +135,7 @@ class Youtube(Plugin):
         format_str = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}] | {link}'
 
         response = self._yt(urlparse.urlparse(e["data"]))
-        if response["link"] == "N/A":
+        if not response:
             e.protocol.msg(e["reply_to"], "Invalid video ID")
         else:
             e.protocol.msg(e["reply_to"], format_str.format(**response))
