@@ -23,8 +23,8 @@ def limited_power(a, b):
     A limited power function to make sure that
     commands do not take too long to process.
     """
-    if any(abs(n) > 100 for n in [a, b]):
-        raise ValueError(a, b)
+    if any(abs(n) > 1000 for n in [a, b]):
+        raise OverflowError("{}**{} is too big".format(a, b))
     return op.pow(a, b)
 
 operators[ast.Pow] = limited_power
@@ -93,11 +93,11 @@ class Calc(Plugin):
             return str(calc_eval(ast.parse(calc_str).body[0]))
         except KeyError as ex:
             return "Unknown operator {}".format(str(ex))
-        except ValueError as ex:  # "6 ** 10000"
-            x, y = ex.args
-            return "Error, {}**{} is too big".format(x, y)
-        except ZeroDivisionError:  # "1 / 0"
-            return "Silly, you cannot divide by 0"
+        except (OverflowError, ValueError, ZeroDivisionError) as ex:
+            # 1 ** 100000
+            # 1 << -1 (also bitshifting a bigint)
+            # 1 / 0
+            return "Error, {}".format(str(ex))
         except NotImplementedError as ex:  # "sgdsdg + 3"
             return "Unknown or invalid constant \"{}\"".format(str(ex))
         except (TypeError, SyntaxError):  # "1 +"
