@@ -27,11 +27,13 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("~True"), "-2")
 
     def test_error(self):
-        self.assertEqual(self.calc._calc("999**999"), "Error, 999**999 is too big")
-        self.assertEqual(self.calc._calc("1 / 0"), "Silly, you cannot divide by 0")
+        self.assertEqual(self.calc._calc("9999**9999"), "Error, 9999**9999 is too big")
+        self.assertEqual(self.calc._calc("1 / 0"), "Error, division by zero")
         self.assertEqual(self.calc._calc("1 + "), "Error, \"1 + \" is not a valid calculation")
         self.assertEqual(self.calc._calc("e = 1"), "Error, \"e = 1\" is not a valid calculation")
         self.assertEqual(self.calc._calc("sgdsdg + 3"), "Unknown or invalid constant \"sgdsdg\"")
+        self.assertEqual(self.calc._calc("1 << (1 << (1 << 10))"), "Error, Python int too large to convert to C ssize_t")
+        self.assertEqual(self.calc._calc("1 << -1"), "Error, negative shift count")
 
 
 
