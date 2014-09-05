@@ -90,7 +90,10 @@ class Calc(Plugin):
         if not calc_str:
             return "You want to calculate something? Type in an expression then, silly!"
         try:
-            return str(calc_eval(ast.parse(calc_str).body[0]))
+            res = str(calc_eval(ast.parse(calc_str).body[0]))
+            if len(res) > 300:
+                raise OverflowError("result is too long")
+            return res
         except KeyError as ex:
             return "Unknown operator {}".format(str(ex))
         except (OverflowError, ValueError, ZeroDivisionError) as ex:

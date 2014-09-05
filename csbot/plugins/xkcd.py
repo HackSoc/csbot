@@ -119,6 +119,6 @@ class xkcd(Plugin):
         """
         try:
             e.protocol.msg(e["reply_to"],
-                           "{} [{} - \"{}\"]".format(self._xkcd(e["data"])))
+                           "{} [{} - \"{}\"]".format(*self._xkcd(e["data"])))
         except self.XKCDError as ex:
             e.protocol.msg(e["reply_to"], str(ex))
