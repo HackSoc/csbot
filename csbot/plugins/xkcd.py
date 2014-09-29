@@ -65,7 +65,7 @@ class xkcd(Plugin):
 
         latest = get_info()
         if not latest:
-            return self.XKCDError("Error getting comics")
+            raise self.XKCDError("Error getting comics")
 
         latest_num = latest["num"]
 
