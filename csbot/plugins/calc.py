@@ -44,10 +44,11 @@ def calc_eval(node):
     """
     Actually do the calculation.
     """
+    # ast.Load is always preceded by something else
+    assert not isinstance(node, ast.Load)
+
     if isinstance(node, ast.Expr):  # Top level expression
         return calc_eval(node.value)
-    elif isinstance(node, ast.Load):  # ignore
-        return
     elif isinstance(node, ast.Name):  # <constant>
         if node.id in constants:
             return constants[node.id]
@@ -63,7 +64,7 @@ def calc_eval(node):
         if type(node) in operators:
             return operators[type(node)]
         else:
-            raise KeyError(type(node).__name__)
+            raise KeyError(type(node).__name__.lower())
     elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
         return calc_eval(node.op)(calc_eval(node.operand))
     elif isinstance(node, ast.BinOp):  # <left> <operator> <right>

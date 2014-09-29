@@ -35,6 +35,8 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("1 << (1 << (1 << 10))"), "Error, Python int too large to convert to C ssize_t")
         self.assertEqual(self.calc._calc("1 << -1"), "Error, negative shift count")
         self.assertEqual(self.calc._calc("10000 << 10000"), "Error, result is too long")
+        self.assertEqual(self.calc._calc("5 in 5"), "Unknown operator 'in'")
+        self.assertEqual(self.calc._calc("sin(5)"), "Error, \"sin(5)\" is not a valid calculation")
 
 
 
