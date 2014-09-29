@@ -88,6 +88,7 @@ class TestXKCDPlugin(BotTestCase):
         responses.add(responses.GET, url, body="404 - Not Found",
                       content_type="text/html", status=404)
         self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "")
+        responses.reset()
 
         # Now override the actual 404 page and the latest "properly"
         responses.add(responses.GET, url, body=read_fixture_file(fixture),
