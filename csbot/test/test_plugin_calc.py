@@ -16,7 +16,7 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("~5"), "-6")
         self.assertEqual(self.calc._calc("pi + 3"), "6.141592653589793")
         self.assertEqual(self.calc._calc(""),
-                         "You want to calculate something? Type in an expression then, silly!"),
+                         "You want to calculate something? Type in an expression then!"),
         self.assertEqual(self.calc._calc("N"), "6.0221412927e+23")
         self.assertEqual(self.calc._calc("3 + π"), "6.141592653589793")  # Also tests unicode
         self.assertEqual(self.calc._calc("3 < 5"), "True")
@@ -29,14 +29,14 @@ class TestCalcPlugin(BotTestCase):
     def test_error(self):
         self.assertEqual(self.calc._calc("9999**9999"), "Error, 9999**9999 is too big")
         self.assertEqual(self.calc._calc("1 / 0"), "Error, division by zero")
-        self.assertEqual(self.calc._calc("1 + "), "Error, \"1 + \" is not a valid calculation")
-        self.assertEqual(self.calc._calc("e = 1"), "Error, \"e = 1\" is not a valid calculation")
-        self.assertEqual(self.calc._calc("sgdsdg + 3"), "Unknown or invalid constant \"sgdsdg\"")
+        self.assertEqual(self.calc._calc("1 + "), "Error, '1 + ' is not a valid calculation")
+        self.assertEqual(self.calc._calc("e = 1"), "Error, 'e = 1' is not a valid calculation")
+        self.assertEqual(self.calc._calc("sgdsdg + 3"), "Error, unknown or invalid constant 'sgdsdg'")
         self.assertEqual(self.calc._calc("1 << (1 << (1 << 10))"), "Error, Python int too large to convert to C ssize_t")
         self.assertEqual(self.calc._calc("1 << -1"), "Error, negative shift count")
         self.assertEqual(self.calc._calc("10000 << 10000"), "Error, result is too long")
-        self.assertEqual(self.calc._calc("5 in 5"), "Unknown operator 'in'")
-        self.assertEqual(self.calc._calc("sin(5)"), "Error, \"sin(5)\" is not a valid calculation")
+        self.assertEqual(self.calc._calc("5 in 5"), "Error, invalid operator 'in'")
+        self.assertEqual(self.calc._calc("sin(5)"), "Error, 'sin(5)' is not a valid calculation")
 
 
 
