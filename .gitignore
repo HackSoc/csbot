@@ -44,6 +44,7 @@ pip-log.txt
 .tox
 nosetests.xml
 _trial_temp/
+htmlcov
 
 #Translations
 *.mo

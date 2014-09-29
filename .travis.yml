@@ -1,13 +1,23 @@
 language: python
 python:
-- 3.4
-install: pip install -r requirements.txt
-script: ./run_tests.py
+  - 3.4
+
+install:
+  - pip install -r requirements.txt
+  - pip install coverage python-coveralls
+
+script:
+  - coverage run --include="csbot/*" --omit="csbot/test/*" run_tests.py
+
+after_success:
+  - coveralls
+
 notifications:
   irc:
     channels:
     - irc.freenode.org#cs-york-dev
     skip_join: true
+
 deploy:
   provider: heroku
   api_key:
