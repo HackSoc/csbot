@@ -12,7 +12,6 @@ json_test_cases = [
     # "Normal"
     (
         "fItlK6L-khc",
-        "https://gdata.youtube.com/feeds/api/videos/fItlK6L-khc?alt=json&v=2",
         "application/json; charset=utf-8",
         200,
         "youtube_fItlK6L-khc.json",
@@ -24,7 +23,6 @@ json_test_cases = [
     # Unicode
     (
         "vZ_YpOvRd3o",
-        "https://gdata.youtube.com/feeds/api/videos/vZ_YpOvRd3o?alt=json&v=2",
         "application/json; charset=utf-8",
         200,
         "youtube_vZ_YpOvRd3o.json",
@@ -36,7 +34,6 @@ json_test_cases = [
     # Broken
     (
         "flibble",
-        "https://gdata.youtube.com/feeds/api/videos/flibble?alt=json&v=2",
         "application/vnd.google.gdata.error+xml",
         400,
         "empty_file",
@@ -46,7 +43,6 @@ json_test_cases = [
     # No id
     (
         "",
-        "https://gdata.youtube.com/feeds/api/videos/?alt=json&v=2",
         "application/json; charset=utf-8",
         400,
         "empty_file",  # actually does have some data, but should never get this far
@@ -56,7 +52,6 @@ json_test_cases = [
     # Malformed json
     (
         "malformed_id",
-        "https://gdata.youtube.com/feeds/api/videos/malformed_id?alt=json&v=2",
         "application/json; charset=utf-8",
         200,
         "youtube_malformed.json",
@@ -67,13 +62,14 @@ json_test_cases = [
     # Malformed json (missing ID)
     (
         "malformed_id2",
-        "https://gdata.youtube.com/feeds/api/videos/malformed_id2?alt=json&v=2",
         "application/json; charset=utf-8",
         200,
         "youtube_malformed2.json",
         None
     )
 ]
+
+JSON_URL = "https://gdata.youtube.com/feeds/api/videos/{}?alt=json&v=2"
 
 
 class TestYoutubePlugin(BotTestCase):
@@ -86,12 +82,12 @@ class TestYoutubePlugin(BotTestCase):
 
     @responses.activate
     def test_ids(self):
-        for _, url, content_type, status, fixture, _ in json_test_cases:
-            responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type, status=status,
-                          match_querystring=True)
+        for vid_id, content_type, status, fixture, _ in json_test_cases:
+            responses.add(responses.GET, JSON_URL.format(vid_id),
+                          body=read_fixture_file(fixture), content_type=content_type,
+                          status=status, match_querystring=True)
 
-        for vid_id, _, _, _, _, expected in json_test_cases:
+        for vid_id, _, _, _, expected in json_test_cases:
             with self.subTest(vid_id=vid_id):
                 result = self.youtube._yt(urlparse.urlparse(vid_id))
                 self.assertEqual(result, expected)
@@ -110,19 +106,20 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
                                                                   "youtu.be",
                                                                   "www.youtube.com"})
 
+
     @responses.activate
     def test_integration(self):
-        for _, url, content_type, status, fixture, _ in json_test_cases:
-            responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type, status=status,
-                          match_querystring=True)
+        for vid_id, content_type, status, fixture, _ in json_test_cases:
+            responses.add(responses.GET, JSON_URL.format(vid_id),
+                          body=read_fixture_file(fixture), content_type=content_type,
+                          status=status, match_querystring=True)
 
         url_types = {"https://www.youtube.com/watch?v={}",
                      "http://m.youtube.com/details?v={}",
                      "https://www.youtube.com/v/{}",
                      "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
                      "http://youtu.be/{}"}
-        for vid_id, _, _, _, _, response in json_test_cases:
+        for vid_id, _, _, _, response in json_test_cases:
             for url in url_types:
                 with self.subTest(vid_id=vid_id, url=url):
                     url = url.format(vid_id)
