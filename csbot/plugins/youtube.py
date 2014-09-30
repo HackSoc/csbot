@@ -93,8 +93,8 @@ class Youtube(Plugin):
                 mins, secs = divmod(rem, 60)
 
                 if hours != 0:
-
                     vid_info["duration"] += format(hours, "02d") + ":"
+
                 vid_info["duration"] += "{:02d}:{:02d}".format(mins, secs)
         except KeyError as ex:
             vid_info["duration"] = "N/A"

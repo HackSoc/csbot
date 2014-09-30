@@ -5,7 +5,7 @@ import requests
 from . import BotTestCase, read_fixture_file
 
 
-#: Tests are (number, url, content-type, fixture, expected)
+#: Tests are (number, url, content-type, status, fixture, expected)
 json_test_cases = [
     # (These test case are copied from the actual URLs, without the lengthy transcripts)
 
@@ -14,6 +14,7 @@ json_test_cases = [
         "fItlK6L-khc",
         "https://gdata.youtube.com/feeds/api/videos/fItlK6L-khc?alt=json&v=2",
         "application/json; charset=utf-8",
+        200,
         "youtube_fItlK6L-khc.json",
         {'link': 'http://youtu.be/fItlK6L-khc', 'uploader': 'BruceWillakers',
          'uploaded': '2014-08-29', 'views': '22,387', 'duration': '21:00',
@@ -25,6 +26,7 @@ json_test_cases = [
         "vZ_YpOvRd3o",
         "https://gdata.youtube.com/feeds/api/videos/vZ_YpOvRd3o?alt=json&v=2",
         "application/json; charset=utf-8",
+        200,
         "youtube_vZ_YpOvRd3o.json",
         {'title': "Oh! it's just me! / Фух! Это всего лишь я!", 'likes': '+4,267/-66',
          'duration': '00:24', 'uploader': 'ignoramusky', 'uploaded': '2014-08-26',
@@ -36,6 +38,7 @@ json_test_cases = [
         "flibble",
         "https://gdata.youtube.com/feeds/api/videos/flibble?alt=json&v=2",
         "application/vnd.google.gdata.error+xml",
+        400,
         "empty_file",
         None
     ),
@@ -45,11 +48,32 @@ json_test_cases = [
         "",
         "https://gdata.youtube.com/feeds/api/videos/?alt=json&v=2",
         "application/json; charset=utf-8",
+        400,
         "empty_file",  # actually does have some data, but should never get this far
+        None
+    ),
+
+    # Malformed json
+    (
+        "malformed_id",
+        "https://gdata.youtube.com/feeds/api/videos/malformed_id?alt=json&v=2",
+        "application/json; charset=utf-8",
+        200,
+        "youtube_malformed.json",
+        {'title': 'N/A', 'uploaded': 'N/A', 'duration': 'N/A', 'likes': 'N/A',
+         'link': 'http://youtu.be/malformed_id', 'uploader': 'N/A', 'views': 'N/A'}
+    ),
+
+    # Malformed json (missing ID)
+    (
+        "malformed_id2",
+        "https://gdata.youtube.com/feeds/api/videos/malformed_id2?alt=json&v=2",
+        "application/json; charset=utf-8",
+        200,
+        "youtube_malformed2.json",
         None
     )
 ]
-
 
 
 class TestYoutubePlugin(BotTestCase):
@@ -62,11 +86,12 @@ class TestYoutubePlugin(BotTestCase):
 
     @responses.activate
     def test_ids(self):
-        for _, url, content_type, fixture, _ in json_test_cases:
+        for _, url, content_type, status, fixture, _ in json_test_cases:
             responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type, match_querystring=True)
+                          content_type=content_type, status=status,
+                          match_querystring=True)
 
-        for vid_id, _, _, _, expected in json_test_cases:
+        for vid_id, _, _, _, _, expected in json_test_cases:
             with self.subTest(vid_id=vid_id):
                 result = self.youtube._yt(urlparse.urlparse(vid_id))
                 self.assertEqual(result, expected)
@@ -87,16 +112,17 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
 
     @responses.activate
     def test_integration(self):
-        for _, url, content_type, fixture, _ in json_test_cases:
+        for _, url, content_type, status, fixture, _ in json_test_cases:
             responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type, match_querystring=True)
+                          content_type=content_type, status=status,
+                          match_querystring=True)
 
         url_types = {"https://www.youtube.com/watch?v={}",
                      "http://m.youtube.com/details?v={}",
                      "https://www.youtube.com/v/{}",
                      "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
                      "http://youtu.be/{}"}
-        for vid_id, _, _, _, response in json_test_cases:
+        for vid_id, _, _, _, _, response in json_test_cases:
             for url in url_types:
                 with self.subTest(vid_id=vid_id, url=url):
                     url = url.format(vid_id)
