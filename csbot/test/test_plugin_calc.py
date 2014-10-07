@@ -32,9 +32,7 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("1 + "), "Error, \"1 + \" is not a valid calculation")
         self.assertEqual(self.calc._calc("e = 1"), "Error, \"e = 1\" is not a valid calculation")
         self.assertEqual(self.calc._calc("sgdsdg + 3"), "Unknown or invalid constant \"sgdsdg\"")
-        self.assertEqual(self.calc._calc("1 << (1 << (1 << 10))"), "Error, Python int too large to convert to C ssize_t")
-        self.assertEqual(self.calc._calc("1 << -1"), "Error, negative shift count")
-        self.assertEqual(self.calc._calc("10000 << 10000"), "Error, result is too long")
+        self.assertEqual(self.calc._calc("1 << (1 << (1 << 10))"), "Error, cannot use bitshifting")
 
 
 

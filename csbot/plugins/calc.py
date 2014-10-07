@@ -8,9 +8,9 @@ from csbot.util import pairwise
 # Available operators
 operators = {ast.And: op.and_, ast.Or: op.or_,  # boolop
              ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
-             ast.Div: op.truediv, ast.Mod: op.mod, ast.LShift: op.lshift,
-             ast.RShift: op.rshift, ast.BitOr: op.or_, ast.BitXor: op.xor,
-             ast.BitAnd: op.and_, ast.FloorDiv: op.floordiv,  # operator
+             ast.Div: op.truediv, ast.Mod: op.mod, ast.BitOr: op.or_,
+             ast.BitXor: op.xor, ast.BitAnd: op.and_,
+             ast.FloorDiv: op.floordiv,  # operator
              ast.Invert: op.inv, ast.Not: op.not_, ast.UAdd: op.pos,
              ast.USub: op.neg,  # unaryop
              ast.Eq: op.eq, ast.NotEq: op.ne, ast.Lt: op.lt, ast.LtE: op.le,
@@ -62,6 +62,8 @@ def calc_eval(node):
           isinstance(node, ast.cmpop)):  # <operator>
         if type(node) in operators:
             return operators[type(node)]
+        elif isinstance(node, ast.LShift) or isinstance(node, ast.RShift):
+            raise ValueError("cannot use bitshifting")
         else:
             raise KeyError(type(node).__name__)
     elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
@@ -90,7 +92,8 @@ class Calc(Plugin):
         if not calc_str:
             return "You want to calculate something? Type in an expression then, silly!"
         try:
-            res = str(calc_eval(ast.parse(calc_str).body[0]))
+            res = calc_eval(ast.parse(calc_str).body[0])
+            res = str(res)
             if len(res) > 300:
                 raise OverflowError("result is too long")
             return res
@@ -98,7 +101,6 @@ class Calc(Plugin):
             return "Unknown operator {}".format(str(ex))
         except (OverflowError, ValueError, ZeroDivisionError) as ex:
             # 1 ** 100000
-            # 1 << -1 (also bitshifting a bigint)
             # 1 / 0
             return "Error, {}".format(str(ex))
         except NotImplementedError as ex:  # "sgdsdg + 3"
