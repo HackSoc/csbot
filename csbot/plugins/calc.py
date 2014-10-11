@@ -19,8 +19,7 @@ operators = {ast.And: op.and_, ast.Or: op.or_,  # boolop
 }
 
 def limited_power(a, b):
-    """
-    A limited power function to make sure that
+    """A limited power function to make sure that
     commands do not take too long to process.
     """
     if any(abs(n) > 1000 for n in [a, b]):
@@ -41,13 +40,13 @@ constants = {
 }
 
 def calc_eval(node):
+    """Actually do the calculation.
     """
-    Actually do the calculation.
-    """
+    # ast.Load is always preceded by something else
+    assert not isinstance(node, ast.Load)
+
     if isinstance(node, ast.Expr):  # Top level expression
         return calc_eval(node.value)
-    elif isinstance(node, ast.Load):  # ignore
-        return
     elif isinstance(node, ast.Name):  # <constant>
         if node.id in constants:
             return constants[node.id]
@@ -65,7 +64,7 @@ def calc_eval(node):
         elif isinstance(node, ast.LShift) or isinstance(node, ast.RShift):
             raise ValueError("cannot use bitshifting")
         else:
-            raise KeyError(type(node).__name__)
+            raise KeyError(type(node).__name__.lower())
     elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
         return calc_eval(node.op)(calc_eval(node.operand))
     elif isinstance(node, ast.BinOp):  # <left> <operator> <right>
@@ -78,19 +77,17 @@ def calc_eval(node):
 
 
 class Calc(Plugin):
-    """
-    A plugin that calculates things.
+    """A plugin that calculates things.
     Heavily based on http://stackoverflow.com/a/9558001/995325
     """
 
     def _calc(self, calc_str):
-        """
-        Start the calculation, and handle any exceptions.
+        """Start the calculation, and handle any exceptions.
         Returns a string of the answer.
         """
 
         if not calc_str:
-            return "You want to calculate something? Type in an expression then, silly!"
+            return "You want to calculate something? Type in an expression then!"
         try:
             res = calc_eval(ast.parse(calc_str).body[0])
             res = str(res)
@@ -98,15 +95,14 @@ class Calc(Plugin):
                 raise OverflowError("result is too long")
             return res
         except KeyError as ex:
-            return "Unknown operator {}".format(str(ex))
+            return "Error, invalid operator {}".format(str(ex))
         except (OverflowError, ValueError, ZeroDivisionError) as ex:
-            # 1 ** 100000
-            # 1 / 0
+            # 1 ** 100000, 1 << -1, 1 / 0
             return "Error, {}".format(str(ex))
         except NotImplementedError as ex:  # "sgdsdg + 3"
-            return "Unknown or invalid constant \"{}\"".format(str(ex))
+            return "Error, unknown or invalid constant '{}'".format(str(ex))
         except (TypeError, SyntaxError):  # "1 +"
-            return "Error, \"{}\" is not a valid calculation".format(calc_str)
+            return "Error, '{}' is not a valid calculation".format(calc_str)
 
 
     @Plugin.command('calc')

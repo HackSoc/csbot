@@ -1,4 +1,5 @@
 import responses
+from unittest.mock import patch
 
 from . import BotTestCase, read_fixture_file
 
@@ -76,10 +77,20 @@ class TestXKCDPlugin(BotTestCase):
         # Also test the empty string
         self.assertEqual(self.xkcd._xkcd(""), json_test_cases[0][4])
 
+        # !xkcd 221
+        with patch("random.randint", return_value=1):
+            self.assertEqual(self.xkcd._xkcd("rand"), json_test_cases[1][4])
+
     @responses.activate
     def test_error(self):
-        # Still need to overrride the "latest" and the 404 page
-        _, url, content_type, fixture, _ = json_test_cases[0]
+        _, url, content_type, fixture, _ = json_test_cases[0]  # Latest
+        # Test if the comics are unavailable by making the latest return a 404
+        responses.add(responses.GET, url, body="404 - Not Found",
+                      content_type="text/html", status=404)
+        self.assertRaises(self.xkcd.XKCDError, self.xkcd._xkcd, "")
+        responses.reset()
+
+        # Now override the actual 404 page and the latest "properly"
         responses.add(responses.GET, url, body=read_fixture_file(fixture),
                       content_type=content_type)
         responses.add(responses.GET, "http://xkcd.com/404/info.0.json",
@@ -112,3 +123,6 @@ class TestXKCDLinkInfoIntegration(BotTestCase):
                 _, _, linkinfo_title = self.linkinfo.get_link_info(url)
                 self.assertIn(title, linkinfo_title)
                 self.assertIn(alt, linkinfo_title)
+
+        # Error case
+        self.assertEqual(self.linkinfo.get_link_info("http://xkcd.com/flibble"), None)
