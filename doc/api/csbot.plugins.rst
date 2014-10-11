@@ -20,6 +20,8 @@ Submodules
    csbot.plugins.topic
    csbot.plugins.usertrack
    csbot.plugins.whois
+   csbot.plugins.xkcd
+   csbot.plugins.youtube
 
 Module contents
 ---------------
