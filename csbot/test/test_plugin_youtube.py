@@ -50,23 +50,23 @@ json_test_cases = [
     ),
 
     # Malformed json
-    # (
-    #     "malformed_id",
-    #     "application/json; charset=utf-8",
-    #     200,
-    #     "youtube_malformed.json",
-    #     {'title': 'N/A', 'uploaded': 'N/A', 'duration': 'N/A', 'likes': 'N/A',
-    #      'link': 'http://youtu.be/malformed_id', 'uploader': 'N/A', 'views': 'N/A'}
-    # ),
+    (
+        "malformed_id",
+        "application/json; charset=utf-8",
+        200,
+        "youtube_malformed.json",
+        {'title': 'N/A', 'uploaded': 'N/A', 'duration': 'N/A', 'likes': 'N/A',
+         'link': 'http://youtu.be/malformed_id', 'uploader': 'N/A', 'views': 'N/A'}
+    ),
 
     # Malformed json (missing ID)
-    # (
-    #     "malformed_id2",
-    #     "application/json; charset=utf-8",
-    #     200,
-    #     "youtube_malformed2.json",
-    #     None
-    # )
+    (
+        "malformed_id2",
+        "application/json; charset=utf-8",
+        200,
+        "youtube_malformed2.json",
+        None
+    )
 ]
 
 JSON_URL = "https://gdata.youtube.com/feeds/api/videos/{}?alt=json&v=2"
