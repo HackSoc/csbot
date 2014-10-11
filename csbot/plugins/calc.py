@@ -6,16 +6,34 @@ from csbot.plugin import Plugin
 from csbot.util import pairwise
 
 # Available operators
-operators = {ast.And: op.and_, ast.Or: op.or_,  # boolop
-             ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
-             ast.Div: op.truediv, ast.Mod: op.mod, ast.BitOr: op.or_,
-             ast.BitXor: op.xor, ast.BitAnd: op.and_,
-             ast.FloorDiv: op.floordiv,  # operator
-             ast.Invert: op.inv, ast.Not: op.not_, ast.UAdd: op.pos,
-             ast.USub: op.neg,  # unaryop
-             ast.Eq: op.eq, ast.NotEq: op.ne, ast.Lt: op.lt, ast.LtE: op.le,
-             ast.Gt: op.gt, ast.GtE: op.ge, ast.Is: op.is_,
-             ast.IsNot: op.is_not  # cmpop
+operators = {
+    # boolop
+    ast.And: op.and_,
+    ast.Or: op.or_,
+    # operator
+    ast.Add: op.add,
+    ast.Sub: op.sub,
+    ast.Mult: op.mul,
+    ast.Div: op.truediv,
+    ast.Mod: op.mod,
+    ast.BitOr: op.or_,
+    ast.BitXor: op.xor,
+    ast.BitAnd: op.and_,
+    ast.FloorDiv: op.floordiv,
+    # unaryop
+    ast.Invert: op.inv,
+    ast.Not: op.not_,
+    ast.UAdd: op.pos,
+    ast.USub: op.neg,
+    # cmpop
+    ast.Eq: op.eq,
+    ast.NotEq: op.ne,
+    ast.Lt: op.lt,
+    ast.LtE: op.le,
+    ast.Gt: op.gt,
+    ast.GtE: op.ge,
+    ast.Is: op.is_,
+    ast.IsNot: op.is_not,
 }
 
 def limited_power(a, b):
