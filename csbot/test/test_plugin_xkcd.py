@@ -120,9 +120,10 @@ class TestXKCDLinkInfoIntegration(BotTestCase):
         for num, _, _, _, (_, title, alt) in json_test_cases:
             with self.subTest(num=num):
                 url = 'http://xkcd.com/{}'.format(num)
-                _, _, linkinfo_title = self.linkinfo.get_link_info(url)
-                self.assertIn(title, linkinfo_title)
-                self.assertIn(alt, linkinfo_title)
+                result = self.linkinfo.get_link_info(url)
+                self.assertIn(title, result.text)
+                self.assertIn(alt, result.text)
 
         # Error case
-        self.assertEqual(self.linkinfo.get_link_info("http://xkcd.com/flibble"), None)
+        result = self.linkinfo.get_link_info("http://xkcd.com/flibble")
+        self.assertTrue(result.is_error)

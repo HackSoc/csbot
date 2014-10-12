@@ -123,11 +123,11 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
             for url in url_types:
                 with self.subTest(vid_id=vid_id, url=url):
                     url = url.format(vid_id)
-                    link_resp = self.linkinfo.get_link_info(url)
-                    if link_resp is None:
-                        break
-                    _, _, linkinfo_title = link_resp
-                    for key in response:
-                        if key == "link":
-                            continue
-                        self.assertIn(response[key], linkinfo_title)
+                    result = self.linkinfo.get_link_info(url)
+                    if response is None:
+                        self.assertTrue(result.is_error)
+                    else:
+                        for key in response:
+                            if key == "link":
+                                continue
+                            self.assertIn(response[key], result.text)

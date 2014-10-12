@@ -1,5 +1,6 @@
-from csbot.plugin import Plugin
 import urllib.parse as urlparse
+
+from ..plugin import Plugin
 
 
 class Imgur(Plugin):
@@ -23,20 +24,13 @@ class Imgur(Plugin):
 
         def page_handler(url, match):
             """Scrape title, but don't say anything for the default title."""
-            reply = linkinfo.scrape_html_title(url)
-            if reply is None:
-                return None
-            elif reply[2] == '"imgur: the simple image sharer"':
-                return None
-            else:
-                return reply
+            result = linkinfo.scrape_html_title(url)
+            result.is_redundant = 'imgur: the simple image sharer' in result.text
+            return result
 
         # Handle direct image links
         linkinfo.register_handler(lambda url: url.netloc == 'i.imgur.com',
-                                  image_handler)
+                                  image_handler, exclusive=True)
         # Handle image page links
         linkinfo.register_handler(lambda url: url.netloc == 'imgur.com',
-                                  page_handler)
-        # If we didn't reply for an imgur page, nobody should
-        linkinfo.register_exclude(lambda url: url.netloc in {'i.imgur.com',
-                                                             'imgur.com'})
+                                  page_handler, exclusive=True)

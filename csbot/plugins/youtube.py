@@ -3,8 +3,9 @@ import requests
 from datetime import datetime
 import urllib.parse as urlparse
 
-from csbot.plugin import Plugin
-from csbot.util import simple_http_get, cap_string
+from ..plugin import Plugin
+from ..util import simple_http_get, cap_string
+from .linkinfo import LinkInfoResult
 
 
 def get_yt_json(vid_id):
@@ -123,7 +124,7 @@ class Youtube(Plugin):
             response = self._yt(url)
             if not response:
                 return None
-            return url.netloc, False, self.RESPONSE.format(**response)
+            return LinkInfoResult(url.geturl(), self.RESPONSE.format(**response))
 
         linkinfo.register_handler(lambda url: url.netloc in {"m.youtube.com", "www.youtube.com", "youtu.be"},
                                   page_handler)

@@ -3,8 +3,9 @@ import random
 import requests
 import lxml.html
 
-from csbot.plugin import Plugin
-from csbot.util import simple_http_get, cap_string, is_ascii
+from ..plugin import Plugin
+from ..util import simple_http_get, cap_string, is_ascii
+from .linkinfo import LinkInfoResult
 
 
 def fix_json_unicode(data):
@@ -104,14 +105,12 @@ class xkcd(Plugin):
             # Remove leading and trailing '/'
             try:
                 response = self._xkcd(url.path.strip('/'))
-                return "xkcd.com", False, '{1} - "{2}"'.format(*response)
+                return LinkInfoResult(url.geturl(), '{1} - "{2}"'.format(*response))
             except self.XKCDError:
                 return None
 
         linkinfo.register_handler(lambda url: url.netloc == "xkcd.com",
-                                  page_handler)
-
-        linkinfo.register_exclude(lambda url: url.netloc == "xkcd.com")
+                                  page_handler, exclusive=True)
 
     @Plugin.command('xkcd')
     def randall_is_awesome(self, e):
