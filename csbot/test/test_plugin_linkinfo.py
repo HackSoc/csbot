@@ -14,7 +14,7 @@ encoding_test_cases = [
         "http://example.com/utf8-content-type-only",
         "text/html; charset=utf-8",
         b"<html><head><title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>",
-        '"EM DASH \u2014 \u2014"'
+        'EM DASH \u2014 \u2014'
     ),
     # UTF-8 with meta http-equiv encoding only
     (
@@ -22,7 +22,7 @@ encoding_test_cases = [
         "text/html",
         (b'<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
          b'<title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>'),
-        '"EM DASH \u2014 \u2014"'
+        'EM DASH \u2014 \u2014'
     ),
     # UTF-8 with XML encoding declaration only
     (
@@ -30,7 +30,7 @@ encoding_test_cases = [
         "text/html",
         (b'<?xml version="1.0" encoding="UTF-8"?><html><head>'
          b'<title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>'),
-        '"EM DASH \u2014 \u2014"'
+        'EM DASH \u2014 \u2014'
     ),
 
     # (The following are real test cases the bot has barfed on in the past)
@@ -57,7 +57,7 @@ encoding_test_cases = [
     </body>
 </html>
         """,
-        '"Extensible Markup Language (XML) 1.0 (Fifth Edition)"'
+        'Extensible Markup Language (XML) 1.0 (Fifth Edition)'
     ),
     # No Content-Type encoding, but has http-equiv encoding.  Has a mix of
     # UTF-8 literal em-dash and HTML entity em-dash - both should be output as
@@ -79,7 +79,7 @@ encoding_test_cases = [
   </body>
 </html>
         """,
-        '"15.7. logging \u2014 Logging facility for Python \u2014 Python v2.7.3 documentation"'
+        '15.7. logging \u2014 Logging facility for Python \u2014 Python v2.7.3 documentation'
     ),
 ]
 
@@ -93,7 +93,7 @@ if LIBXML_VERSION >= (2, 8, 0):
             "text/html",
             (b'<html><head><meta charset="UTF-8">'
              b'<title>EM DASH \xe2\x80\x94 &mdash;</title></head><body></body></html>'),
-            '"EM DASH \u2014 \u2014"'
+            'EM DASH \u2014 \u2014'
         ),
     ]
 
@@ -114,5 +114,5 @@ class TestLinkInfoPlugin(BotTestCase):
 
         for url, _, _, expected_title in encoding_test_cases:
             with self.subTest(url=url):
-                _, _, title = self.linkinfo.get_link_info(url)
-                self.assertEqual(title, expected_title, url)
+                result = self.linkinfo.get_link_info(url)
+                self.assertEqual(result.text, expected_title, url)

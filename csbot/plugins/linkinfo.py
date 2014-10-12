@@ -2,14 +2,38 @@ import os.path
 import re
 from urllib.parse import urlparse
 import collections
+from collections import namedtuple
 import datetime
+from functools import partial
 
 import requests
 import lxml.etree
 import lxml.html
 
-from csbot.plugin import Plugin
-from csbot.util import simple_http_get
+from ..plugin import Plugin
+from ..util import simple_http_get, Struct
+
+
+LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
+
+
+class LinkInfoResult(Struct):
+    #: The URL requested
+    url = Struct.REQUIRED
+    #: Information about the URL
+    text = Struct.REQUIRED
+    #: Is an error?
+    is_error = False
+    #: URL is not safe for work?
+    nsfw = False
+    #: URL information is redundant? (e.g. duplicated in URL string)
+    is_redundant = False
+
+    def get_message(self):
+        if self.is_error:
+            return 'Error: {} ({})'.format(self.text, self.url)
+        else:
+            return '{}"{}"'.format('[NSFW] ' if self.nsfw else '', self.text)
 
 
 class LinkInfo(Plugin):
@@ -45,28 +69,33 @@ class LinkInfo(Plugin):
         # Timestamps of recently handled URLs for cooldown timer
         self.rate_limit_list = collections.deque()
 
-    def register_handler(self, filter, handler):
+    def register_handler(self, filter, handler, exclusive=False):
         """Add a URL handler.
 
-        If ``filter(url)`` returns a True-like value, then
-        ``handler(url, filter(url))`` will be called.  The the URL is provided
-        as a :class:`urlparse.ParseResult`.  Including the filter result is
-        useful for accessing the results of a regular expression filter.
+        *filter* should be a function that returns a True-like or False-like
+        value to indicate whether *handler* should be run for a particular URL.
+        The URL is supplied as a :class:`urlparse:ParseResult` instance.
 
-        *handler* should return a ``(prefix, nsfw, message)`` tuple.  If it
-        returns None instead, the processing will fall through to the next
-        handler: this is the best way to signal that a handler doesn't know
-        what to do with a URL it has matched.
+        If *handler* is called, it will be as ``handler(url, filter(url))``.
+        The filter result is useful for accessing the results of a regular
+        expression filter, for example.  The result should be a
+        :class:`LinkInfoResult` instance.  If the result is None instead, the
+        processing will fall through to the next handler; this is the best way
+        to signal that a handler doesn't know what to do with a particular URL.
+
+        If *exclusive* is True, the fall-through behaviour will not happen,
+        instead terminating the handling with the result of calling *handler*.
         """
-        self.handlers.append((filter, handler))
+        self.handlers.append(LinkInfoHandler(filter, handler, exclusive))
 
     def register_exclude(self, filter):
         """Add a URL exclusion filter.
 
-        URL exclusions are applied after all handlers have been tried without
-        getting a response, and before the the default title-scraping handler
-        is invoked.  If ``filter(url)`` returns a True-like value, then the URL
-        will be ignored.
+        *filter* should be a function that returns a True-like or False-like
+        value to indicate whether or not a URL should be excluded from the
+        default title-scraping behaviour (after all registered handlers have
+        been tried).  The URL is supplied as a :class:`urlparse.ParseResult`
+        instance.
         """
         self.excludes.append(filter)
 
@@ -83,18 +112,17 @@ class LinkInfo(Plugin):
         parts = e['data'].split(None, 1)
         url = parts[0]
         rest = parts[1] if len(parts) > 1 else ''
-        # See if the command data was marked as NSFW
-        nsfw = 'nsfw' in rest.lower()
 
         if '://' not in url:
             url = 'http://' + url
 
-        reply = self.get_link_info(url)
-        if reply is not None:
-            prefix, link_nsfw, message = reply
-            self._respond(e, prefix, nsfw or link_nsfw, message)
-        else:
-            e.protocol.msg(e['reply_to'], "Couldn't fetch info for " + url)
+        # Get info for the URL
+        result = self.get_link_info(url)
+        self._log_if_error(result)
+        # See if it was marked as NSFW in the command text
+        result.nsfw |= 'nsfw' in rest.lower()
+        # Tell the user
+        e.protocol.msg(e['reply_to'], result.get_message())
 
     @Plugin.hook('core.message.privmsg')
     def scan_privmsg(self, e):
@@ -109,60 +137,80 @@ class LinkInfo(Plugin):
 
         parts = e['message'].split()
         for i, part in enumerate(parts[:int(self.config_get('scan_limit'))]):
-            if '://' in part:
+            # Skip parts that don't look like URLs
+            if '://' not in part:
+                continue
+
+            # Get info for the URL
+            result = self.get_link_info(part)
+            self._log_if_error(result)
+
+            if result.is_error:
+                # Try next bit if this one didn't work - might have not really
+                # been a valid URL, and we're only guessing after all...
+                continue
+            else:
                 # See if "NSFW" appears anywhere else in the message
-                nsfw = 'nsfw' in ''.join(parts[:i] + parts[i + 1:]).lower()
-                reply = self.get_link_info(part)
-                if reply is not None and not self._rate_limited():
-                    prefix, link_nsfw, message = reply
-                    self._respond(e, prefix, nsfw or link_nsfw, message)
-                    break
+                result.nsfw |= 'nsfw' in ''.join(parts[:i] + parts[i + 1:]).lower()
+                # Send message only if it was interesting enough
+                if not result.is_redundant:
+                    e.protocol.msg(e['reply_to'], result.get_message())
+                # ... and since we got a useful result, stop processing the message
+                break
 
     def get_link_info(self, original_url):
-        """Get information about a URL, returning either None or a tuple of
-        ``(prefix, nsfw, message)``.
+        """Get information about a URL.
+
+        Using the *original_url* string, run the chain of URL handlers and
+        excludes to get a :class:`LinkInfoResult`.
         """
+        make_error = partial(LinkInfoResult, original_url, is_error=True)
+
         url = urlparse(original_url)
 
         # Skip non-HTTP(S) URLs
         if url.scheme not in ('http', 'https'):
-            return None
+            return make_error('not a recognised URL scheme: {}'.format(url.scheme))
 
         # Try handlers in registration order
-        for f, h in self.handlers:
-            match = f(url)
+        for h in self.handlers:
+            match = h.filter(url)
             if match:
-                reply = h(url, match)
-                # "None" replies fall through to the next handler
-                if reply is not None:
-                    return reply
+                result = h.handler(url, match)
+                if result is not None:
+                    # Useful result, return it
+                    return result
+                elif h.exclusive:
+                    # No result, and exclusive handler
+                    return make_error('exclusive handler gave no result')
+                else:
+                    # No result, fall through to next handler
+                    pass
         # If no handlers gave a response, use the default handler
         else:
             # Check that the URL hasn't been excluded
             for f in self.excludes:
                 if f(url):
-                    self.log.debug('ignored URL: ' + original_url)
-                    return None
-            # Invoke the default handler
+                    return make_error('URL excluded')
+            # Invoke the default handler if not excluded
             else:
-                reply = self.scrape_html_title(url)
-                if reply is None:
-                    self.log.debug('URL not handled: ' + original_url)
-                return reply
+                return self.scrape_html_title(url)
 
     def scrape_html_title(self, url):
-        """Scrape the ``<title>`` tag contents from an HTML page.
+        """Scrape the ``<title>`` tag contents from the HTML page at *url*.
+
+        Returns a :class:`LinkInfoResult`.
         """
+        make_error = partial(LinkInfoResult, url.geturl(), is_error=True)
+
         # Let's see what's on the other end...
         r = simple_http_get(url.geturl())
         # Only bother with 200 OK
         if r.status_code != requests.codes.ok:
-            self.log.debug('request failed for ' + url.geturl())
-            return None
+            return make_error('HTTP request failed: {}'.format(r.status_code))
         if 'html' not in r.headers['Content-Type']:
-            self.log.debug('Content-Type not HTML-ish ({}): {}'
-                           .format(r.headers['Content-Type'], url.geturl()))
-            return None
+            return make_error('Content-Type not HTML-ish: {}'
+                              .format(r.headers['Content-Type']))
 
         # Attempt to scrape the HTML for a <title>
         if 'charset=' in r.headers['content-type']:
@@ -175,19 +223,15 @@ class LinkInfo(Plugin):
         title = html.find('.//title')
 
         if title is None:
-            self.log.debug('failed to find <title>: ' + url.geturl())
-            return None
+            return make_error('failed to find <title>')
 
         # Normalise title whitespace
         title = ' '.join(title.text.strip().split())
-        nsfw = url.netloc.endswith('.xxx')
-
-        # See if the title is in the URL
-        if self._filter_title_in_url(url, title):
-            return None
-
-        # Return the scraped title
-        return 'Title', nsfw, '"{}"'.format(title)
+        # Build result
+        result = LinkInfoResult(url, title, nsfw=url.netloc.endswith('.xxx'))
+        # See if the title is redundant, i.e. appears in the URL
+        result.is_redundant = self._filter_title_in_url(url, title)
+        return result
 
     def _filter_title_in_url(self, url, title):
         """See if *title* is represented in *url*.
@@ -231,13 +275,11 @@ class LinkInfo(Plugin):
         # Didn't match
         return False
 
-    def _respond(self, e, prefix, nsfw, message):
-        """A helper function for responding to link information requests in a
-        consistent format.
+    def _log_if_error(self, result):
+        """If *result* represents an error, log it.
         """
-        e.protocol.msg(e['reply_to'], '{}: {}{}'.format(
-            prefix, '[NSFW] ' if nsfw else '', message,
-        ))
+        if result is not None and result.is_error:
+            self.log.debug(result.text + ' (' + result.url + ')')
 
     def _rate_limited(self):
         """Find out if the current call is subject to rate limiting.
