@@ -22,9 +22,10 @@ def mock_client(cls, *args, **kwargs):
 
             # Mock an asyncio event loop where delayed calls are immediate
             self.loop = mock.Mock()
+            self.loop.get_debug.return_value = True
             def call_soon(func, *args):
                 func(*args)
-                return asyncio.Handle(func, args, None)
+                return asyncio.Handle(func, args, self.loop)
             self.loop.call_soon = call_soon
             def call_later(delay, func, *args):
                 return call_soon(func, *args)
