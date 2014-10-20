@@ -252,38 +252,16 @@ class BotClient(IRCClient):
             'reply_to': user.nick if channel == self.nick else channel,
         })
 
-    def irc_JOIN(self, msg):
-        """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
-        """
-        user = IRCUser.parse(msg.prefix)
-        nick = user.nick
-        channel, account, _ = msg.params
-
-        if nick == self.nick:
-            self.on_joined(channel)
-        else:
-            self.emit_new('core.user.identified', {
-                'user': user.raw,
-                'account': None if account == '*' else account,
-            })
-            self.emit_new('core.channel.joined', {
-                'channel': channel,
-                'user': user.raw,
-            })
+    def on_user_joined(self, user, channel):
+        self.emit_new('core.channel.joined', {
+            'channel': channel,
+            'user': user.raw,
+        })
 
     def on_user_left(self, user, channel, message):
         self.emit_new('core.channel.left', {
             'channel': channel,
             'user': user.raw,
-        })
-
-    def names(self, channel, names, raw_names):
-        """Called when the NAMES list for a channel has been received.
-        """
-        self.emit_new('core.channel.names', {
-            'channel': channel,
-            'names': names,
-            'raw_names': raw_names,
         })
 
     def on_user_quit(self, user, message):
@@ -297,6 +275,15 @@ class BotClient(IRCClient):
             'oldnick': oldnick,
             'newnick': newnick,
         })
+
+    def on_topic_changed(self, user, channel, topic):
+        self.emit_new('core.channel.topic', {
+            'channel': channel,
+            'author': user.raw,     # might be server name or nick
+            'topic': topic,
+        })
+
+    # Implement NAMES handling
 
     def irc_RPL_NAMREPLY(self, msg):
         channel = msg.params[2]
@@ -323,14 +310,18 @@ class BotClient(IRCClient):
         names = list(map(f, raw_names))
 
         # Fire the event
-        self.names(channel, names, raw_names)
+        self.on_names(channel, names, raw_names)
 
-    def on_topic_changed(self, user, channel, topic):
-        self.emit_new('core.channel.topic', {
+    def on_names(self, channel, names, raw_names):
+        """Called when the NAMES list for a channel has been received.
+        """
+        self.emit_new('core.channel.names', {
             'channel': channel,
-            'author': user.raw,     # might be server name or nick
-            'topic': topic,
+            'names': names,
+            'raw_names': raw_names,
         })
+
+    # Implement active account discovery via "formatted WHO"
 
     def identify(self, target):
         """Find the account for a user or all users in a channel."""
@@ -341,14 +332,31 @@ class BotClient(IRCClient):
         """Handle "formatted WHO" responses."""
         tag = msg.params[1]
         if tag == self._WHO_IDENTIFY[0]:
-            self.emit_new('core.user.identified', {
-                'user': msg.params[2],
-                'account': None if msg.params[3] == '0' else msg.params[3],
-            })
+            user, account = msg.params[2:]
+            self.on_user_identified(user, None if account == '0' else account)
+
+    def on_user_identified(self, user, account):
+        self.emit_new('core.user.identified', {
+            'user': user,
+            'account': account,
+        })
+
+    # Implement passive account discovery via "Client Capabilities"
 
     def irc_ACCOUNT(self, msg):
         """Account change notification from ``account-notify`` capability."""
-        self.emit_new('core.user.identified', {
-            'user': msg.prefix,
-            'account': None if msg.params[0] == '*' else msg.params[0],
-        })
+        account = msg.params[0]
+        self.on_user_identified(msg.prefix, None if account == '*' else account)
+
+    def irc_JOIN(self, msg):
+        """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
+        """
+        user = IRCUser.parse(msg.prefix)
+        nick = user.nick
+        channel, account, _ = msg.params
+
+        if nick == self.nick:
+            self.on_joined(channel)
+        else:
+            self.on_user_identified(user.raw, None if account == '*' else account)
+            self.on_user_joined(user, channel)
