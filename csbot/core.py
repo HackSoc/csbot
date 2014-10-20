@@ -185,6 +185,9 @@ class BotClient(IRCClient):
         # RPL_ENDOFNAMES events
         self.names_accumulator = collections.defaultdict(list)
 
+        # Acknowledged capabilities
+        self.capabilities = set()
+
     def emit_new(self, event_type, data=None):
         """Shorthand for firing a new event; the new event is returned.
         """
@@ -200,7 +203,7 @@ class BotClient(IRCClient):
     def connection_made(self, transport):
         super().connection_made(transport)
         # TODO: do this in on_welcome() instead?
-        self.send_raw('CAP REQ :account-notify extended-join')
+        self.request_capabilities(['account-notify', 'extended-join'])
         self.emit_new('core.raw.connected')
 
     def connection_lost(self, exc):
@@ -321,6 +324,32 @@ class BotClient(IRCClient):
             'raw_names': raw_names,
         })
 
+    # Implement "IRC Client Capabilities Extension"
+
+    def request_capabilities(self, capabilities):
+        """Request "IRC Client Capabilities".
+
+        Wait for an appropriate response (e.g. :meth:`on_capabilities_changed`)
+        before assuming the request was successful.
+        """
+        self.send_raw('CAP REQ :' + ' '.join(capabilities))
+
+    def irc_CAP(self, msg):
+        """Handle "IRC Client Capabilities Extension" messages."""
+        _, subcmd, data = msg.params
+        data = data.split()
+        if subcmd == 'ACK':
+            self.capabilities |= set(data)
+            self.on_capabilities_changed(self.capabilities)
+        elif subcmd == 'NAK':
+            self.capabilities -= set(data)
+            self.on_capabilities_changed(self.capabilities)
+
+    def on_capabilities_changed(self, capabilities):
+        self.emit_new('core.self.capabilities', {
+            'capabilities': capabilities,
+        })
+
     # Implement active account discovery via "formatted WHO"
 
     def identify(self, target):
@@ -351,6 +380,10 @@ class BotClient(IRCClient):
     def irc_JOIN(self, msg):
         """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
         """
+        # Only do special handling if extended-join was enabled
+        if 'extended-join' not in self.capabilities:
+            return super().irc_JOIN(msg)
+
         user = IRCUser.parse(msg.prefix)
         nick = user.nick
         channel, account, _ = msg.params

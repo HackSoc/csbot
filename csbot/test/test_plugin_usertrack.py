@@ -9,6 +9,11 @@ class TestUserTrackPlugin(BotTestCase):
 
     PLUGINS = ['usertrack']
 
+    def setUp(self):
+        super().setUp()
+        # Enable client capabilities that the tests rely upon
+        self.protocol_.line_received(":server CAP self ACK :account-notify extended-join")
+
     def _assert_channels(self, nick, channels):
         self.assertEqual(self.usertrack.get_user(nick)['channels'], channels)
 
