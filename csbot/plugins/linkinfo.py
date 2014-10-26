@@ -33,7 +33,7 @@ class LinkInfoResult(Struct):
         if self.is_error:
             return 'Error: {} ({})'.format(self.text, self.url)
         else:
-            return '{}"{}"'.format('[NSFW] ' if self.nsfw else '', self.text)
+            return ('[NSFW] ' if self.nsfw else '') + self.text
 
 
 class LinkInfo(Plugin):
