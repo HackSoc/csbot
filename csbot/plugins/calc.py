@@ -122,8 +122,8 @@ def calc_eval(node):
         eval_args = [calc_eval(arg) for arg in node.args]
         try:
             return calc_eval(node.func)(*eval_args)
-        except TypeError:
-            raise ValueError("{} does not take {} parameters".format(node.func, len(node.args)))
+        except TypeError as ex:
+            raise ValueError(str(ex))
     elif isinstance(node, ast.NameConstant):
         return node.value
     elif isinstance(node, ast.Num):  # <number>
