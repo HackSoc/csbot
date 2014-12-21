@@ -5,6 +5,26 @@ import math
 from csbot.plugin import Plugin
 from csbot.util import pairwise
 
+
+def limited_power(a, b):
+    """A limited power function to make sure that
+    commands do not take too long to process.
+    """
+    if any(abs(n) > 1000 for n in [a, b]):
+        raise OverflowError("{}**{} would take too long to calculate".format(a, b))
+    return op.pow(a, b)
+
+
+def limited_lshift(a, b):
+    if not isinstance(a, int) or not isinstance(b, int):
+        # floats are handled more gracefully
+        pass
+    elif b.bit_length() > 64:
+        # Only need to check how much the number is being shifted by
+        raise OverflowError("{} << {} would take too long to calculate".format(a, b))
+    return op.lshift(a, b)
+
+
 # Available operators
 operators = {
     # boolop
@@ -20,6 +40,9 @@ operators = {
     ast.BitXor: op.xor,
     ast.BitAnd: op.and_,
     ast.FloorDiv: op.floordiv,
+    ast.Pow: limited_power,
+    ast.LShift: limited_lshift,
+    ast.RShift: op.rshift,
     # unaryop
     ast.Invert: op.inv,
     ast.Not: op.not_,
@@ -36,16 +59,7 @@ operators = {
     ast.IsNot: op.is_not,
 }
 
-def limited_power(a, b):
-    """A limited power function to make sure that
-    commands do not take too long to process.
-    """
-    if any(abs(n) > 1000 for n in [a, b]):
-        raise OverflowError("{}**{} is too big".format(a, b))
-    return op.pow(a, b)
-
-operators[ast.Pow] = limited_power
-
+# Available constants
 constants = {
     "e": math.e,
     "pi": math.pi,
@@ -57,9 +71,18 @@ constants = {
     "N": 6.0221412927e23,   # mol-1
 }
 
+
+def limited_factorial(a):
+    # Any larger than this would be too long to output regardless
+    if a > 100:
+        raise OverflowError("factorial({}) is too large to calculate", a)
+    return math.factorial(a)
+
+
+# Available functions
 functions = {
     "ceil": math.ceil,
-    "factorial": math.factorial,
+    "factorial": limited_factorial,
     "floor": math.floor,
     "isfinite": math.isfinite,
     "isinf": math.isinf,
@@ -110,8 +133,6 @@ def calc_eval(node):
           isinstance(node, ast.cmpop)):  # <operator>
         if type(node) in operators:
             return operators[type(node)]
-        elif isinstance(node, ast.LShift) or isinstance(node, ast.RShift):
-            raise ValueError("cannot use bitshifting")
         else:
             raise KeyError(type(node).__name__.lower())
     elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
@@ -140,7 +161,7 @@ class Calc(Plugin):
 
         try:
             res = calc_eval(ast.parse(calc_str).body[0])
-            if math.log10(res) > 255:
+            if math.log10(res) > 127:
                 raise OverflowError("result is too long to be printed")
             return str(res)
         except KeyError as ex:
