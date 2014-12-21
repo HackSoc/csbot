@@ -137,12 +137,12 @@ class Calc(Plugin):
 
         if not calc_str:
             return "You want to calculate something? Type in an expression then!"
+
         try:
             res = calc_eval(ast.parse(calc_str).body[0])
-            res = str(res)
-            if len(res) > 300:
-                raise OverflowError("result is too long")
-            return res
+            if math.log10(res) > 255:
+                raise OverflowError("result is too long to be printed")
+            return str(res)
         except KeyError as ex:
             return "Error, invalid operator {}".format(str(ex))
         except (OverflowError, ValueError, ZeroDivisionError) as ex:
