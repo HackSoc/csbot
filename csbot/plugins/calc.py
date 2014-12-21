@@ -161,7 +161,7 @@ class Calc(Plugin):
 
         try:
             res = calc_eval(ast.parse(calc_str).body[0])
-            if math.log10(res) > 127:
+            if isinstance(res, int) and math.log10(res) > 127:
                 raise OverflowError("result is too long to be printed")
             return str(res)
         except KeyError as ex:
