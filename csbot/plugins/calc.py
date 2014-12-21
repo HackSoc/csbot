@@ -57,6 +57,29 @@ constants = {
     "N": 6.0221412927e23,   # mol-1
 }
 
+functions = {
+    "ceil": math.ceil,
+    "factorial": math.factorial,
+    "floor": math.floor,
+    "isfinite": math.isfinite,
+    "isinf": math.isinf,
+    "isnan": math.isnan,
+    "exp": math.exp,
+    "log": math.log,
+    "sqrt": math.sqrt,
+    # Trig
+    "acos": math.acos,
+    "asin": math.asin,
+    "atan": math.atan,
+    "cos": math.cos,
+    "sin": math.sin,
+    "tan": math.tan,
+    "degrees": math.degrees,
+    "deg": math.degrees,
+    "radians": math.radians,
+    "rad": math.radians,
+}
+
 def calc_eval(node):
     """Actually do the calculation.
     """
@@ -68,8 +91,16 @@ def calc_eval(node):
     elif isinstance(node, ast.Name):  # <constant>
         if node.id in constants:
             return constants[node.id]
+        elif node.id in functions:
+            return functions[node.id]
         else:
             raise NotImplementedError(node.id)
+    elif isinstance(node, ast.Call):
+        eval_args = [calc_eval(arg) for arg in node.args]
+        try:
+            return calc_eval(node.func)(*eval_args)
+        except TypeError:
+            raise ValueError("{} does not take {} parameters".format(node.func, len(node.args)))
     elif isinstance(node, ast.NameConstant):
         return node.value
     elif isinstance(node, ast.Num):  # <number>
@@ -118,7 +149,7 @@ class Calc(Plugin):
             # 1 ** 100000, 1 << -1, 1 / 0
             return "Error, {}".format(str(ex))
         except NotImplementedError as ex:  # "sgdsdg + 3"
-            return "Error, unknown or invalid constant '{}'".format(str(ex))
+            return "Error, unknown or invalid value '{}'".format(str(ex))
         except (TypeError, SyntaxError):  # "1 +"
             return "Error, '{}' is not a valid calculation".format(calc_str)
 
