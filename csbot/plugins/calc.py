@@ -6,16 +6,30 @@ from csbot.plugin import Plugin
 from csbot.util import pairwise
 
 
+def is_too_long(n):
+    # Don't care about floats
+    return isinstance(n, int) and n != 0 and math.log10(abs(n)) > 127
+
+
 def limited_power(a, b):
     """A limited power function to make sure that
     commands do not take too long to process.
     """
+    for n in (a, b):
+        if is_too_long(n):
+            # Neaten the error message
+            raise OverflowError("result is too long to be printed")
+
     if any(abs(n) > 1000 for n in [a, b]):
         raise OverflowError("{}**{} would take too long to calculate".format(a, b))
     return op.pow(a, b)
 
 
 def limited_lshift(a, b):
+    if is_too_long(b):
+        # Neaten the error message
+        raise OverflowError("result is too long to be printed")
+
     if not isinstance(a, int) or not isinstance(b, int):
         # floats are handled more gracefully
         pass
@@ -75,7 +89,10 @@ constants = {
 def limited_factorial(a):
     # Any larger than this would be too long to output regardless
     if a > 100:
-        raise OverflowError("factorial({}) is too large to calculate", a)
+        if is_too_long(a):
+            # Neaten the error message
+            raise OverflowError("result is too long to be printed")
+        raise OverflowError("factorial({}) is too large to calculate".format(a))
     return math.factorial(a)
 
 
@@ -161,7 +178,7 @@ class Calc(Plugin):
 
         try:
             res = calc_eval(ast.parse(calc_str).body[0])
-            if isinstance(res, int) and math.log10(res) > 127:
+            if is_too_long(res):
                 raise OverflowError("result is too long to be printed")
             return str(res)
         except KeyError as ex:
