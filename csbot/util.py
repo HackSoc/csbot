@@ -79,15 +79,20 @@ def parse_arguments(raw):
     return list(lex)
 
 
-def simple_http_get(url):
+def simple_http_get(url, stream=False):
     """A deliberately dumb wrapper around :func:`requests.get`.
 
     This should be used for the vast majority of HTTP GET requests.  It turns
     off SSL certificate verification and sets a non-default User-Agent, thereby
     succeeding at most "just get the content" requests.
+
+    *stream* controls the "streaming mode" of the HTTP client, i.e. deferring
+    the acquisition of the response body.  Use this if you need to impose a
+    maximum size or process a large response.  *The entire content must be
+    consumed or ``response.close()`` must be called.*
     """
     headers = {'User-Agent': 'csbot/0.1'}
-    return requests.get(url, verify=False, headers=headers)
+    return requests.get(url, verify=False, headers=headers, stream=stream)
 
 
 def pairwise(iterable):

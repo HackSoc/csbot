@@ -5,6 +5,7 @@ import collections
 from collections import namedtuple
 import datetime
 from functools import partial
+from contextlib import closing
 
 import requests
 import lxml.etree
@@ -51,6 +52,8 @@ class LinkInfo(Plugin):
         'rate_limit_time': 60,
         # Maximum rate of URL responses over rate limiting period
         'rate_limit_count': 5,
+        # Maximum response size
+        'max_response_size': 1048576,  # 1MB
     }
 
     def __init__(self, *args, **kwargs):
@@ -204,34 +207,53 @@ class LinkInfo(Plugin):
         make_error = partial(LinkInfoResult, url.geturl(), is_error=True)
 
         # Let's see what's on the other end...
-        r = simple_http_get(url.geturl())
-        # Only bother with 200 OK
-        if r.status_code != requests.codes.ok:
-            return make_error('HTTP request failed: {}'.format(r.status_code))
-        if 'html' not in r.headers['Content-Type']:
-            return make_error('Content-Type not HTML-ish: {}'
-                              .format(r.headers['Content-Type']))
+        with closing(simple_http_get(url.geturl(), stream=True)) as r:
+            # Only bother with 200 OK
+            if r.status_code != requests.codes.ok:
+                return make_error('HTTP request failed: {}'
+                                  .format(r.status_code))
+            # Only process HTML-ish responses
+            if 'html' not in r.headers['Content-Type']:
+                return make_error('Content-Type not HTML-ish: {}'
+                                  .format(r.headers['Content-Type']))
+            # Don't try to process massive responses
+            if 'Content-Length' in r.headers:
+                max_size = int(self.config_get('max_response_size'))
+                if int(r.headers['Content-Length']) > max_size:
+                    return make_error('Content-Length too large: {} bytes, >{}'
+                                      .format(r.headers['Content-Length'],
+                                              self.config_get('max_response_size')))
 
-        # Attempt to scrape the HTML for a <title>
-        if 'charset=' in r.headers['content-type']:
-            # If present, HTTP Content-Type header charset takes precedence
-            parser = lxml.html.HTMLParser(
-                encoding=r.headers['content-type'].rsplit('=', 1)[1])
-        else:
-            parser = lxml.html.html_parser
-        html = lxml.etree.fromstring(r.content, parser)
-        title = html.find('.//title')
+            # Get the correct parser
+            if 'charset=' in r.headers['content-type']:
+                # If present, HTTP Content-Type header charset takes precedence
+                parser = lxml.html.HTMLParser(
+                    encoding=r.headers['content-type'].rsplit('=', 1)[1])
+            else:
+                parser = lxml.html.html_parser
 
-        if title is None:
-            return make_error('failed to find <title>')
+            # Get only a chunk, in case Content-Length is absent on massive file
+            chunk = next(r.iter_content(int(self.config_get('max_response_size'))))
+            # Try to trim chunk to a tag end to help the HTML parser out
+            try:
+                chunk = chunk[:chunk.rindex(b'>') + 1]
+            except ValueError:
+                pass
 
-        # Normalise title whitespace
-        title = ' '.join(title.text.strip().split())
-        # Build result
-        result = LinkInfoResult(url, title, nsfw=url.netloc.endswith('.xxx'))
-        # See if the title is redundant, i.e. appears in the URL
-        result.is_redundant = self._filter_title_in_url(url, title)
-        return result
+            # Attempt to get the <title> tag
+            html = lxml.etree.fromstring(chunk, parser)
+            title = html.find('.//title')
+            if title is None:
+                return make_error('failed to find <title>')
+
+            # Normalise title whitespace
+            title = ' '.join(title.text.strip().split())
+            # Build result
+            result = LinkInfoResult(url, title,
+                                    nsfw=url.netloc.endswith('.xxx'))
+            # See if the title is redundant, i.e. appears in the URL
+            result.is_redundant = self._filter_title_in_url(url, title)
+            return result
 
     def _filter_title_in_url(self, url, title):
         """See if *title* is represented in *url*.
