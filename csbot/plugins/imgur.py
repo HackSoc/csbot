@@ -25,7 +25,7 @@ class Imgur(Plugin):
         def page_handler(url, match):
             """Scrape title, but don't say anything for the default title."""
             result = linkinfo.scrape_html_title(url)
-            result.is_redundant = results.text.lower() == 'imgur'
+            result.is_redundant = result.text.lower() == 'imgur'
             return result
 
         # Handle direct image links
