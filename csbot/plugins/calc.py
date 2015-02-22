@@ -73,18 +73,6 @@ operators = {
     ast.IsNot: op.is_not,
 }
 
-# Available constants
-constants = {
-    "e": math.e,
-    "pi": math.pi,
-    "π": math.pi,
-    "F": 1.2096,            # Barrucadu's Constant (microfortnights in a second)
-    "c": 299792458,         # m s-1
-    "G": 6.6738480e-11,     # m3 kg-1 s-2
-    "h": 6.6260695729e-34,  # J s
-    "N": 6.0221412927e23,   # mol-1
-}
-
 
 def limited_factorial(a):
     # Any larger than this would be too long to output regardless
@@ -96,8 +84,18 @@ def limited_factorial(a):
     return math.factorial(a)
 
 
-# Available functions
-functions = {
+identifiers = {
+    # Available constants
+    "e": math.e,
+    "pi": math.pi,
+    "π": math.pi,
+    "F": 1.2096,            # Barrucadu's Constant (microfortnights in a second)
+    "c": 299792458,         # m s-1
+    "G": 6.6738480e-11,     # m3 kg-1 s-2
+    "h": 6.6260695729e-34,  # J s
+    "N": 6.0221412927e23,   # mol-1
+
+    # Available functions
     "ceil": math.ceil,
     "factorial": limited_factorial,
     "floor": math.floor,
@@ -120,6 +118,7 @@ functions = {
     "rad": math.radians,
 }
 
+
 def calc_eval(node):
     """Actually do the calculation.
     """
@@ -129,10 +128,8 @@ def calc_eval(node):
     if isinstance(node, ast.Expr):  # Top level expression
         return calc_eval(node.value)
     elif isinstance(node, ast.Name):  # <constant>
-        if node.id in constants:
-            return constants[node.id]
-        elif node.id in functions:
-            return functions[node.id]
+        if node.id in identifiers:
+            return identifiers[node.id]
         else:
             raise NotImplementedError(node.id)
     elif isinstance(node, ast.Call):
