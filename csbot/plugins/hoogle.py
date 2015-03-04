@@ -57,9 +57,8 @@ class Hoogle(Plugin):
         encqry = urllib.parse.quote(query.encode('utf-8'))
         fullurl = 'http://www.haskell.org/hoogle/?hoogle=' + encqry
 
-        e.protocol.msg(
-            e['reply_to'], 'Showing {} of {} results: {} ({})'.format(
-                maxresults if maxresults < totalresults else totalresults,
-                totalresults,
-                '; '.join(niceresults),
-                fullurl))
+        e.reply('Showing {} of {} results: {} ({})'.format(
+            maxresults if maxresults < totalresults else totalresults,
+            totalresults,
+            '; '.join(niceresults),
+            fullurl))

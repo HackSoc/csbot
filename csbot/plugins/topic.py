@@ -89,11 +89,11 @@ class Topic(Plugin):
         topic = self._get_topic(e['channel'])
         delim = self._get_delimiters(e['channel'])
         parts = self._split_topic(delim, topic)
-        e.protocol.msg(e['reply_to'], repr(parts))
+        e.reply(repr(parts))
 
     @Plugin.command('topic.history', help='topic.history: show recent topics')
     def topic_history(self, e):
-        e.protocol.msg(e['reply_to'], repr(list(self.topics[e['channel']])))
+        e.reply(repr(list(self.topics[e['channel']])))
 
     @Plugin.command('topic.undo', help=('topic.undo: revert to previous topic '
                                         'see topic.history)'))
@@ -101,7 +101,7 @@ class Topic(Plugin):
         topics = self.topics[e['channel']]
 
         if len(topics) < 2:
-            e.protocol.msg(e['reply_to'], 'error: no history to revert to')
+            e.reply('error: no history to revert to')
             return
 
         # Attempt to set the topic, and if it was allowed, drop the most recent
@@ -132,7 +132,7 @@ class Topic(Plugin):
             try:
                 position = int(e['data'])
             except ValueError:
-                e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+                e.reply('error: invalid topic position')
                 return
         else:
             # Default to removing the last item
@@ -142,7 +142,7 @@ class Topic(Plugin):
         try:
             parts.pop(position)
         except IndexError:
-            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            e.reply('error: invalid topic position')
             return
 
         # Update with new topic
@@ -160,21 +160,21 @@ class Topic(Plugin):
         # Check number of arguments
         data_parts = e['data'].split(None, 1)
         if len(data_parts) != 2:
-            e.protocol.msg(e['reply_to'], 'error: missing argument')
+            e.reply('error: missing argument')
             return
 
         # Parse position number
         try:
             position = int(data_parts[0])
         except ValueError:
-            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            e.reply('error: invalid topic position')
             return
 
         # Set topic part
         try:
             parts[position] = data_parts[1]
         except IndexError:
-            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            e.reply('error: invalid topic position')
             return
 
         # Update with new topic
@@ -191,21 +191,21 @@ class Topic(Plugin):
         # Check number of arguments
         data_parts = e['data'].split(None, 1)
         if len(data_parts) != 2:
-            e.protocol.msg(e['reply_to'], 'error: missing argument')
+            e.reply('error: missing argument')
             return
 
         # Parse position number
         try:
             position = int(data_parts[0])
         except ValueError:
-            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            e.reply('error: invalid topic position')
             return
 
         # Insert topic part
         try:
             parts.insert(position, data_parts[1])
         except IndexError:
-            e.protocol.msg(e['reply_to'], 'error: invalid topic position')
+            e.reply('error: invalid topic position')
             return
 
         # Update with new topic

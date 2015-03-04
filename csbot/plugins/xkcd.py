@@ -117,7 +117,6 @@ class xkcd(Plugin):
         """Well, Randall sucks at unicode actually :(
         """
         try:
-            e.protocol.msg(e["reply_to"],
-                           "{} [{} - \"{}\"]".format(*self._xkcd(e["data"])))
+            e.reply("{} [{} - \"{}\"]".format(*self._xkcd(e["data"])))
         except self.XKCDError as ex:
-            e.protocol.msg(e["reply_to"], str(ex))
+            e.reply(str(ex))

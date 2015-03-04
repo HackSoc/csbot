@@ -39,14 +39,12 @@ class TermDates(Plugin):
     @Plugin.command('termdates', help='termdates: show the current term dates')
     def termdates(self, e):
         if not self.initialised:
-            e.protocol.msg(e['reply_to'],
-                           'error: no term dates (see termdates.set)')
+            e.reply('error: no term dates (see termdates.set)')
         else:
-            e.protocol.msg(e['reply_to'],
-                           'Aut {} -- {}, Spr {} -- {}, Sum {} -- {}'.format(
-                               self._term_start('aut'), self._term_end('aut'),
-                               self._term_start('spr'), self._term_end('spr'),
-                               self._term_start('sum'), self._term_end('sum')))
+            e.reply('Aut {} -- {}, Spr {} -- {}, Sum {} -- {}'.format(
+                self._term_start('aut'), self._term_end('aut'),
+                self._term_start('spr'), self._term_end('spr'),
+                self._term_start('sum'), self._term_end('sum')))
 
     def _term_start(self, term):
         """
@@ -68,8 +66,7 @@ class TermDates(Plugin):
                     help='week [term] <num>: get the start date of a week')
     def week(self, e):
         if not self.initialised:
-            e.protocol.msg(e['reply_to'],
-                           'error: no term dates (see termdates.set)')
+            e.reply('error: no term dates (see termdates.set)')
             return
 
         # We can handle weeks in the following formats:
@@ -94,18 +91,17 @@ class TermDates(Plugin):
                     e.prototol.msg(e['reply_to'], 'error: bad week format')
                     return
         else:
-            e.protocol.msg(e['reply_to'], 'error: bad week format')
+            e.reply('error: bad week format')
             return
 
         try:
             weekstart = self._week_start(term, weeknum)
         except KeyError:
-            e.protocol.msg(e['reply_to'], 'error: bad week')
+            e.reply('error: bad week')
             return
 
         term = term.capitalize()
-        e.protocol.msg(e['reply_to'],
-                       '{} {}: {}'.format(term, weeknum, weekstart))
+        e.reply('{} {}: {}'.format(term, weeknum, weekstart))
 
     def _current_term(self):
         """
@@ -136,8 +132,7 @@ class TermDates(Plugin):
         dates = e['data'].split()
 
         if len(dates) < 3:
-            e.protocol.msg(e['reply_to'],
-                           'error: all three dates must be provided')
+            e.reply('error: all three dates must be provided')
             return
 
         # Firstly compute the start and end dates of each term
@@ -145,8 +140,7 @@ class TermDates(Plugin):
             try:
                 term_start = datetime.strptime(date, self.DATE_FORMAT)
             except ValueError:
-                e.protocol.msg(e['reply_to'],
-                               'error: dates must be in %Y-%M-%d format.')
+                e.reply('error: dates must be in %Y-%M-%d format.')
                 return
 
             # Not all terms start on a monday, so we need to compute the "real"

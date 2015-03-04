@@ -194,4 +194,4 @@ class Calc(Plugin):
         """
         What? You don't have a calculator handy?
         """
-        e.protocol.msg(e["reply_to"], self._calc(e["data"]))
+        e.reply(self._calc(e["data"]))

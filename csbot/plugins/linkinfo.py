@@ -125,7 +125,7 @@ class LinkInfo(Plugin):
         # See if it was marked as NSFW in the command text
         result.nsfw |= 'nsfw' in rest.lower()
         # Tell the user
-        e.protocol.msg(e['reply_to'], result.get_message())
+        e.reply(result.get_message())
 
     @Plugin.hook('core.message.privmsg')
     def scan_privmsg(self, e):
@@ -161,7 +161,7 @@ class LinkInfo(Plugin):
                 result.nsfw |= 'nsfw' in ''.join(parts[:i] + parts[i + 1:]).lower()
                 # Send message only if it was interesting enough
                 if not result.is_redundant:
-                    e.protocol.msg(e['reply_to'], result.get_message())
+                    e.reply(result.get_message())
                 # ... and since we got a useful result, stop processing the message
                 break
 

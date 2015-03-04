@@ -47,5 +47,4 @@ class Helix(Plugin):
         Ask and you shall recieve.
         """
         answer = self._answer(e["data"])
-        e.protocol.msg(e['reply_to'],
-                       'The Helix Fossil says: "{}"'.format(answer))
+        e.reply('The Helix Fossil says: "{}"'.format(answer))

@@ -146,17 +146,15 @@ class Bot(SpecialPlugin):
             cmd = args[0]
             if cmd in self.commands:
                 f, meta, tag = self.commands[cmd]
-                e.protocol.msg(e['reply_to'],
-                               meta.get('help', cmd + ': no help string'))
+                e.reply(meta.get('help', cmd + ': no help string'))
             else:
-                e.protocol.msg(e['reply_to'], cmd + ': no such command')
+                e.reply(cmd + ': no such command')
         else:
-            e.protocol.msg(e['reply_to'], ', '.join(sorted(self.commands)))
+            e.reply(', '.join(sorted(self.commands)))
 
     @Plugin.command('plugins')
-    def show_plugins(self, event):
-        event.protocol.msg(event['reply_to'],
-                           'loaded plugins: ' + ', '.join(self.plugins))
+    def show_plugins(self, e):
+        e.reply('loaded plugins: ' + ', '.join(self.plugins))
 
 
 class PluginError(Exception):

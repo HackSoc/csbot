@@ -137,6 +137,6 @@ class Youtube(Plugin):
 
         response = self._yt(urlparse.urlparse(e["data"]))
         if not response:
-            e.protocol.msg(e["reply_to"], "Invalid video ID")
+            e.reply("Invalid video ID")
         else:
-            e.protocol.msg(e["reply_to"], self.CMD_RESPONSE.format(**response))
+            e.reply(self.CMD_RESPONSE.format(**response))

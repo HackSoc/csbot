@@ -117,11 +117,11 @@ class Auth(Plugin):
             printable_perm = channel + ':' + perm
 
         if account is None:
-            e.protocol.msg(e['reply_to'], 'error: not authenticated')
+            e.reply('error: not authenticated')
             return False
         elif success is False:
-            e.protocol.msg(e['reply_to'], ('error: {} not authorised for {}'
-                                           .format(account, printable_perm)))
+            e.reply('error: {} not authorised for {}'.format(account,
+                                                             printable_perm))
             return False
         else:
             return True
