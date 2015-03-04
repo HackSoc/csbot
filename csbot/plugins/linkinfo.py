@@ -144,6 +144,10 @@ class LinkInfo(Plugin):
             if '://' not in part:
                 continue
 
+            # Skip rest of message if we've auto-replied to URLs too frequently
+            if self._rate_limited():
+                break
+
             # Get info for the URL
             result = self.get_link_info(part)
             self._log_if_error(result)

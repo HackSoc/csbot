@@ -1,6 +1,7 @@
 # coding=utf-8
 import responses
 from lxml.etree import LIBXML_VERSION
+import unittest.mock as mock
 
 from . import BotTestCase
 
@@ -116,3 +117,30 @@ class TestLinkInfoPlugin(BotTestCase):
             with self.subTest(url=url):
                 result = self.linkinfo.get_link_info(url)
                 self.assertEqual(result.text, expected_title, url)
+
+    def test_scan_privmsg(self):
+        # Test cases as (message, URLs) pairs
+        test_cases = [
+            ('http://example.com', ['http://example.com']),
+        ]
+
+        for msg, urls in test_cases:
+            with self.subTest(msg=msg), mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
+                self.protocol_.line_received(':nick!user@host PRIVMSG #channel :' + msg)
+                get_link_info.assert_has_calls([mock.call(url) for url in urls])
+
+    def test_scan_privmsg_rate_limit(self):
+        """Test that we won't respond too frequently to URLs in messages.
+
+        Unfortunately we can't currently test the passage of time, so the only
+        element that can be tested is that URLs stop getting processed after so
+        many URL-like strings and not enough (zero) time passing.
+        """
+        count = int(self.linkinfo.config_get('rate_limit_count'))
+        for i in range(count):
+            with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
+                self.protocol_.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
+                get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
+        with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
+            self.protocol_.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
+            self.assert_(not get_link_info.called)
