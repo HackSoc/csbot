@@ -99,6 +99,14 @@ class Event(dict):
 
         return e
 
+    def reply(self, message):
+        """Send a reply.
+
+        For messages that have a ``reply_to`` key, instruct the :attr:`protocol`
+        to send a reply.
+        """
+        self.protocol.reply(self['reply_to'], message)
+
     @property
     def bot(self):
         """Shortcut to ``self.protocol.bot``."""

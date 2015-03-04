@@ -34,6 +34,7 @@ class Bot(SpecialPlugin):
         'irc_host': 'irc.freenode.net',
         'irc_port': '6667',
         'command_prefix': '!',
+        'use_notice': True,
         'channels': ' '.join([
             '#cs-york-dev',
         ]),
@@ -178,6 +179,12 @@ class BotClient(IRCClient):
             port=bot.config_get('irc_port'),
             password=bot.config_get('password'),
         )
+
+        # Plumb in reply(...) method
+        if bot.config_getboolean('use_notice'):
+            self.reply = self.notice
+        else:
+            self.reply = self.msg
 
         self.bot = bot
 
@@ -393,3 +400,11 @@ class BotClient(IRCClient):
         else:
             self.on_user_identified(user.raw, None if account == '*' else account)
             self.on_user_joined(user, channel)
+
+    def reply(self, to, message):
+        """Reply to a nick/channel.
+
+        This is not implemented because it should be replaced in the constructor
+        with a reference to a real method, e.g. ``self.reply = self.msg``.
+        """
+        raise NotImplementedError
