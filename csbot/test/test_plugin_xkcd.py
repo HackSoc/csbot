@@ -13,8 +13,8 @@ json_test_cases = [
         "0",  # 0 is latest
         "http://xkcd.com/info.0.json",
         "application/json; charset=utf-8",
-        'xkcd_1399.json',
-        ('http://xkcd.com/1399', 'Chaos', 'Although the oral exam for the doctorate was just \'can you do that weird laugh?\'')
+        'xkcd_latest.json',
+        ('http://xkcd.com/99999', 'Chaos', 'Although the oral exam for the doctorate was just \'can you do that weird laugh?\'')
     ),
 
     # Normal
@@ -51,6 +51,15 @@ json_test_cases = [
         "application/json; charset=utf-8",
         'xkcd_1363.json',
         ('http://xkcd.com/1363', 'xkcd Phone', 'Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, LifeStyles, and the US Chamber of Commerce. M...')
+    ),
+
+    # No alt text
+    (
+        "1506",
+        "http://xkcd.com/1506/info.0.json",
+        "application/json; charset=utf-8",
+        'xkcd_1506.json',
+        ('http://xkcd.com/1506', 'xkcloud', '')
     )
 ]
 
