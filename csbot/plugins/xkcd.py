@@ -12,7 +12,8 @@ def fix_json_unicode(data):
     """Fixes the unicode silliness that is included in the json data.
     Why Randall, Why?"""
     for tag in data:
-        if type(data[tag]) != str:
+        # Skip non-strings and empty strings (the latter due to bug in lxml)
+        if type(data[tag]) != str or not data[tag]:
             continue
 
         # Remove HTML escape characters
