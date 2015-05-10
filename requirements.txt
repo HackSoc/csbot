@@ -5,7 +5,7 @@ pymongo>=2.7.0
 requests>=2.3.0,<3.0.0
 lxml>=2.3.5
 google-api-python-client>=1.4.0,<2.0.0
-isodate==0.5.1
+isodate>=0.5.1
 
 # Requirements for unit testing
 responses
