@@ -1,24 +1,11 @@
-import json
-import requests
-from datetime import datetime
+import datetime
 import urllib.parse as urlparse
 
+from apiclient.discovery import build as google_api
+import isodate
+
 from ..plugin import Plugin
-from ..util import simple_http_get, cap_string
 from .linkinfo import LinkInfoResult
-
-
-def get_yt_json(vid_id):
-    """Gets the (vaguely) relevant parts of the raw json from youtube.
-    """
-
-    # v=2 needed for like count
-    url = "https://gdata.youtube.com/feeds/api/videos/{}?alt=json&v=2".format(vid_id)
-    httpdata = simple_http_get(url)
-    if httpdata.status_code != requests.codes.ok:
-        return None
-
-    return httpdata.json()["entry"]
 
 
 def get_yt_id(url):
@@ -43,8 +30,30 @@ class Youtube(Plugin):
     """A plugin that does some youtube things.
     Based on williebot youtube plugin.
     """
+    CONFIG_DEFAULTS = {
+        'api_key': '',
+    }
+
+    CONFIG_ENVVARS = {
+        'api_key': ['YOUTUBE_DATA_API_KEY'],
+    }
+
     RESPONSE = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}]'
     CMD_RESPONSE = RESPONSE + ' | {link}'
+
+    #: Hook for mocking HTTP responses to Google API client
+    http = None
+
+    def setup(self):
+        super().setup()
+        self.client = google_api('youtube',  'v3', developerKey=self.config_get('api_key'), http=self.http)
+
+    def get_video_json(self, id):
+        response = self.client.videos().list(id=id, part='snippet,contentDetails,statistics').execute(http=self.http)
+        if len(response['items']) == 0:
+            return None
+        else:
+            return response['items'][0]
 
     def _yt(self, url):
         """Builds a nicely formatted version of youtube's own internal JSON"""
@@ -53,7 +62,7 @@ class Youtube(Plugin):
         if not vid_id:
             return None
         try:
-            json = get_yt_json(vid_id)
+            json = self.get_video_json(vid_id)
             if json is None:
                 return None
         except (KeyError, ValueError):
@@ -62,53 +71,48 @@ class Youtube(Plugin):
         vid_info = {}
         try:
             # Last part of the ID format is the actual ID
-            vid_id = json["id"]["$t"].split(':')[-1]
+            vid_id = json["id"]
             vid_info["link"] = "http://youtu.be/" + vid_id
         except KeyError:
             # No point getting any more info if we don't have a valid link
             return None
 
         try:
-            vid_info["title"] = json["title"]["$t"]
+            vid_info["title"] = json["snippet"]["title"]
         except KeyError:
             vid_info["title"] = "N/A"
 
         try:
-            vid_info["uploader"] = json["author"][0]["name"]["$t"]
+            vid_info["uploader"] = json["snippet"]["channelTitle"]
         except KeyError:
             vid_info["uploader"] = "N/A"
 
         try:
-            dt = datetime.strptime(json["published"]["$t"], "%Y-%m-%dT%H:%M:%S.%fZ")
+            dt = isodate.parse_datetime(json["snippet"]["publishedAt"])
             vid_info["uploaded"] = dt.strftime("%Y-%m-%d")
         except KeyError:
             vid_info["uploaded"] = "N/A"
 
         try:
-            vid_secs = int(json["media$group"]["yt$duration"]["seconds"])
-            vid_info["duration"] = ""
-            if vid_secs < 1:
+            duration = isodate.parse_duration(json["contentDetails"]["duration"])
+            if duration == datetime.timedelta():
                 vid_info["duration"] = "LIVE"
             else:
-                hours, rem = divmod(vid_secs, 3600)
-                mins, secs = divmod(rem, 60)
-
-                if hours != 0:
-                    vid_info["duration"] += format(hours, "02d") + ":"
-
-                vid_info["duration"] += "{:02d}:{:02d}".format(mins, secs)
+                vid_info["duration"] = str(duration)
+                if vid_info["duration"].startswith('0:'):
+                    vid_info["duration"] = vid_info["duration"][2:]
         except KeyError as ex:
             vid_info["duration"] = "N/A"
 
         try:
-            views = int(json["yt$statistics"]["viewCount"])
+            views = int(json["statistics"]["viewCount"])
             vid_info["views"] = "{:,}".format(views)
         except KeyError:
             vid_info["views"] = "N/A"
 
         try:
-            likes = int(json["yt$rating"]["numLikes"])
-            dislikes = int(json["yt$rating"]["numDislikes"])
+            likes = int(json["statistics"]["likeCount"])
+            dislikes = int(json["statistics"]["dislikeCount"])
             vid_info["likes"] = "+{:,}/-{:,}".format(likes, dislikes)
         except KeyError:
             vid_info["likes"] = "N/A"

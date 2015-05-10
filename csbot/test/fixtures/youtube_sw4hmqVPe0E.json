@@ -1,0 +1,78 @@
+{
+ "kind": "youtube#videoListResponse",
+ "etag": "\"tbWC5XrSXxe1WOAx6MK9z4hHSU8/SDnHnFy9afsDwDVUpNEur_J_PLE\"",
+ "pageInfo": {
+  "totalResults": 1,
+  "resultsPerPage": 1
+ },
+ "items": [
+  {
+   "kind": "youtube#video",
+   "etag": "\"tbWC5XrSXxe1WOAx6MK9z4hHSU8/2xYrOMDqkw2kNWpd83g9ycZTk7g\"",
+   "id": "sw4hmqVPe0E",
+   "snippet": {
+    "publishedAt": "2015-03-24T17:42:59.000Z",
+    "channelId": "UCoMdktPbSTixAyNGwb-UYkQ",
+    "title": "Sky News Live",
+    "description": "SUBSCRIBE to our YouTube channel for more great videos: http://www.youtube.com/skynews\n\nFollow us on Twitter: https://twitter.com/skynews and https://twitter.com/skynewsbreak\n\nLike us on Facebook: https://www.facebook.com/skynews\n\nFor more great content go to http://news.sky.com and download our apps: \n\niPad https://itunes.apple.com/gb/app/Sky-News-for-iPad/id422583124\n\niPhone https://itunes.apple.com/gb/app/sky-news/id316391924?mt=8\n\nAndroid https://play.google.com/store/apps/details?id=com.bskyb.skynews.android&hl=en_GB",
+    "thumbnails": {
+     "default": {
+      "url": "https://i.ytimg.com/vi/sw4hmqVPe0E/default_live.jpg",
+      "width": 120,
+      "height": 90
+     },
+     "medium": {
+      "url": "https://i.ytimg.com/vi/sw4hmqVPe0E/mqdefault_live.jpg",
+      "width": 320,
+      "height": 180
+     },
+     "high": {
+      "url": "https://i.ytimg.com/vi/sw4hmqVPe0E/hqdefault_live.jpg",
+      "width": 480,
+      "height": 360
+     },
+     "standard": {
+      "url": "https://i.ytimg.com/vi/sw4hmqVPe0E/sddefault_live.jpg",
+      "width": 640,
+      "height": 480
+     }
+    },
+    "channelTitle": "Sky News",
+    "categoryId": "25",
+    "liveBroadcastContent": "live",
+    "localized": {
+     "title": "Sky News Live",
+     "description": "SUBSCRIBE to our YouTube channel for more great videos: http://www.youtube.com/skynews\n\nFollow us on Twitter: https://twitter.com/skynews and https://twitter.com/skynewsbreak\n\nLike us on Facebook: https://www.facebook.com/skynews\n\nFor more great content go to http://news.sky.com and download our apps: \n\niPad https://itunes.apple.com/gb/app/Sky-News-for-iPad/id422583124\n\niPhone https://itunes.apple.com/gb/app/sky-news/id316391924?mt=8\n\nAndroid https://play.google.com/store/apps/details?id=com.bskyb.skynews.android&hl=en_GB"
+    }
+   },
+   "contentDetails": {
+    "duration": "PT0S",
+    "dimension": "2d",
+    "definition": "sd",
+    "caption": "false",
+    "licensedContent": true,
+    "regionRestriction": {
+     "blocked": [
+      "ZA",
+      "SG",
+      "NZ",
+      "CN",
+      "HK",
+      "AU",
+      "MV",
+      "RU",
+      "DE",
+      "CA"
+     ]
+    }
+   },
+   "statistics": {
+    "viewCount": "2271999",
+    "likeCount": "2195",
+    "dislikeCount": "586",
+    "favoriteCount": "0",
+    "commentCount": "189096"
+   }
+  }
+ ]
+}
