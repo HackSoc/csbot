@@ -3,6 +3,9 @@ import textwrap
 import sys
 import logging
 import signal
+import os
+
+import rollbar
 
 from .core import Bot, BotClient
 
@@ -21,6 +24,7 @@ def main(argv=None):
       --debug-all       Turn on all debug logging.
       --colour          Force use of color in logging (automatic in a TTY).
       --no-colour       Don't use color in logging.
+      --rollbar         Enable Rollbar error reporting
     """
     argv = argv or sys.argv[1:]
     args = docopt.docopt(textwrap.dedent(main.__doc__), argv)
@@ -61,8 +65,19 @@ def main(argv=None):
         bot = Bot(f)
     bot.bot_setup()
 
-    # Connect the bot and run the event loop
+    # Create the bot client
     client = BotClient(bot)
+
+    # Configure Rollbar for exception reporting
+    if args['--rollbar']:
+        rollbar.init(os.environ['ROLLBAR_ACCESS_TOKEN'],
+                     os.environ.get('ROLLBAR_ENV', 'development'))
+        def handler(loop, context):
+            rollbar.report_exc_info()
+            loop.default_exception_handler(context)
+        client.loop.set_exception_handler(handler)
+
+    # Connect the client and run the event loop
     client.connect()
     def stop():
         client.disconnect()
