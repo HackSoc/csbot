@@ -113,6 +113,9 @@ class LinkInfo(Plugin):
         """
         # Split command data into the URL and any trailing information
         parts = e['data'].split(None, 1)
+        if len(parts) < 1:
+            e.reply('No URL supplied')
+            return
         url = parts[0]
         rest = parts[1] if len(parts) > 1 else ''
 
@@ -217,7 +220,9 @@ class LinkInfo(Plugin):
                 return make_error('HTTP request failed: {}'
                                   .format(r.status_code))
             # Only process HTML-ish responses
-            if 'html' not in r.headers['Content-Type']:
+            if 'Content-Type' not in r.headers:
+                return make_error('No Content-Type header')
+            elif 'html' not in r.headers['Content-Type']:
                 return make_error('Content-Type not HTML-ish: {}'
                                   .format(r.headers['Content-Type']))
             # Don't try to process massive responses
