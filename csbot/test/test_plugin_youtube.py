@@ -49,6 +49,22 @@ json_test_cases = [
         "youtube_flibble.json",
         None
     ),
+
+    # Invalid API key (400 Bad Request)
+    (
+        "dQw4w9WgXcQ",
+        400,
+        "youtube_invalid_key.json",
+        None
+    ),
+
+    # Valid API key, but Youtube Data API not enabled (403 Forbidden)
+    (
+        "dQw4w9WgXcQ",
+        403,
+        "youtube_access_not_configured.json",
+        None
+    ),
 ]
 
 
