@@ -46,7 +46,7 @@ json_test_cases = [
     (
         "flibble",
         200,
-        "empty_file",
+        "youtube_flibble.json",
         None
     ),
 ]
