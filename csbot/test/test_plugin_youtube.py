@@ -4,8 +4,8 @@ import responses
 import urllib.parse as urlparse
 from apiclient.http import HttpMock
 
-from . import BotTestCase, fixture_file
-from ..plugins.youtube import Youtube
+from csbot.test import BotTestCase, fixture_file
+from csbot.plugins.youtube import Youtube
 
 
 #: Tests are (number, url, content-type, status, fixture, expected)

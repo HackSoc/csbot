@@ -1,7 +1,7 @@
 import unittest
 from io import StringIO
 
-from . import TempEnvVars
+from csbot.test import TempEnvVars
 import csbot.core
 import csbot.plugin
 

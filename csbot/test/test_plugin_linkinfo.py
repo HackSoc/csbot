@@ -3,7 +3,7 @@ import responses
 from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
 
-from . import BotTestCase
+from csbot.test import BotTestCase
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)

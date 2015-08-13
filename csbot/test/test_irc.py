@@ -1,8 +1,8 @@
 import unittest
 from unittest import mock
 
-from . import mock_client
-from ..irc import *
+from csbot.test import mock_client
+from csbot.irc import *
 
 
 class IRCClientTestCase(unittest.TestCase):

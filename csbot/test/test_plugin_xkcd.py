@@ -1,7 +1,7 @@
 import responses
 from unittest.mock import patch
 
-from . import BotTestCase, read_fixture_file
+from csbot.test import BotTestCase, read_fixture_file
 
 
 #: Tests are (number, url, content-type, fixture, expected)

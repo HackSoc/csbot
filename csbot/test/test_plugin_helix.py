@@ -1,4 +1,4 @@
-from . import BotTestCase
+from csbot.test import BotTestCase
 
 
 class TestHelixPlugin(BotTestCase):
