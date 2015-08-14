@@ -1,5 +1,6 @@
 from csbot.plugin import Plugin
 from csbot.util import nick
+from csbot.events import Event
 from datetime import datetime
 import pymongo
 
@@ -10,11 +11,6 @@ class Last(Plugin):
     querying on either.
     """
     db = Plugin.use('mongodb', collection='last')
-
-    def provide(self, plugin_name):
-        """Return a reference to the plugin, allowing other plugins to
-        use it."""
-        return self
 
     def last(self, nick, channel=None, msgtype=None):
         """Get the last thing said (including actions) by a given
@@ -60,7 +56,10 @@ class Last(Plugin):
         if event['message'].startswith(self.bot.config_get('command_prefix')):
             return
 
-        self.record(nick(event['user']), event['channel'], 'message',
+        self.record(event,
+                    nick(event['user']),
+                    event['channel'],
+                    'message',
                     event['message'])
 
     @Plugin.hook('core.message.privmsg')
@@ -70,28 +69,43 @@ class Last(Plugin):
         if not event['message'].startswith(self.bot.config_get('command_prefix')):
             return
 
-        self.record(nick(event['user']), event['channel'], 'command',
+        self.record(event,
+                    nick(event['user']),
+                    event['channel'],
+                    'command',
                     event['message'])
 
     @Plugin.hook('core.message.action')
     def record_action(self, event):
         """Record the receipt of a new action.
         """
-        self.record(nick(event['user']), event['channel'], 'action',
+        self.record(event,
+                    nick(event['user']),
+                    event['channel'],
+                    'action',
                     event['message'])
 
-    def record(self, nick, channel, msgtype, msg):
+    def record(self, event, nick, channel, msgtype, msg):
         """Record a new message, of a given type.
         """
-        self.db.remove({'nick': nick,
-                        'channel': channel,
-                        'type': msgtype})
+        self._schedule_update(event,
+                              {'nick': nick,
+                               'channel': channel,
+                               'type': msgtype},
+                              {'nick': nick,
+                               'channel': channel,
+                               'type': msgtype,
+                               'when': datetime.now(),
+                               'message': msg})
 
-        self.db.insert({'nick': nick,
-                        'channel': channel,
-                        'type': msgtype,
-                        'when': datetime.now(),
-                        'message': msg})
+    def _schedule_update(self, e, query, update):
+        self.bot.post_event(Event.extend(e, 'last.update',
+                                         {'query': query, 'update': update}))
+
+    @Plugin.hook('last.update')
+    def _apply_update(self, e):
+        self.db.remove(e['query'])
+        self.db.insert(e['update'])
 
     @Plugin.command('seen', help=('seen nick [type]: show the last thing'
                                   ' said by a nick in this channel, optionally'
