@@ -9,20 +9,17 @@ class Last(Plugin):
     user. Records both messages and actions individually, and allows
     querying on either.
     """
-
     db = Plugin.use('mongodb', collection='last')
 
     def provide(self, plugin_name):
         """Return a reference to the plugin, allowing other plugins to
         use it."""
-
         return self
 
     def last(self, nick, channel=None, msgtype=None):
         """Get the last thing said (including actions) by a given
         nick, optionally filtering by channel.
         """
-
         search = {'nick': nick}
 
         if channel is not None:
@@ -37,34 +34,30 @@ class Last(Plugin):
         """Get the last message sent by a nick, optionally filtering
         by channel.
         """
-
         return self.last(nick, channel=channel, msgtype='message')
 
     def last_action(self, nick, channel=None):
         """Get the last action sent by a nick, optionally filtering
         by channel.
         """
-
         return self.last(nick, channel=channel, msgtype='action')
 
     def last_command(self, nick, channel=None):
         """Get the last command sent by a nick, optionally filtering
         by channel.
         """
-
         return self.last(nick, channel=channel, msgtype='command')
 
     @Plugin.hook('core.message.privmsg')
     def record_message(self, event):
         """Record the receipt of a new message.
         """
-
         # Check if this is an action
-        if event['message'][:7] == '\x01ACTION':
+        if event['message'].startswith('\x01ACTION'):
             return
 
         # Check if this is a command
-        if event['message'][0] == self.bot.config_get('command_prefix'):
+        if event['message'].startswith(self.bot.config_get('command_prefix')):
             return
 
         self.record(nick(event['user']), event['channel'], 'message',
@@ -74,8 +67,7 @@ class Last(Plugin):
     def record_command(self, event):
         """Record the receipt of a new command.
         """
-
-        if event['message'][0] != self.bot.config_get('command_prefix'):
+        if not event['message'].startswith(self.bot.config_get('command_prefix')):
             return
 
         self.record(nick(event['user']), event['channel'], 'command',
@@ -85,14 +77,12 @@ class Last(Plugin):
     def record_action(self, event):
         """Record the receipt of a new action.
         """
-
         self.record(nick(event['user']), event['channel'], 'action',
                     event['message'])
 
     def record(self, nick, channel, msgtype, msg):
         """Record a new message, of a given type.
         """
-
         self.db.remove({'nick': nick,
                         'channel': channel,
                         'type': msgtype})
@@ -113,25 +103,21 @@ class Last(Plugin):
         msgtype = splitted[1] if len(splitted) > 1 else None
 
         if msgtype not in ['message', 'command', 'action', None]:
-            event.protocol.msg(event['reply_to'],
-                               'Bad filter: {}. Accepted are "message", "command", and "action".'.format(msgtype))
+            event.reply('Bad filter: {}. Accepted are "message", "command", and "action".'.format(msgtype))
             return
 
         message = self.last(thenick, channel=event['channel'], msgtype=msgtype)
 
         if message is None:
-            event.protocol.msg(event['reply_to'],
-                               'Nothing recorded for {}'.format(thenick))
+            event.reply('Nothing recorded for {}'.format(thenick))
         elif message['type'] in ['message', 'command']:
-            event.protocol.msg(event['reply_to'],
-                               '[{}] <{}> {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
-                                                     thenick,
-                                                     message['message']))
+            event.reply('[{}] <{}> {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
+                                              thenick,
+                                              message['message']))
         else:
-            event.protocol.msg(event['reply_to'],
-                               '[{}] * {} {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
-                                                     thenick,
-                                                     message['message']))
+            event.reply('[{}] * {} {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
+                                              thenick,
+                                              message['message']))
 
     @Plugin.command('seen', help=('seen nick: report when that nick was last'
                                   ' seen in this channel.'))
@@ -140,9 +126,7 @@ class Last(Plugin):
         message = self.last(thenick, channel=event['channel'])
 
         if message is None:
-            event.protocol.msg(event['reply_to'],
-                               '{} has never been seen in this channel.'.format(thenick))
+            event.reply('{} has never been seen in this channel.'.format(thenick))
         else:
-            event.protocol.msg(event['reply_to'],
-                               '{} was last seen at {}.'.format(thenick,
-                                                                message['when'].strftime("%Y-%m-%d %H:%M:%S")))
+            event.reply('{} was last seen at {}.'
+                        .format(thenick, message['when'].strftime("%Y-%m-%d %H:%M:%S")))
