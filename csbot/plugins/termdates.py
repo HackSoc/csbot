@@ -1,5 +1,8 @@
 from csbot.plugin import Plugin
 from datetime import datetime, timedelta
+import math
+
+from ..util import ordinal
 
 
 class TermDates(Plugin):
@@ -63,22 +66,33 @@ class TermDates(Plugin):
         return self.terms[term][1].strftime(self.DATE_FORMAT)
 
     @Plugin.command('week',
-                    help='week [term] <num>: get the start date of a week')
+                    help='week [term] [num]: info about a week, '
+                         'relative to the UoY term schedule')
     def week(self, e):
         if not self.initialised:
             e.reply('error: no term dates (see termdates.set)')
             return
 
         # We can handle weeks in the following formats:
+        #  !week - get information about the current week
         #  !week n - get the date of week n in the current (or next, if in
         #            holiday) term
         #  !week term n - get the date of week n in the given term
         #  !week n term - as above
 
         week = e['data'].split()
-        if len(week) == 1:
-            term = self._current_term()
-            weeknum = week[0][:3]
+        if len(week) == 0:
+            term, weeknum = self._current_week()
+        elif len(week) == 1:
+            try:
+                term = self._current_term()
+                weeknum = int(week[0])
+                if weeknum < 1:
+                    e.reply('error: bad week format')
+                    return
+            except ValueError:
+                term = week[0][:3]
+                term, weeknum = self._current_week(term)
         elif len(week) >= 2:
             try:
                 term = week[0][:3]
@@ -88,34 +102,46 @@ class TermDates(Plugin):
                     term = week[1][:3]
                     weeknum = int(week[0])
                 except ValueError:
-                    e.prototol.msg(e['reply_to'], 'error: bad week format')
+                    e.reply('error: bad week format')
                     return
         else:
             e.reply('error: bad week format')
             return
 
-        try:
-            weekstart = self._week_start(term, weeknum)
-        except KeyError:
-            e.reply('error: bad week')
-            return
-
-        term = term.capitalize()
-        e.reply('{} {}: {}'.format(term, weeknum, weekstart))
+        if weeknum > 0:
+            e.reply('{} {}: {}'.format(term.capitalize(),
+                                       weeknum,
+                                       self._week_start(term, weeknum)))
+        else:
+            e.reply('{} week before {} (starts {})'
+                    .format(ordinal(-weeknum),
+                            term.capitalize(),
+                            self._week_start(term, 1)))
 
     def _current_term(self):
         """
         Get the name of the current term
         """
 
-        now = datetime.now()
+        now = datetime.now().date()
         for term in ['aut', 'spr', 'sum']:
             dates = self.terms[term]
-            if now >= dates[0] and now <= dates[1]:
+            if now >= dates[0].date() and now <= dates[1].date():
                 return term
-            elif now <= dates[0]:
+            elif now <= dates[0].date():
                 # We can do this because the terms are ordered
                 return term
+
+    def _current_week(self, term=None):
+        if term is None:
+            term = self._current_term()
+        start, _ = self.terms[term]
+        now = datetime.now()
+        delta = now.date() - start.date()
+        weeknum = math.floor(delta.days / 7.0)
+        if weeknum >= 0:
+            weeknum += 1
+        return term, weeknum
 
     def _week_start(self, term, week):
         """
@@ -123,8 +149,12 @@ class TermDates(Plugin):
         """
 
         term = term.lower()
-        return self.weeks['{} {}'.format(term, week)].strftime(
-            self.DATE_FORMAT)
+        start = self.weeks['{} 1'.format(term)]
+        if week > 0:
+            offset = timedelta(weeks=week - 1)
+        else:
+            offset = timedelta(weeks=week)
+        return (start + offset).strftime(self.DATE_FORMAT)
 
     @Plugin.command('termdates.set',
                     help='termdates.set <aut> <spr> <sum>: set the term dates')
