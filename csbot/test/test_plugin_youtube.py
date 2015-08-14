@@ -1,11 +1,13 @@
 from unittest.mock import patch
+from distutils.version import StrictVersion
 
 import responses
 import urllib.parse as urlparse
+import apiclient
 from apiclient.http import HttpMock
 
 from csbot.test import BotTestCase, fixture_file
-from csbot.plugins.youtube import Youtube
+from csbot.plugins.youtube import Youtube, YoutubeError
 
 
 #: Tests are (number, url, content-type, status, fixture, expected)
@@ -49,23 +51,27 @@ json_test_cases = [
         "youtube_flibble.json",
         None
     ),
-
-    # Invalid API key (400 Bad Request)
-    (
-        "dQw4w9WgXcQ",
-        400,
-        "youtube_invalid_key.json",
-        None
-    ),
-
-    # Valid API key, but Youtube Data API not enabled (403 Forbidden)
-    (
-        "dQw4w9WgXcQ",
-        403,
-        "youtube_access_not_configured.json",
-        None
-    ),
 ]
+
+# Non-success HttpMock results are broken in older versions of google-api-python-client
+if StrictVersion(apiclient.__version__) > StrictVersion("1.4.1"):
+    json_test_cases += [
+        # Invalid API key (400 Bad Request)
+        (
+            "dQw4w9WgXcQ",
+            400,
+            "youtube_invalid_key.json",
+            YoutubeError
+        ),
+
+        # Valid API key, but Youtube Data API not enabled (403 Forbidden)
+        (
+            "dQw4w9WgXcQ",
+            403,
+            "youtube_access_not_configured.json",
+            YoutubeError
+        ),
+    ]
 
 
 class TestYoutubePlugin(BotTestCase):
@@ -87,9 +93,10 @@ class TestYoutubePlugin(BotTestCase):
         for vid_id, status, fixture, expected in json_test_cases:
             http = HttpMock(fixture_file(fixture), {'status': status})
             with self.subTest(vid_id=vid_id), patch.object(self.youtube, 'http', wraps=http):
-                result = self.youtube._yt(urlparse.urlparse(vid_id))
-                self.assertEqual(result, expected)
-
+                if expected is YoutubeError:
+                    self.assertRaises(YoutubeError, self.youtube._yt, urlparse.urlparse(vid_id))
+                else:
+                    self.assertEqual(self.youtube._yt(urlparse.urlparse(vid_id)), expected)
 
 
 class TestYoutubeLinkInfoIntegration(BotTestCase):
@@ -112,7 +119,6 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
                                                                   "youtu.be",
                                                                   "www.youtube.com"})
 
-
     @responses.activate
     def test_integration(self):
         url_types = {"https://www.youtube.com/watch?v={}",
@@ -126,7 +132,7 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
                 with self.subTest(vid_id=vid_id, url=url), patch.object(self.youtube, 'http', wraps=http):
                     url = url.format(vid_id)
                     result = self.linkinfo.get_link_info(url)
-                    if response is None:
+                    if response is None or response is YoutubeError:
                         self.assertTrue(result.is_error)
                     else:
                         for key in response:

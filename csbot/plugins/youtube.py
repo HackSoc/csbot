@@ -2,6 +2,7 @@ import datetime
 import urllib.parse as urlparse
 
 from apiclient.discovery import build as google_api
+from apiclient.errors import HttpError
 import isodate
 
 from ..plugin import Plugin
@@ -24,6 +25,26 @@ def get_yt_id(url):
         if 'v' in params:
             return params['v'][0]
     return None
+
+
+class YoutubeError(Exception):
+    """Signifies some error occurred accessing the Youtube API.
+
+    This is only used for actual errors, e.g. invalid API key, not failure to
+    find any data matching a query.
+
+    Pass the :exc:`HttpError` from the API call as an argument.
+    """
+    def __init__(self, http_error):
+        super(YoutubeError, self).__init__(http_error)
+        self.http_error = http_error
+
+    def __str__(self):
+        s = '%s: %s' % (self.http_error.resp.status, self.http_error._get_reason())
+        if self.http_error.resp.status == 400:
+            return s + ' - invalid API key?'
+        else:
+            return s
 
 
 class Youtube(Plugin):
@@ -67,6 +88,9 @@ class Youtube(Plugin):
                 return None
         except (KeyError, ValueError):
             return None
+        except HttpError as e:
+            # Chain our own exception that gets a more sanitised error message
+            raise YoutubeError(e) from e
 
         vid_info = {}
         try:
@@ -125,10 +149,14 @@ class Youtube(Plugin):
 
         def page_handler(url, match):
             """Handles privmsg urls."""
-            response = self._yt(url)
-            if not response:
-                return None
-            return LinkInfoResult(url.geturl(), self.RESPONSE.format(**response))
+            try:
+                response = self._yt(url)
+                if response:
+                    return LinkInfoResult(url.geturl(), self.RESPONSE.format(**response))
+                else:
+                    return None
+            except YoutubeError as e:
+                return LinkInfoResult(url.geturl(), str(e), is_error=True)
 
         linkinfo.register_handler(lambda url: url.netloc in {"m.youtube.com", "www.youtube.com", "youtu.be"},
                                   page_handler)
@@ -139,8 +167,11 @@ class Youtube(Plugin):
     def all_hail_our_google_overlords(self, e):
         """I for one, welcome our Google overlords."""
 
-        response = self._yt(urlparse.urlparse(e["data"]))
-        if not response:
-            e.reply("Invalid video ID")
-        else:
-            e.reply(self.CMD_RESPONSE.format(**response))
+        try:
+            response = self._yt(urlparse.urlparse(e["data"]))
+            if not response:
+                e.reply("Invalid video ID")
+            else:
+                e.reply(self.CMD_RESPONSE.format(**response))
+        except YoutubeError as exc:
+            e.reply("Error: " + str(exc))
