@@ -93,11 +93,11 @@ class Last(Plugin):
                         'when': datetime.now(),
                         'message': msg})
 
-    @Plugin.command('last', help=('last nick [type]: show the last thing'
+    @Plugin.command('seen', help=('seen nick [type]: show the last thing'
                                   ' said by a nick in this channel, optionally'
                                   ' filtering by type: message, action,'
                                   ' or command.'))
-    def show_last(self, event):
+    def show_seen(self, event):
         splitted = event['data'].split()
         thenick = splitted[0]
         msgtype = splitted[1] if len(splitted) > 1 else None
@@ -118,15 +118,3 @@ class Last(Plugin):
             event.reply('[{}] * {} {}'.format(message['when'].strftime("%Y-%m-%d %H:%M:%S"),
                                               thenick,
                                               message['message']))
-
-    @Plugin.command('seen', help=('seen nick: report when that nick was last'
-                                  ' seen in this channel.'))
-    def show_seen(self, event):
-        thenick = nick(event['data'])
-        message = self.last(thenick, channel=event['channel'])
-
-        if message is None:
-            event.reply('{} has never been seen in this channel.'.format(thenick))
-        else:
-            event.reply('{} was last seen at {}.'
-                        .format(thenick, message['when'].strftime("%Y-%m-%d %H:%M:%S")))
