@@ -31,3 +31,4 @@ deploy:
   app: csyorkbot
   on:
     repo: HackSoc/csbot
+    python: '3.4'
