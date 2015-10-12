@@ -1,0 +1,14 @@
+{
+ "error": {
+  "errors": [
+   {
+    "domain": "usageLimits",
+    "reason": "accessNotConfigured",
+    "message": "Access Not Configured. The API (YouTube Data API) is not enabled for your project. Please use the Google Developers Console to update your configuration.",
+    "extendedHelp": "https://console.developers.google.com"
+   }
+  ],
+  "code": 403,
+  "message": "Access Not Configured. The API (YouTube Data API) is not enabled for your project. Please use the Google Developers Console to update your configuration."
+ }
+}
