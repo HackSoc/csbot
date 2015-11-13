@@ -1,5 +1,6 @@
 from datetime import datetime
 from collections import deque
+import re
 
 from csbot.util import parse_arguments
 
@@ -125,26 +126,15 @@ class CommandEvent(Event):
         Returns None if *event['message']* wasn't recognised as being a
         command.
         """
-        # Split on the first space to find the "command" part
-        parts = event['message'].split(None, 1)
-        if len(parts) == 0:
-            # Called with an empty message, nothing to do
-            return None
-        elif len(parts) == 1:
-            command, data = parts[0], ''
-        else:
-            command, data = parts
+        pattern = r'{prefix}(?P<command>[^\s]+)(\s+(?P<data>.+))?'.format(prefix=re.escape(prefix))
+        match = re.fullmatch(pattern, event['message'].strip())
 
-        # See if the command part is really a command
-        if len(command) <= len(prefix) or not command.startswith(prefix):
-            # Nothing to do if this doesn't fit the command pattern
+        if match is None:
             return None
         else:
-            # Trim the command prefix from the command name
-            command = command[len(prefix):]
-
-        return cls.extend(event, 'core.command',
-                          {'command': command, 'data': data.strip()})
+            return cls.extend(event, 'core.command',
+                              {'command': match.group('command'),
+                               'data': match.group('data') or ''})
 
     def arguments(self):
         """Parse *self["data"]* into a list of arguments using
