@@ -116,7 +116,7 @@ class Event(dict):
 
 class CommandEvent(Event):
     @classmethod
-    def parse_command(cls, event, prefix):
+    def parse_command(cls, event, prefix, nick):
         """Attempt to create a :class:`CommandEvent` from a
         ``core.message.privmsg`` event.
 
@@ -126,7 +126,10 @@ class CommandEvent(Event):
         Returns None if *event['message']* wasn't recognised as being a
         command.
         """
-        pattern = r'{prefix}(?P<command>[^\s]+)(\s+(?P<data>.+))?'.format(prefix=re.escape(prefix))
+        pattern = r'({prefix}|{nick}[,:]\s*)(?P<command>[^\s]+)(\s+(?P<data>.+))?'.format(
+            prefix=re.escape(prefix),
+            nick=re.escape(nick),
+        )
         match = re.fullmatch(pattern, event['message'].strip())
 
         if match is None:

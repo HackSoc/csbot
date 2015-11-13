@@ -1,5 +1,6 @@
 import unittest
 import datetime
+import functools
 
 import csbot.events
 import collections
@@ -183,11 +184,14 @@ class TestEvent(unittest.TestCase):
 
 
 class TestCommandEvent(unittest.TestCase):
+    def setUp(self):
+        self.nick = 'csbot'
+
     def _check_valid_command(self, message, prefix, command, data):
         """Test helper for checking the result of parsing a command from a
         message."""
         e = csbot.events.Event(None, 'test.event', {'message': message})
-        c = csbot.events.CommandEvent.parse_command(e, prefix)
+        c = csbot.events.CommandEvent.parse_command(e, prefix, self.nick)
         self.assertEqual(c['command'], command)
         self.assertEqual(c['data'], data)
         return c
@@ -196,7 +200,7 @@ class TestCommandEvent(unittest.TestCase):
         """Test helper for verifying that an invalid command is not
         interpreted as a valid command."""
         e = csbot.events.Event(None, 'test.event', {'message': message})
-        c = csbot.events.CommandEvent.parse_command(e, prefix)
+        c = csbot.events.CommandEvent.parse_command(e, prefix, self.nick)
         self.assertIs(c, None)
         return c
 
@@ -246,6 +250,12 @@ class TestCommandEvent(unittest.TestCase):
         self._check_invalid_command('\u0CA0test', '\xC2')
         ## Unicode command
         self._check_valid_command('!\u0CA0_\u0CA0', '!', '\u0CA0_\u0CA0', '')
+
+        # Test "conversational", i.e. mentioned by nick
+        self._check_valid_command('csbot: do something', '!', 'do', 'something')
+        self._check_valid_command('   csbot, do   something ', '!', 'do', 'something')
+        self._check_valid_command('csbot:do something', '!', 'do', 'something')
+        self._check_invalid_command('csbot do something', '!')
 
     def test_arguments(self):
         """Test argument grouping/parsing.  These tests are pretty much just
