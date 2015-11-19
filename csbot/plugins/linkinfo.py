@@ -252,8 +252,8 @@ class LinkInfo(Plugin):
             # Attempt to get the <title> tag
             html = lxml.etree.fromstring(chunk, parser)
             title = html.find('.//title')
-            if title is None:
-                return make_error('failed to find <title>')
+            if title is None or title.text is None:
+                return make_error('Missing or empty <title> tag')
 
             # Normalise title whitespace
             title = ' '.join(title.text.strip().split())

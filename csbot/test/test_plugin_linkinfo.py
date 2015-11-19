@@ -108,6 +108,15 @@ class TestLinkInfoPlugin(BotTestCase):
     PLUGINS = ['linkinfo']
 
     @responses.activate
+    def test_empty_title(self):
+        url = 'http://example.com/empty-title-tag'
+        responses.add(responses.GET, url,
+                      body=b'<html><head><title></title></head><body></body></html>',
+                      content_type='text/html')
+        result = self.linkinfo.get_link_info(url)
+        self.assert_(result.is_error)
+
+    @responses.activate
     def test_encoding_handling(self):
         for url, content_type, body, _ in encoding_test_cases:
             responses.add(responses.GET, url, body=body,
