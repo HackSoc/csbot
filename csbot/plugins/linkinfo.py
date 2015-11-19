@@ -251,12 +251,13 @@ class LinkInfo(Plugin):
 
             # Attempt to get the <title> tag
             html = lxml.etree.fromstring(chunk, parser)
-            title = html.find('.//title')
-            if title is None or title.text is None:
+            title = html.findtext('.//title') or ''
+            # Normalise title whitespace
+            title = ' '.join(title.strip().split())
+
+            if not title:
                 return make_error('Missing or empty <title> tag')
 
-            # Normalise title whitespace
-            title = ' '.join(title.text.strip().split())
             # Build result
             result = LinkInfoResult(url, title,
                                     nsfw=url.netloc.endswith('.xxx'))
