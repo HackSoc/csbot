@@ -8,22 +8,27 @@ from csbot.irc import *
 class TestIRCClientLineProtocol(IRCClientTestCase):
     CLIENT_CLASS = IRCClient
 
+    @run_client
     def test_buffer(self):
         """Check that incoming data is converted to a line-oriented protocol."""
         with self.patch('line_received') as m:
             self.receive_bytes(b':nick!user@host PRIVMSG')
+            yield
             self.assertFalse(m.called)
             self.receive_bytes(b' #channel :hello\r\nPING')
+            yield
             m.assert_has_calls([
                 mock.call(':nick!user@host PRIVMSG #channel :hello'),
             ])
             self.receive_bytes(b' :server.name\r\n')
+            yield
             m.assert_has_calls([
                 mock.call(':nick!user@host PRIVMSG #channel :hello'),
                 mock.call('PING :server.name'),
             ])
             self.receive_bytes(b':nick!user@host JOIN #foo\r\n'
                                b':nick!user@host JOIN #bar\r\n')
+            yield
             m.assert_has_calls([
                 mock.call(':nick!user@host PRIVMSG #channel :hello'),
                 mock.call('PING :server.name'),

@@ -12,42 +12,13 @@ from unittest import mock
 from csbot.core import Bot, BotClient
 
 
-def mock_reader_writer(loop):
-    """Create a mock (reader, writer) pair.
-
-    The writer is augmented with a mock write method, and ``writer.close()``
-    directly causes EOF on ``reader``.
-    """
-    reader = asyncio.StreamReader(loop=loop)
-    class MockStreamWriter(asyncio.StreamWriter):
-        def close(self):
-            self._reader.feed_eof()
-    writer = MockStreamWriter(None, None, reader, loop)
-    writer.write = mock.Mock()
-    return reader, writer
+class MockStreamReader(asyncio.StreamReader):
+    pass
 
 
-def mock_client(cls, *args, **kwargs):
-    """Create an instance of a mocked subclass of *cls*.
-
-    *cls* should be :class:`IRCClient` or a subclass of it.  The event loop and
-    transport are mocked, and a :meth:`reset_mock` method is added for resetting
-    all mocks on the client.
-    """
-    class MockIRCClient(cls):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.send_line = mock.Mock(wraps=self.send_line)
-
-        @asyncio.coroutine
-        def connect(self):
-            # Connect to mock streams
-            self.reader, self.writer = mock_reader_writer(self.loop)
-
-        def reset_mock(self):
-            self.send_line.reset_mock()
-
-    return MockIRCClient(*args, **kwargs)
+class MockStreamWriter(asyncio.StreamWriter):
+    def close(self):
+        self._reader.feed_eof()
 
 
 class IRCClientTestCase(asyncio.test_utils.TestCase):
@@ -61,10 +32,22 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         self.loop = asyncio.new_event_loop()
         self.set_event_loop(self.loop)  # Disables "default" event loop!
         # Create client and make it use our event loop
-        self.client = mock_client(self.CLIENT_CLASS)
+        self.client = self.CLIENT_CLASS()
         self.client.loop = self.loop
-        # Connect fake stream reader/writer
-        self.loop.run_until_complete(self.client.connect())
+        # Create fake stream reader/writer
+        self.reader = MockStreamReader(loop=self.loop)
+        self.writer = MockStreamWriter(None, None, self.reader, self.loop)
+        # Create future that will always give this (reader, writer) pair
+        self.open_connection = asyncio.Future(loop=self.loop)
+        self.open_connection.set_result((self.reader, self.writer))
+        # Connect fake stream reader/writer (for tests that don't need the read loop)
+        with mock.patch('asyncio.open_connection') as m:
+            m.return_value = self.open_connection
+            self.loop.run_until_complete(self.client.connect())
+
+        # Mock all the things!
+        self.client.send_line = mock.Mock(wraps=self.client.send_line)
+        self.writer.write = mock.Mock()
 
     def tearDown(self):
         # Give queued tasks a final chance to complete - borrowed from
@@ -73,6 +56,10 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         self.loop.close()
         gc.collect()
         super().tearDown()
+
+    def reset_mock(self):
+        self.client.send_line.reset_mock()
+        self.writer.write.reset_mock()
 
     def patch(self, attrs, create=False):
         """Shortcut for patching attribute(s) of the client."""
@@ -84,7 +71,7 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
 
     def receive_bytes(self, bytes):
         """Shortcut for pushing received data to the client."""
-        self.client.reader.feed_data(bytes)
+        self.reader.feed_data(bytes)
 
     def assert_bytes_sent(self, bytes):
         """Check the raw bytes that have been sent via the transport.
@@ -93,9 +80,9 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         ``transport.write(...)``.  Resets the mock so the next call will not
         contain what was checked by this call.
         """
-        sent = b''.join(args[0] for args, _ in self.client.writer.write.call_args_list)
+        sent = b''.join(args[0] for args, _ in self.writer.write.call_args_list)
         self.assertEqual(sent, bytes)
-        self.client.writer.write.reset_mock()
+        self.writer.write.reset_mock()
 
     def receive(self, lines):
         """Shortcut to push a series of lines to the client."""
@@ -117,7 +104,7 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
 
 
 def run_client(f):
-    """Helper for tests that require actually running the bot read loop.
+    """Helper for tests that require actually running the client.
 
     A test decorated with this function should be a coroutine, i.e. at some
     point it should ``yield`` in some way to allow the client to progress.
@@ -136,7 +123,7 @@ def run_client(f):
         # Run the test coroutine
         self.loop.run_until_complete(f(self))
         # Cleanly end the read loop
-        self.client.reader.feed_eof()
+        self.reader.feed_eof()
         self.loop.run_until_complete(read_loop_fut)
     return new_f
 
@@ -161,6 +148,29 @@ class TempEnvVars(object):
                 os.environ[k] = self.restore[k]
             else:
                 del os.environ[k]
+
+
+def mock_client(cls, *args, **kwargs):
+    """Create an instance of a mocked subclass of *cls*.
+
+    *cls* should be :class:`IRCClient` or a subclass of it.  The event loop and
+    transport are mocked, and a :meth:`reset_mock` method is added for resetting
+    all mocks on the client.
+    """
+    class MockIRCClient(cls):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.send_line = mock.Mock(wraps=self.send_line)
+
+        @asyncio.coroutine
+        def connect(self):
+            # Connect to mock streams
+            self.reader, self.writer = mock_reader_writer(self.loop)
+
+        def reset_mock(self):
+            self.send_line.reset_mock()
+
+    return MockIRCClient(*args, **kwargs)
 
 
 class BotTestCase(unittest.TestCase):
