@@ -238,6 +238,14 @@ class TestIRCClientEvents(IRCClientTestCase):
                     # Check for the call
                     m.assert_called_once_with(*args, **kwargs)
 
+    def test_parse_failure(self):
+        """Test something that doesn't parse as a message.
+
+        Most things will parse as a message, technically speaking, but the
+        empty string won't!
+        """
+        self.assertRaises(IRCParseError, self.receive, '')
+
 
 class TestIRCClientCommands(IRCClientTestCase):
     """Test that calling various commands causes the appropriate messages to be

@@ -44,6 +44,8 @@ class IRCMessage(namedtuple('_IRCMessage',
     #: Regular expression to extract message components from a message.
     REGEX = re.compile(r'(:(?P<prefix>\S+) )?(?P<command>\S+)'
                        r'(?P<params>( (?!:)\S+)*)( :(?P<trailing>.*))?')
+    #: Commands to force trailing parameter (``:blah``) for
+    FORCE_TRAILING = {'USER', 'QUIT', 'PRIVMSG'}
 
     @classmethod
     def parse(cls, line):
@@ -82,7 +84,7 @@ class IRCMessage(namedtuple('_IRCMessage',
             'raw': ''.join([
                 (':' + prefix + ' ') if prefix else '',
                 command,
-                cls._raw_params(params or []),
+                cls._raw_params(params or [], command in cls.FORCE_TRAILING),
             ]),
         }
         return cls(**args)
@@ -98,7 +100,7 @@ class IRCMessage(namedtuple('_IRCMessage',
             (':' + self.prefix + ' ') if self.prefix else '',
             self.command,
             ('/' + self.command_name) if self.command != self.command_name else '',
-            self._raw_params(self.params),
+            self._raw_params(self.params, self.command in self.FORCE_TRAILING),
         ])
 
     def pad_params(self, length, default=None):
@@ -116,8 +118,8 @@ class IRCMessage(namedtuple('_IRCMessage',
         return self.params + [default] * (length - len(self.params))
 
     @staticmethod
-    def _raw_params(params):
-        if len(params) > 0 and ' ' in params[-1]:
+    def _raw_params(params, force_trailing):
+        if len(params) > 0 and (force_trailing or ' ' in params[-1]):
             trailing = params[-1]
             params = params[:-1]
         else:
@@ -296,12 +298,12 @@ class IRCClient:
         LOG.debug('connection made')
 
         if self.config['password']:
-            self.send_line('PASS {}'.format(self.config['password']))
+            self.send(IRCMessage.create('PASS', [self.config['password']]))
 
         nick = self.config['nick']
         username = self.config['username'] or nick
         self.set_nick(nick)
-        self.send_line('USER {} * * :{}'.format(username, nick))
+        self.send(IRCMessage.create('USER', [username, '*', '*', nick]))
 
     def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
@@ -596,7 +598,7 @@ class IRCClient:
             method(*args, **kwargs)
 
 
-def main():
+def main():  # pragma: no cover
     logging.basicConfig(format='[%(levelname).1s:%(name)s] %(message)s',
                         level=logging.DEBUG)
     logging.getLogger('asyncio').setLevel(logging.INFO)
@@ -620,5 +622,5 @@ def main():
     loop.close()
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     main()
