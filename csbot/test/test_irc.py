@@ -73,14 +73,19 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
 class TestIRCClientBehaviour(IRCClientTestCase):
     CLIENT_CLASS = IRCClient
 
+    @run_client
     def test_auto_reconnect(self):
         with self.patch('connect') as m:
-            self.client.connection_lost(None)
+            self.assertFalse(m.called)
+            self.reader.feed_eof()
+            yield from self.client.disconnected.wait()
             m.assert_called_once_with()
 
+    @run_client
     def test_disconnect(self):
         with self.patch('connect') as m:
             self.client.disconnect()
+            yield from self.client.disconnected.wait()
             self.assertFalse(m.called)
 
     def test_PING_PONG(self):
@@ -267,16 +272,20 @@ class TestIRCClientCommands(IRCClientTestCase):
         self.client.quit('reason')
         self.assert_sent('QUIT :reason')
 
+    @run_client
     def test_quit_no_reconnect(self):
         with self.patch('connect') as m:
             self.client.quit(reconnect=False)
-            self.client.connection_lost(None)
+            self.reader.feed_eof()
+            yield from self.client.disconnected.wait()
             self.assertFalse(m.called)
 
+    @run_client
     def test_quit_reconnect(self):
         with self.patch('connect') as m:
             self.client.quit(reconnect=True)
-            self.client.connection_lost(None)
+            self.reader.feed_eof()
+            yield from self.client.disconnected.wait()
             self.assertTrue(m.called)
 
     def test_msg(self):

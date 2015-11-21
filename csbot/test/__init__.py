@@ -36,16 +36,12 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         # Create fake stream reader/writer
         self.reader = MockStreamReader(loop=self.loop)
         self.writer = MockStreamWriter(None, None, self.reader, self.loop)
-        # Create future that will always give this (reader, writer) pair
-        self.open_connection = asyncio.Future(loop=self.loop)
-        self.open_connection.set_result((self.reader, self.writer))
         # Connect fake stream reader/writer (for tests that don't need the read loop)
         with self.mock_open_connection():
             self.loop.run_until_complete(self.client.connect())
 
         # Mock all the things!
         self.client.send_line = mock.Mock(wraps=self.client.send_line)
-        self.writer.write = mock.Mock()
 
     def tearDown(self):
         # Give queued tasks a final chance to complete - borrowed from
@@ -56,15 +52,32 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         super().tearDown()
 
     def mock_open_connection(self):
-        """Mock open"""
-        return mock.patch('asyncio.open_connection', return_value=self.open_connection)
+        """Give a mock reader and writer when a stream connection is opened.
+
+        >>> with self.mock_open_connection():
+        ...     self.loop.run_until_complete(self.client.connect())
+        ...     self.client.quit('blah')
+        ...     self.assert_bytes_sent(b'QUIT :blah\r\n')
+        """
+        def create_connection(*args, **kwargs):
+            self.reader = MockStreamReader(loop=self.loop)
+            self.writer = MockStreamWriter(None, None, self.reader, self.loop)
+            self.writer.write = mock.Mock()
+            fut = asyncio.Future(loop=self.loop)
+            fut.set_result((self.reader, self.writer))
+            return fut
+        return mock.patch('asyncio.open_connection', side_effect=create_connection)
 
     def reset_mock(self):
         self.client.send_line.reset_mock()
         self.writer.write.reset_mock()
 
     def patch(self, attrs, create=False):
-        """Shortcut for patching attribute(s) of the client."""
+        """Shortcut for patching attribute(s) of the client.
+
+        If the attribute exists it is wrapped by the mock so that calls aren't
+        blocked.
+        """
         if isinstance(attrs, str):
             return mock.patch.object(self.client, attrs, create=create,
                                      wraps=getattr(self.client, attrs, None))
@@ -122,13 +135,15 @@ def run_client(f):
     """
     @functools.wraps(f)
     def new_f(self):
-        # Start the client read loop
-        read_loop_fut = self.loop.create_task(self.client.read_loop())
-        # Run the test coroutine
-        self.loop.run_until_complete(f(self))
-        # Cleanly end the read loop
-        self.reader.feed_eof()
-        self.loop.run_until_complete(read_loop_fut)
+        with self.mock_open_connection():
+            # Start the client
+            run_fut = self.loop.create_task(self.client.run())
+            self.loop.run_until_complete(self.client.connected.wait())
+            # Run the test coroutine
+            self.loop.run_until_complete(f(self))
+            # Cleanly end the read loop
+            self.client.disconnect()
+            self.loop.run_until_complete(run_fut)
     return new_f
 
 

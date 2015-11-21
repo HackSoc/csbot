@@ -239,18 +239,28 @@ class IRCClient:
 
         self.reader, self.writer = None, None
         self._exiting = False
+        self.connected = asyncio.Event(loop=self.loop)
+        self.connected.clear()
+        self.disconnected = asyncio.Event(loop=self.loop)
+        self.disconnected.set()
 
         self.nick = None
 
     @asyncio.coroutine
-    def run(self):
-        """Run the bot forever, reconnecting when the connection is lost."""
-        self._exiting = False
-        while not self._exiting:
+    def run(self, run_once=False):
+        """Run the bot, reconnecting when the connection is lost."""
+        self._exiting = run_once
+        while True:
             yield from self.connect()
+            self.connected.set()
+            self.disconnected.clear()
             self.connection_made()
             yield from self.read_loop()
             self.connection_lost(self.reader.exception())
+            self.connected.clear()
+            self.disconnected.set()
+            if self._exiting:
+                break
 
     @asyncio.coroutine
     def connect(self):
