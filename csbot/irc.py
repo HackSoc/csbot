@@ -220,8 +220,6 @@ class IRCClient:
     """
     #: Codec for encoding/decoding IRC messages.
     codec = IRCCodec()
-    #: Event loop the client is running on.
-    loop = asyncio.get_event_loop()
 
     #: Generate a default configuration.  Easier to call this and update the
     #: result than relying on ``dict.copy()``.
@@ -233,11 +231,11 @@ class IRCClient:
         password=None,
     ))
 
-    def __init__(self, *configs, **more_config):
+    def __init__(self, *, loop=None, **kwargs):
+        self.loop = loop or asyncio.get_event_loop()
+
         self.config = self.DEFAULTS()
-        for config in configs:
-            self.config.update(config)
-        self.config.update(**more_config)
+        self.config.update(**kwargs)
 
         self.reader, self.writer = None, None
         self._exiting = False
@@ -267,9 +265,9 @@ class IRCClient:
 
         Use :meth:`quit` for a more graceful disconnect.
         """
+        assert self.writer is not None, "disconnect() when not connected"
         self._exiting = True
-        if self.writer is not None:
-            self.writer.close()
+        self.writer.close()
 
     @asyncio.coroutine
     def read_loop(self):

@@ -168,9 +168,10 @@ class BotClient(IRCClient):
 
     _WHO_IDENTIFY = ('1', '%na')
 
-    def __init__(self, bot):
+    def __init__(self, bot, loop=None):
         # Initialise IRCClient from Bot configuration
         super().__init__(
+            loop=loop,
             nick=bot.config_get('nickname'),
             username=bot.config_get('username'),
             host=bot.config_get('irc_host'),

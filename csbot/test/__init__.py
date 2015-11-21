@@ -32,8 +32,7 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         self.loop = asyncio.new_event_loop()
         self.set_event_loop(self.loop)  # Disables "default" event loop!
         # Create client and make it use our event loop
-        self.client = self.CLIENT_CLASS()
-        self.client.loop = self.loop
+        self.client = self.CLIENT_CLASS(loop=self.loop)
         # Create fake stream reader/writer
         self.reader = MockStreamReader(loop=self.loop)
         self.writer = MockStreamWriter(None, None, self.reader, self.loop)
@@ -41,8 +40,7 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         self.open_connection = asyncio.Future(loop=self.loop)
         self.open_connection.set_result((self.reader, self.writer))
         # Connect fake stream reader/writer (for tests that don't need the read loop)
-        with mock.patch('asyncio.open_connection') as m:
-            m.return_value = self.open_connection
+        with self.mock_open_connection():
             self.loop.run_until_complete(self.client.connect())
 
         # Mock all the things!
@@ -57,6 +55,10 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
         gc.collect()
         super().tearDown()
 
+    def mock_open_connection(self):
+        """Mock open"""
+        return mock.patch('asyncio.open_connection', return_value=self.open_connection)
+
     def reset_mock(self):
         self.client.send_line.reset_mock()
         self.writer.write.reset_mock()
@@ -64,10 +66,12 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
     def patch(self, attrs, create=False):
         """Shortcut for patching attribute(s) of the client."""
         if isinstance(attrs, str):
-            return mock.patch.object(self.client, attrs, create=create)
+            return mock.patch.object(self.client, attrs, create=create,
+                                     wraps=getattr(self.client, attrs, None))
         else:
-            return mock.patch.multiple(self.client, create=create,
-                                       **{k: mock.DEFAULT for k in attrs})
+            return [mock.patch.object(self.client, attr, create=create,
+                                      wraps=getattr(self.client, attr, None))
+                    for attr in attrs]
 
     def receive_bytes(self, bytes):
         """Shortcut for pushing received data to the client."""
