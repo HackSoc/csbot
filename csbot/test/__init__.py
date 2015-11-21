@@ -150,30 +150,7 @@ class TempEnvVars(object):
                 del os.environ[k]
 
 
-def mock_client(cls, *args, **kwargs):
-    """Create an instance of a mocked subclass of *cls*.
-
-    *cls* should be :class:`IRCClient` or a subclass of it.  The event loop and
-    transport are mocked, and a :meth:`reset_mock` method is added for resetting
-    all mocks on the client.
-    """
-    class MockIRCClient(cls):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.send_line = mock.Mock(wraps=self.send_line)
-
-        @asyncio.coroutine
-        def connect(self):
-            # Connect to mock streams
-            self.reader, self.writer = mock_reader_writer(self.loop)
-
-        def reset_mock(self):
-            self.send_line.reset_mock()
-
-    return MockIRCClient(*args, **kwargs)
-
-
-class BotTestCase(unittest.TestCase):
+class BotTestCase(IRCClientTestCase):
     """Common functionality for bot test case.
 
     A :class:`unittest.TestCase` with bot and plugin test fixtures.  Creates a
@@ -185,13 +162,14 @@ class BotTestCase(unittest.TestCase):
 
     def setUp(self):
         """Create bot and plugin bindings."""
-        # Bot and protocol stuff, suffixed with _ so they can't clash with
-        # possible/likely plugin names
+        # Create bot
         self.bot_ = Bot(StringIO(dedent(self.CONFIG)))
         self.bot_.bot_setup()
-        self.protocol_ = mock_client(BotClient, self.bot_)
-        self.protocol_.connect()
-        self.protocol_.reset_mock()
+        # Client setup
+        self.CLIENT_CLASS = functools.partial(BotClient, self.bot_)
+        super().setUp()
+        # Keep old tests happy with an alias...
+        self.protocol_ = self.client
 
         for p in self.PLUGINS:
             setattr(self, p, self.bot_.plugins[p])
@@ -202,6 +180,7 @@ class BotTestCase(unittest.TestCase):
         self.protocol_ = None
         for p in self.PLUGINS:
             setattr(self, p, None)
+        super().tearDown()
 
 
 def fixture_file(*path):
