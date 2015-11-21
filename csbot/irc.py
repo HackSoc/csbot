@@ -186,13 +186,12 @@ class IRCCodec(codecs.Codec):
             return codecs.decode(input, 'cp1252', errors)
 
 
-class IRCClient(asyncio.Protocol):
+class IRCClient:
     """Internet Relay Chat client protocol.
 
     A line-oriented protocol for communicating with IRC servers.  It handles
     receiving data at several layers of abstraction:
 
-    * :meth:`data_received`: raw bytes
     * :meth:`line_received`: decoded line
     * :meth:`message_received`: parsed :class:`IRCMessage`
     * ``irc_<COMMAND>(msg)``: called when ``msg.command == '<COMMAND>'``
@@ -201,7 +200,7 @@ class IRCClient(asyncio.Protocol):
 
     It also handles sending data at several layers of abstraction:
 
-    * :meth:`send_raw`: raw IRC command, e.g. ``self.send_raw('JOIN #cs-york-dev')``
+    * :meth:`send_line`: raw IRC command, e.g. ``self.send_line('JOIN #cs-york-dev')``
     * :meth:`send`: :class:`IRCMessage`, e.g.
       ``self.send(IRCMessage.create('JOIN', params=['#cs-york-dev']))``
     * ``<action>(...)``: e.g. ``self.join('#cs-york-dev')``.
@@ -240,17 +239,28 @@ class IRCClient(asyncio.Protocol):
             self.config.update(config)
         self.config.update(**more_config)
 
-        self.transport = None
-        self._buffer = b''
+        self.reader, self.writer = None, None
         self._exiting = False
 
         self.nick = None
 
+    @asyncio.coroutine
+    def run(self):
+        """Run the bot forever, reconnecting when the connection is lost."""
+        self._exiting = False
+        while not self._exiting:
+            yield from self.connect()
+            self.connection_made()
+            yield from self.read_loop()
+            self.connection_lost(self.reader.exception())
+
+    @asyncio.coroutine
     def connect(self):
         """Connect to the IRC server."""
         LOG.debug('connecting to {host}:{port}...'.format(**self.config))
-        return asyncio.Task(self.loop.create_connection(
-            lambda: self, self.config['host'], self.config['port']))
+        self.reader, self.writer = yield from asyncio.open_connection(self.config['host'],
+                                                                      self.config['port'],
+                                                                      loop=self.loop)
 
     def disconnect(self):
         """Disconnect from the IRC server.
@@ -258,24 +268,32 @@ class IRCClient(asyncio.Protocol):
         Use :meth:`quit` for a more graceful disconnect.
         """
         self._exiting = True
-        if self.transport is not None:
-            self.transport.close()
+        if self.writer is not None:
+            self.writer.close()
 
-    def connection_made(self, transport):
+    @asyncio.coroutine
+    def read_loop(self):
+        """Read and dispatch lines until the connection closes."""
+        while True:
+            line = yield from self.reader.readline()
+            if not line.endswith(b'\r\n'):
+                break
+            self.line_received(self.codec.decode(line[:-2]))
+
+    def connection_made(self):
         """Callback for successful connection.
 
         Register with the IRC server.
         """
         LOG.debug('connection made')
-        self.transport = transport
 
         if self.config['password']:
-            self.send_raw('PASS {}'.format(self.config['password']))
+            self.send_line('PASS {}'.format(self.config['password']))
 
         nick = self.config['nick']
         username = self.config['username'] or nick
         self.set_nick(nick)
-        self.send_raw('USER {} * * :{}'.format(username, nick))
+        self.send_line('USER {} * * :{}'.format(username, nick))
 
     def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
@@ -284,17 +302,7 @@ class IRCClient(asyncio.Protocol):
         :meth:`close` was called).
         """
         LOG.debug('connection lost: %r', exc)
-        self.transport = None
-        if not self._exiting:
-            self.loop.call_later(2, self.connect)
-
-    def data_received(self, data):
-        """Callback for received bytes."""
-        data = self._buffer + data
-        lines = data.split(b'\r\n')
-        self._buffer = lines.pop()
-        for line in lines:
-            self.line_received(self.codec.decode(line))
+        self.reader, self.write = None, None
 
     def line_received(self, line):
         """Callback for received raw IRC message."""
@@ -306,34 +314,34 @@ class IRCClient(asyncio.Protocol):
         """Callback for received parsed IRC message."""
         self._dispatch_method('irc_' + msg.command_name, msg)
 
-    def send_raw(self, data):
+    def send_line(self, data):
         """Send a raw IRC message to the server.
 
         Encodes, terminates and sends *data* to the server.
         """
         LOG.debug('<<< %s', data)
         data = self.codec.encode(data) + b'\r\n'
-        self.transport.write(data)
+        self.writer.write(data)
 
     def send(self, msg):
         """Send an :class:`IRCMessage`."""
-        self.send_raw(msg.raw)
+        self.send_line(msg.raw)
 
     # Specific commands for sending messages
 
     def set_nick(self, nick):
         """Ask the server to set our nick."""
-        self.send_raw('NICK {}'.format(nick))
+        self.send_line('NICK {}'.format(nick))
         self.nick = nick
         self.on_nick_changed(nick)
 
     def join(self, channel):
         """Join a channel."""
-        self.send_raw('JOIN {}'.format(channel))
+        self.send_line('JOIN {}'.format(channel))
 
     def leave(self, channel, message=None):
         """Leave a channel, with an optional message."""
-        self.send_raw('PART {} :{}'.format(channel, message or ''))
+        self.send_line('PART {} :{}'.format(channel, message or ''))
 
     def quit(self, message=None, reconnect=False):
         """Leave the server.
@@ -342,11 +350,11 @@ class IRCClient(asyncio.Protocol):
         after the server closes the connection.
         """
         self._exiting = not reconnect
-        self.send_raw('QUIT :{}'.format(message or ''))
+        self.send_line('QUIT :{}'.format(message or ''))
 
     def msg(self, to, message):
         """Send *message* to a channel/nick."""
-        self.send_raw('PRIVMSG {} :{}'.format(to, message))
+        self.send_line('PRIVMSG {} :{}'.format(to, message))
 
     def act(self, to, action):
         """Send *action* as a CTCP ACTION to a channel/nick."""
@@ -354,18 +362,18 @@ class IRCClient(asyncio.Protocol):
 
     def notice(self, to, message):
         """Send *message* as a NOTICE to a channel/nick."""
-        self.send_raw('NOTICE {} :{}'.format(to, message))
+        self.send_line('NOTICE {} :{}'.format(to, message))
 
     def set_topic(self, channel, topic):
         """Try and set a channel's topic."""
-        self.send_raw('TOPIC {} :{}'.format(channel, topic))
+        self.send_line('TOPIC {} :{}'.format(channel, topic))
 
     def get_topic(self, channel):
         """Ask server to send the topic for *channel*.
 
         Will cause :meth:`on_topic_changed` at some point in the future.
         """
-        self.send_raw('TOPIC {}'.format(channel))
+        self.send_line('TOPIC {}'.format(channel))
 
     def ctcp_query(self, to, command, data=None):
         """Send CTCP query."""
@@ -419,7 +427,7 @@ class IRCClient(asyncio.Protocol):
 
     def irc_PING(self, msg):
         """IRC PING/PONG keepalive."""
-        self.send_raw('PONG :{}'.format(msg.params[-1]))
+        self.send_line('PONG :{}'.format(msg.params[-1]))
 
     def irc_NICK(self, msg):
         """Somebody's nick changed."""
@@ -593,14 +601,14 @@ def main():
         self.join('#cs-york-dev')
         self.act('#cs-york-dev', 'arrives')
     bot.on_welcome = types.MethodType(on_welcome, bot)
-    bot.connect()
 
     def stop():
         bot.disconnect()
-        loop.stop()
+        # Give the client a chance to exit cleanly before forcing a stop
+        loop.call_soon(loop.stop)
     loop.add_signal_handler(signal.SIGINT, stop)
 
-    loop.run_forever()
+    loop.run_until_complete(bot.run())
     loop.close()
 
 

@@ -205,8 +205,8 @@ class BotClient(IRCClient):
         """
         self.bot.post_event(event)
 
-    def connection_made(self, transport):
-        super().connection_made(transport)
+    def connection_made(self):
+        super().connection_made()
         # TODO: do this in on_welcome() instead?
         self.request_capabilities(['account-notify', 'extended-join'])
         self.emit_new('core.raw.connected')
@@ -215,8 +215,8 @@ class BotClient(IRCClient):
         super().connection_lost(exc)
         self.emit_new('core.raw.disconnected', {'reason': repr(exc)})
 
-    def send_raw(self, line):
-        super().send_raw(line)
+    def send_line(self, line):
+        super().send_line(line)
         self.emit_new('core.raw.sent', {'message': line})
 
     def line_received(self, line):
@@ -337,7 +337,7 @@ class BotClient(IRCClient):
         Wait for an appropriate response (e.g. :meth:`on_capabilities_changed`)
         before assuming the request was successful.
         """
-        self.send_raw('CAP REQ :' + ' '.join(capabilities))
+        self.send_line('CAP REQ :' + ' '.join(capabilities))
 
     def irc_CAP(self, msg):
         """Handle "IRC Client Capabilities Extension" messages."""
@@ -360,7 +360,7 @@ class BotClient(IRCClient):
     def identify(self, target):
         """Find the account for a user or all users in a channel."""
         tag, query = self._WHO_IDENTIFY
-        self.send_raw('WHO {} {}t,{}'.format(target, query, tag))
+        self.send_line('WHO {} {}t,{}'.format(target, query, tag))
 
     def irc_354(self, msg):
         """Handle "formatted WHO" responses."""

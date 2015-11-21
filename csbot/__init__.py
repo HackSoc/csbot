@@ -77,13 +77,13 @@ def main(argv=None):
             loop.default_exception_handler(context)
         client.loop.set_exception_handler(handler)
 
-    # Connect the client and run the event loop
-    client.connect()
+    # Run the client
     def stop():
         client.disconnect()
-        client.loop.stop()
+        client.loop.call_soon(client.loop.stop)
     client.loop.add_signal_handler(signal.SIGINT, stop)
-    client.loop.run_forever()
+    client.loop.run_until_complete(client.run())
+    client.loop.close()
 
     # When the loop ends, run teardown
     bot.bot_teardown()

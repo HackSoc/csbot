@@ -1,65 +1,13 @@
 import unittest
 from unittest import mock
 
-from csbot.test import mock_client
+from csbot.test import IRCClientTestCase, run_client
 from csbot.irc import *
 
 
-class IRCClientTestCase(unittest.TestCase):
-    CLIENT_CONFIG = {}
-
-    def setUp(self):
-        self.client = mock_client(IRCClient, self.CLIENT_CONFIG)
-
-    def patch(self, attrs, create=False):
-        """Shortcut for patching attribute(s) of the client."""
-        if isinstance(attrs, str):
-            return mock.patch.object(self.client, attrs, create=create)
-        else:
-            return mock.patch.multiple(self.client, create=create,
-                                       **{k: mock.DEFAULT for k in attrs})
-
-    def receive_bytes(self, bytes):
-        """Shortcut for pushing received data to the client."""
-        self.client.data_received(bytes)
-
-    def assert_bytes_sent(self, bytes):
-        """Check the raw bytes that have been sent via the transport.
-
-        Compares *bytes* to the collection of everything sent to
-        ``transport.write(...)``.  Resets the mock so the next call will not
-        contain what was checked by this call.
-        """
-        sent = b''.join(args[0] for args, _ in self.client.transport.write.call_args_list)
-        self.assertEqual(sent, bytes)
-        self.client.transport.write.reset_mock()
-
-    def receive(self, lines):
-        """Shortcut to push a series of lines to the client."""
-        if isinstance(lines, str):
-            lines = [lines]
-        for l in lines:
-            self.client.line_received(l)
-
-    def assert_sent(self, lines):
-        """Check that a list of (unicode) strings have been sent.
-
-        Resets the mock so the next call will not contain what was checked by
-        this call.
-        """
-        if isinstance(lines, str):
-            lines = [lines]
-        self.client.send_raw.assert_has_calls([mock.call(l) for l in lines])
-        self.client.send_raw.reset_mock()
-
-    def connect(self, silent=True):
-        """Make the client "connect" to a fake transport, optionally removing
-        traces of the on-connect messages."""
-        self.client.connect()
-        if silent:
-            self.client.reset_mock()
-
 class TestIRCClientLineProtocol(IRCClientTestCase):
+    CLIENT_CLASS = IRCClient
+
     def test_buffer(self):
         """Check that incoming data is converted to a line-oriented protocol."""
         with self.patch('line_received') as m:
@@ -83,18 +31,23 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
                 mock.call(':nick!user@host JOIN #bar'),
             ])
 
+    @run_client
     def test_decode_ascii(self):
         """Check that plain ASCII ends up as a (unicode) string."""
         with self.patch('line_received') as m:
             self.receive_bytes(b':nick!user@host PRIVMSG #channel :hello\r\n')
+            yield
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :hello')
 
+    @run_client
     def test_decode_utf8(self):
         """Check that incoming UTF-8 is properly decoded."""
         with self.patch('line_received') as m:
             self.receive_bytes(b':nick!user@host PRIVMSG #channel :\xe0\xb2\xa0\r\n')
+            yield
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :ಠ')
 
+    @run_client
     def test_decode_cp1252(self):
         """Check that incoming CP1252 is properly decoded.
 
@@ -103,16 +56,18 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
         """
         with self.patch('line_received') as m:
             self.receive_bytes(b':nick!user@host PRIVMSG #channel :\x93\x94\r\n')
+            yield
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :“”')
 
     def test_encode(self):
         """Check that outgoing data is encoded as UTF-8."""
-        self.connect()
-        self.client.send_raw('PRIVMSG #channel :ಠ_ಠ')
+        self.client.send_line('PRIVMSG #channel :ಠ_ಠ')
         self.assert_bytes_sent(b'PRIVMSG #channel :\xe0\xb2\xa0_\xe0\xb2\xa0\r\n')
 
 
 class TestIRCClientBehaviour(IRCClientTestCase):
+    CLIENT_CLASS = IRCClient
+
     def test_auto_reconnect(self):
         with self.patch('connect') as m:
             self.client.connection_lost(None)
@@ -124,14 +79,12 @@ class TestIRCClientBehaviour(IRCClientTestCase):
             self.assertFalse(m.called)
 
     def test_PING_PONG(self):
-        self.connect()
         self.receive('PING :i.am.a.server')
         self.assert_sent('PONG :i.am.a.server')
 
     def test_RPL_WELCOME_nick_truncated(self):
         """IRC server might truncate the requested nick at sign-on, this should
         be reflected by the client's behaviour."""
-        self.connect()
         with self.patch('on_nick_changed') as m:
             self.client.set_nick('foo_bar')
             self.assertEqual(self.client.nick, 'foo_bar')
@@ -143,17 +96,17 @@ class TestIRCClientBehaviour(IRCClientTestCase):
 
     def test_ERR_NICKNAMEINUSE(self):
         """If nick is in use, try another one."""
-        self.connect()
-        nick = self.client.nick
-        new_nick = nick + '_'
-        self.receive(':a.server 433 * {} :Nickname is already in use.'.format(nick))
+        original_nick = 'MrRoboto'
+        self.client.set_nick(original_nick)
+        self.assert_sent('NICK {}'.format(original_nick))
+        self.receive(':a.server 433 * {} :Nickname is already in use.'.format(original_nick))
+        new_nick = original_nick + '_'
         self.assert_sent('NICK {}'.format(new_nick))
         self.assertEqual(self.client.nick, new_nick)
 
     def test_ERR_NICKNAMEINUSE_truncated(self):
         """IRC server might truncate requested nicks, so we should use a
         different strategy to resolve nick collisions if that happened."""
-        self.connect()
         self.client.set_nick('a_very_long_nick')
         self.receive(':a.server 433 * a_very_long_nick :Nickname is already in use.')
         # Should have triggered the same behaviour as above, appending _
@@ -172,6 +125,8 @@ class TestIRCClientBehaviour(IRCClientTestCase):
 
 class TestIRCClientEvents(IRCClientTestCase):
     """Test that particular methods are run as a consequence of messages."""
+    CLIENT_CLASS = IRCClient
+
     TEST_ROUTING = [
         # Generic message routing to irc_COMMAND
         (':nick!user@host PRIVMSG #channel :hello',
@@ -192,7 +147,6 @@ class TestIRCClientEvents(IRCClientTestCase):
 
     def test_routing(self):
         """Run every routing test case."""
-        self.connect()
         # Iterate over test cases
         for raw, method, args, kwargs in self.TEST_ROUTING:
             # Inform unittest which test case we're running
@@ -261,7 +215,6 @@ class TestIRCClientEvents(IRCClientTestCase):
 
     def test_events(self):
         """Run every event test case."""
-        self.connect()
         # Iterate over test cases
         for raw, method, args, kwargs in self.TEST_EVENTS:
             # Perform substitutions
@@ -279,6 +232,8 @@ class TestIRCClientEvents(IRCClientTestCase):
 class TestIRCClientCommands(IRCClientTestCase):
     """Test that calling various commands causes the appropriate messages to be
     sent to the server."""
+    CLIENT_CLASS = IRCClient
+
     def setUp(self):
         super().setUp()
         # All of these tests send things, so connect the mock transport
