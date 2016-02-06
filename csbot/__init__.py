@@ -2,6 +2,7 @@ import docopt
 import textwrap
 import sys
 import logging
+import logging.config
 import signal
 import os
 
@@ -41,24 +42,39 @@ def main(argv=None):
     elif args['--no-colour']:
         colour_logging = False
 
-    # Create and attach logging handler
-    handler = PrettyStreamHandler(colour=colour_logging)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter(
-        '[%(asctime)s] (%(levelname).1s:%(name)s) %(message)s',
-        '%Y/%m/%d %H:%M:%S'))
-    rootlogger = logging.getLogger('')
-    rootlogger.addHandler(handler)
-
-    # Set logging level for the bot
-    rootlogger.setLevel(logging.DEBUG if args['--debug'] else logging.INFO)
-    # Set logging level for IRCClient
-    logging.getLogger('csbot.irc').setLevel(
-        logging.DEBUG if args['--debug-irc'] else logging.INFO)
-    # Set logging level for asyncio - default is WARNING because "poll took x
-    # seconds" messages are annoying
-    logging.getLogger('asyncio').setLevel(
-        logging.DEBUG if args['--debug-asyncio'] else logging.WARNING)
+    # Configure logging
+    logging.config.dictConfig({
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'default': {
+                'format': '[{asctime}] ({levelname[0]}:{name}) {message}',
+                'datefmt': '%Y/%m/%d %H:%M:%S',
+                'style': '{',
+            },
+        },
+        'handlers': {
+            'pretty': {
+                'class': 'csbot.PrettyStreamHandler',
+                'level': 'DEBUG',
+                'formatter': 'default',
+                'colour': colour_logging,
+            },
+        },
+        'root': {
+            'level': 'DEBUG' if args['--debug'] else 'INFO',
+            'handlers': ['pretty'],
+        },
+        'loggers': {
+            'csbot.irc': {
+                'level': 'DEBUG' if args['--debug-irc'] else 'INFO',
+            },
+            'asyncio': {
+                # Default is WARNING because 'poll took x seconds' messages are annoying
+                'level': 'DEBUG' if args['--debug-asyncio'] else 'WARNING',
+            },
+        }
+    })
 
     # Create and initialise the bot
     with open(args['<config>'], 'r') as f:
