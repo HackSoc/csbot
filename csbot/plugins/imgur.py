@@ -35,28 +35,29 @@ class Imgur(Plugin):
 
         try:
             if kind == '':
-                title = self._format_image(self.client.get_image(id))
+                nsfw, title = self._format_image(self.client.get_image(id))
             elif kind == 'a':
-                title = self._format_album(self.client.get_album(id), url.fragment)
+                nsfw, title = self._format_album(self.client.get_album(id), url.fragment)
             elif kind == 'gallery':
                 data = self.client.gallery_item(id)
                 if data.is_album:
-                    title = self._format_album(data, None)
+                    nsfw, title = self._format_album(data, None)
                 else:
-                    title = self._format_image(data)
+                    nsfw, title = self._format_image(data)
             else:
-                title = None
+                nsfw, title = False, None
         except ImgurClientError as e:
             return LinkInfoResult(url, str(e), is_error=True)
 
         if title:
-            return LinkInfoResult(url, title)
+            return LinkInfoResult(url, title, nsfw=nsfw)
         else:
             return None
 
     @staticmethod
     def _format_image(data):
-        return data.title
+        title = data.title or ''
+        return data.nsfw or 'nsfw' in title.lower(), title
 
     @staticmethod
     def _format_album(data, image_id):
@@ -66,4 +67,4 @@ class Imgur(Plugin):
         image = images.get(image_id)
         if image and image['title']:
             title += ': ' + image['title']
-        return title
+        return data.nsfw or 'nsfw' in title.lower(), title

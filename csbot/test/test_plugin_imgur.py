@@ -144,6 +144,17 @@ test_cases = [
     ),
 ]
 
+nsfw_test_cases = [
+    (
+        'http://imgur.com/a/cwXza',
+        'https://api.imgur.com/3/album/cwXza',
+        200,
+        'application/json',
+        'imgur_nsfw_album.json',
+        'NSFW Celeb GIFS (81 images)',
+    ),
+]
+
 
 class TestImgurLinkInfoIntegration(BotTestCase):
     CONFIG = """\
@@ -159,6 +170,19 @@ class TestImgurLinkInfoIntegration(BotTestCase):
 
     def test_integration(self):
         for url, api_url, status, content_type, fixture, title in test_cases:
+            with self.subTest(url=url), responses.RequestsMock() as rsps:
+                rsps.add(responses.GET, api_url, status=status,
+                         body=read_fixture_file(fixture),
+                         content_type=content_type)
+                result = self.linkinfo.get_link_info(url)
+                if title is None:
+                    self.assert_(result.is_error)
+                else:
+                    self.assert_(not result.is_error)
+                    self.assertEqual(title, result.text)
+
+    def test_integration_nsfw(self):
+        for url, api_url, status, content_type, fixture, title in nsfw_test_cases:
             with self.subTest(url=url), responses.RequestsMock() as rsps:
                 rsps.add(responses.GET, api_url, status=status,
                          body=read_fixture_file(fixture),
