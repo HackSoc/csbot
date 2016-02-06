@@ -166,6 +166,10 @@ def ordinal(value):
     return ordval
 
 
+def pluralize(n, singular, plural):
+    return '{0} {1}'.format(n, singular if n == 1 else plural)
+
+
 def is_ascii(s):
     """Returns true if all characters in a string can be represented in ASCII.
     """

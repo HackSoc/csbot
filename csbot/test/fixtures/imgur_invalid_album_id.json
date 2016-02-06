@@ -1,0 +1,1 @@
+{"data":{"error":"Unable to find an album with the id, not_an_album.","request":"\/3\/album\/not_an_album","method":"GET"},"success":false,"status":404}

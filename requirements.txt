@@ -5,6 +5,7 @@ pymongo>=2.8.0
 requests>=2.9.1,<3.0.0
 lxml>=2.3.5
 google-api-python-client>=1.4.1,<2.0.0
+imgurpython>=1.1.6,<2.0.0
 isodate>=0.5.1
 rollbar
 
