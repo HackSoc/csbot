@@ -10,6 +10,8 @@ rollbar
 
 # Requirements for unit testing
 responses
+coverage>=4.0.3,<5.0.0
+python-coveralls>=2.6.0,<2.7.0
 
 # Requirements for documentation
 # (commented out to save build time)
