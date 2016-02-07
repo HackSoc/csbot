@@ -101,15 +101,13 @@ class TestImmediateEventRunner(unittest.TestCase):
 
 
 class TestEvent(unittest.TestCase):
-    class DummyProtocol(object):
+    class DummyBot(object):
         pass
 
-    def _assert_events_equal(self, e1, e2, protocol=True, bot=True,
+    def _assert_events_equal(self, e1, e2, bot=True,
                              event_type=True, datetime=True, data=True):
         """Test helper for comparing two events.  ``<property>=False`` disables
         checking that property of the events."""
-        if protocol:
-            self.assertIs(e1.protocol, e2.protocol)
         if bot:
             self.assertIs(e1.bot, e2.bot)
         if event_type:
@@ -124,26 +122,18 @@ class TestEvent(unittest.TestCase):
         # Test data
         data = {'a': 1, 'b': 2, 'c': None}
         dt = datetime.datetime.now()
-        bot = object()
-        protocol = self.DummyProtocol()
-        protocol.bot = bot
+        bot = self.DummyBot()
 
         # Create the event
-        e = csbot.events.Event(protocol, 'event.type', data)
+        e = csbot.events.Event(bot, 'event.type', data)
         # Check that the event's datetime can be reasonably considered "now"
         self.assertTrue(dt <= e.datetime)
         self.assertTrue(abs(e.datetime - dt) < datetime.timedelta(seconds=1))
-        # Check that the protocol, event type and data made it through
-        self.assertIs(e.protocol, protocol)
+        # Check that the bot, event type and data made it through
         self.assertIs(e.bot, bot)
         self.assertEqual(e.event_type, 'event.type')
         for k, v in data.items():
             self.assertEqual(e[k], v)
-
-        # Check that .bot really is a shortcut to .protocol.bot
-        broken_protocol = self.DummyProtocol()
-        broken_event = csbot.events.Event(broken_protocol, 'broken')
-        self.assertRaises(AttributeError, lambda: broken_event.bot)
 
     def test_extend(self):
         # Test data
@@ -151,12 +141,10 @@ class TestEvent(unittest.TestCase):
         data2 = {'c': 'foo', 'd': 'bar'}
         et1 = 'event.type'
         et2 = 'other.event'
-        bot = object()
-        protocol = self.DummyProtocol()
-        protocol.bot = bot
+        bot = self.DummyBot()
 
         # Create an event
-        e1 = csbot.events.Event(protocol, et1, data1)
+        e1 = csbot.events.Event(bot, et1, data1)
 
         # Unchanged event
         e2 = csbot.events.Event.extend(e1)

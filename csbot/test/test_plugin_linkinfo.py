@@ -161,7 +161,7 @@ class TestLinkInfoPlugin(BotTestCase):
 
         for msg, urls in test_cases:
             with self.subTest(msg=msg), mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-                self.protocol_.line_received(':nick!user@host PRIVMSG #channel :' + msg)
+                self.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
                 get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
     def test_scan_privmsg_rate_limit(self):
@@ -174,8 +174,8 @@ class TestLinkInfoPlugin(BotTestCase):
         count = int(self.linkinfo.config_get('rate_limit_count'))
         for i in range(count):
             with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-                self.protocol_.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
+                self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
                 get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
         with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-            self.protocol_.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
+            self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
             self.assert_(not get_link_info.called)

@@ -75,7 +75,7 @@ class Tell(Plugin):
         msgs = self.getMessages(event.user)
         if msgs.count() > 1:
             deliver_to = event.user
-            event.protocol.msg(event.channel,
+            event.bot.msg(event.channel,
                     "{}, several people left messages for you. \
                     Please check the PMs I'm sending you.".format(event.user))
         else:
@@ -84,7 +84,7 @@ class Tell(Plugin):
             from_user = msg['from']
             time = msg['time'].strftime('%H:%M')
             message = msg['message']
-            self.sendMessage(event.protocol, deliver_to,
+            self.sendMessage(event.bot, deliver_to,
                     from_user, event.user, message, time)
             # Remove the message now we've delivered it
             self.db.messages.remove(msg['_id'])
@@ -105,7 +105,7 @@ class Tell(Plugin):
         return (self.db.messages.find({'to': user}).count() > 0)
 
     def action(self, user, channel, action):
-        print "*", action
+        print("*", action)
 
     @features.command('messages')
     def messages_command(self, event):

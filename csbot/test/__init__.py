@@ -184,7 +184,6 @@ class BotTestCase(IRCClientTestCase):
         super().setUp()
         self.client.bot_setup()
         # Keep old tests happy with an alias...
-        self.protocol_ = self.client
         self.bot_ = self.client
 
         for p in self.PLUGINS:
@@ -193,7 +192,6 @@ class BotTestCase(IRCClientTestCase):
     def tearDown(self):
         """Lose references to bot and plugins."""
         self.bot_ = None
-        self.protocol_ = None
         for p in self.PLUGINS:
             setattr(self, p, None)
         super().tearDown()

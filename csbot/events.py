@@ -64,18 +64,18 @@ class Event(dict):
     Events are dicts of event information, plus some attributes which are
     applicable for all events.
     """
-    #: The :class:`.BotProtocol` which triggered the event.
-    protocol = None
+    #: The :class:`.Bot` which triggered the event.
+    bot = None
     #: The name of the event.
     event_type = None
     #: The value of :meth:`datetime.datetime.now()` when the event was
     #: triggered.
     datetime = None
 
-    def __init__(self, protocol, event_type, data=None):
+    def __init__(self, bot, event_type, data=None):
         dict.__init__(self, data if data is not None else {})
 
-        self.protocol = protocol
+        self.bot = bot
         self.event_type = event_type
         self.datetime = datetime.now()
 
@@ -87,7 +87,7 @@ class Event(dict):
         event type, preserving existing information.  For example:
         """
         # Duplicate event information
-        e = cls(event.protocol,
+        e = cls(event.bot,
                 event.event_type,
                 event)
         e.datetime = event.datetime
@@ -103,15 +103,10 @@ class Event(dict):
     def reply(self, message):
         """Send a reply.
 
-        For messages that have a ``reply_to`` key, instruct the :attr:`protocol`
+        For messages that have a ``reply_to`` key, instruct the :attr:`bot`
         to send a reply.
         """
-        self.protocol.reply(self['reply_to'], message)
-
-    @property
-    def bot(self):
-        """Shortcut to ``self.protocol.bot``."""
-        return self.protocol.bot
+        self.bot.reply(self['reply_to'], message)
 
 
 class CommandEvent(Event):

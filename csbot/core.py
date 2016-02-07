@@ -53,7 +53,6 @@ class Bot(SpecialPlugin, IRCClient):
 
     def __init__(self, config=None, loop=None):
         # Initialise plugin
-        # TODO: it burns, the code, it burns
         SpecialPlugin.__init__(self, self)
 
         # Load configuration
@@ -88,9 +87,6 @@ class Bot(SpecialPlugin, IRCClient):
             self.reply = self.notice
         else:
             self.reply = self.msg
-
-        # TODO: oh god remove this
-        self.bot = self
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -143,14 +139,14 @@ class Bot(SpecialPlugin, IRCClient):
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
         for c in self.config_get('channels').split():
-            event.protocol.join(c)
+            event.bot.join(c)
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
         command = CommandEvent.parse_command(
-            event, self.config_get('command_prefix'), event.protocol.nick)
+            event, self.config_get('command_prefix'), event.bot.nick)
         if command is not None:
             self.post_event(command)
 
