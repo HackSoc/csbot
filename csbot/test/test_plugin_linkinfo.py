@@ -99,6 +99,20 @@ if LIBXML_VERSION >= (2, 8, 0):
     ]
 
 
+error_test_cases = [
+    (
+        "http://example.com/empty-title-tag",
+        "text/html",
+        b'<html><head><title></title></head><body></body></html>',
+    ),
+    (
+        "http://example.com/whitespace-title-tag",
+        "text/html",
+        b'<html><head><title>   </title></head><body></body></html>',
+    ),
+]
+
+
 class TestLinkInfoPlugin(BotTestCase):
     CONFIG = """\
     [@bot]
@@ -117,6 +131,17 @@ class TestLinkInfoPlugin(BotTestCase):
             with self.subTest(url=url):
                 result = self.linkinfo.get_link_info(url)
                 self.assertEqual(result.text, expected_title, url)
+
+    @responses.activate
+    def test_errors(self):
+        for url, content_type, body in error_test_cases:
+            responses.add(responses.GET, url, body=body,
+                          content_type=content_type)
+
+        for url, _, _ in error_test_cases:
+            with self.subTest(url=url):
+                result = self.linkinfo.get_link_info(url)
+                self.assert_(result.is_error)
 
     def test_scan_privmsg(self):
         # Test cases as (message, URLs) pairs

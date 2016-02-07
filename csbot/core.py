@@ -123,7 +123,7 @@ class Bot(SpecialPlugin):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
         command = CommandEvent.parse_command(
-            event, self.config_get('command_prefix'))
+            event, self.config_get('command_prefix'), event.protocol.nick)
         if command is not None:
             self.post_event(command)
 
