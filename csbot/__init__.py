@@ -6,7 +6,7 @@ import os
 import click
 import rollbar
 
-from .core import Bot, BotClient
+from .core import Bot
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -65,11 +65,8 @@ def main(config, debug, debug_irc, debug_asyncio, debug_all, colour_logging, use
     })
 
     # Create and initialise the bot
-    bot = Bot(config)
-    bot.bot_setup()
-
-    # Create the bot client
-    client = BotClient(bot)
+    client = Bot(config)
+    client.bot_setup()
 
     # Configure Rollbar for exception reporting
     if use_rollbar:
@@ -89,7 +86,7 @@ def main(config, debug, debug_irc, debug_asyncio, debug_all, colour_logging, use
     client.loop.close()
 
     # When the loop ends, run teardown
-    bot.bot_teardown()
+    client.bot_teardown()
 
 
 class PrettyStreamHandler(logging.StreamHandler):

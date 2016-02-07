@@ -1,5 +1,3 @@
-import unittest
-from unittest import mock
 import asyncio
 import asyncio.test_utils
 import os
@@ -9,7 +7,7 @@ import gc
 import functools
 from unittest import mock
 
-from csbot.core import Bot, BotClient
+from csbot.core import Bot
 
 
 class MockStreamReader(asyncio.StreamReader):
@@ -181,14 +179,13 @@ class BotTestCase(IRCClientTestCase):
 
     def setUp(self):
         """Create bot and plugin bindings."""
-        # Create bot
-        self.bot_ = Bot(StringIO(dedent(self.CONFIG)))
-        self.bot_.bot_setup()
         # Client setup
-        self.CLIENT_CLASS = functools.partial(BotClient, self.bot_)
+        self.CLIENT_CLASS = functools.partial(Bot, StringIO(dedent(self.CONFIG)))
         super().setUp()
+        self.client.bot_setup()
         # Keep old tests happy with an alias...
         self.protocol_ = self.client
+        self.bot_ = self.client
 
         for p in self.PLUGINS:
             setattr(self, p, self.bot_.plugins[p])

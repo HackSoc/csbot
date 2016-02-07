@@ -1,6 +1,5 @@
 import logging
 import collections
-import signal
 
 import configparser
 import straight.plugin
@@ -13,15 +12,12 @@ from csbot.events import Event, CommandEvent
 from .irc import IRCClient, IRCUser
 
 
-class Bot(SpecialPlugin):
-    """The IRC bot.
+class PluginError(Exception):
+    pass
 
-    Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
-    losing and regaining connection.
 
-    *config* is an optional file-like object to read configuration from, which
-    is parsed with :mod:`configparser`.
-    """
+class Bot(SpecialPlugin, IRCClient):
+    # TODO: use IRCUser instances instead of raw user string
 
     #: Default configuration values
     CONFIG_DEFAULTS = {
@@ -53,8 +49,12 @@ class Bot(SpecialPlugin):
     available_plugins = build_plugin_dict(straight.plugin.load(
         'csbot.plugins', subclasses=Plugin))
 
-    def __init__(self, config=None):
-        super(Bot, self).__init__(self)
+    _WHO_IDENTIFY = ('1', '%na')
+
+    def __init__(self, config=None, loop=None):
+        # Initialise plugin
+        # TODO: it burns, the code, it burns
+        SpecialPlugin.__init__(self, self)
 
         # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
@@ -71,6 +71,33 @@ class Bot(SpecialPlugin):
 
         # Event runner
         self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
+
+        # Initialise IRCClient from Bot configuration
+        IRCClient.__init__(
+            self,
+            loop=loop,
+            nick=self.config_get('nickname'),
+            username=self.config_get('username'),
+            host=self.config_get('irc_host'),
+            port=self.config_get('irc_port'),
+            password=self.config_get('password'),
+        )
+
+        # Plumb in reply(...) method
+        if self.config_getboolean('use_notice'):
+            self.reply = self.notice
+        else:
+            self.reply = self.msg
+
+        # TODO: oh god remove this
+        self.bot = self
+
+        # Keeps partial name lists between RPL_NAMREPLY and
+        # RPL_ENDOFNAMES events
+        self.names_accumulator = collections.defaultdict(list)
+
+        # Acknowledged capabilities
+        self.capabilities = set()
 
     def bot_setup(self):
         """Load plugins defined in configuration and run setup methods.
@@ -156,43 +183,7 @@ class Bot(SpecialPlugin):
     def show_plugins(self, e):
         e.reply('loaded plugins: ' + ', '.join(self.plugins))
 
-
-class PluginError(Exception):
-    pass
-
-
-class BotClient(IRCClient):
-    # TODO: use IRCUser instances instead of raw user string
-
-    log = logging.getLogger('csbot.protocol')
-
-    _WHO_IDENTIFY = ('1', '%na')
-
-    def __init__(self, bot, loop=None):
-        # Initialise IRCClient from Bot configuration
-        super().__init__(
-            loop=loop,
-            nick=bot.config_get('nickname'),
-            username=bot.config_get('username'),
-            host=bot.config_get('irc_host'),
-            port=bot.config_get('irc_port'),
-            password=bot.config_get('password'),
-        )
-
-        # Plumb in reply(...) method
-        if bot.config_getboolean('use_notice'):
-            self.reply = self.notice
-        else:
-            self.reply = self.msg
-
-        self.bot = bot
-
-        # Keeps partial name lists between RPL_NAMREPLY and
-        # RPL_ENDOFNAMES events
-        self.names_accumulator = collections.defaultdict(list)
-
-        # Acknowledged capabilities
-        self.capabilities = set()
+    # Implement IRCClient events
 
     def emit_new(self, event_type, data=None):
         """Shorthand for firing a new event; the new event is returned.
