@@ -37,6 +37,8 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("1 + "), "Error, invalid syntax (<unknown>, line 1)")
         self.assertEqual(self.calc._calc("e = 1"), "Error, invalid calculation")
         self.assertEqual(self.calc._calc("sgdsdg + 3"), "Error, unknown constant or function")
+        self.assertEqual(self.calc._calc("2.0 << 2.0"), "Error, non-integer shift values")
+        self.assertEqual(self.calc._calc("2.0 >> 2.0"), "Error, non-integer shift values")
         self.assertEqual(self.calc._calc("1 << (1 << (1 << 10))"), "Error, would take too long to calculate")
         self.assertEqual(self.calc._calc("5 in 5"), "Error, invalid operator")
         self.assertEqual(self.calc._calc("429496729 << 1000"), "Error, result too long to be printed")

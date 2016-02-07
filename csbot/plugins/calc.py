@@ -1,7 +1,6 @@
 import ast
 import operator as op
 import math
-import numbers
 
 from csbot.plugin import Plugin
 from csbot.util import pairwise
@@ -12,7 +11,7 @@ def is_too_long(n):
     return isinstance(n, int) and n != 0 and math.log10(abs(n)) > 127
 
 
-def limited_power(a, b):
+def guarded_power(a, b):
     """A limited power function to make sure that
     commands do not take too long to process.
     """
@@ -24,15 +23,18 @@ def limited_power(a, b):
         raise CalcError("too large to represent as float")
 
 
-def limited_lshift(a, b):
-    if not isinstance(a, int) or not isinstance(b, int):
-        # floats are handled more gracefully
-        pass
+def guarded_lshift(a, b):
+    if not (isinstance(a, int) and isinstance(b, int)):
+        raise CalcError("non-integer shift values")
     elif b.bit_length() > 64:
         # Only need to check how much the number is being shifted by
         raise CalcError("would take too long to calculate")
     return op.lshift(a, b)
 
+def guarded_rshift(a, b):
+    if not (isinstance(a, int) and isinstance(b, int)):
+        raise CalcError("non-integer shift values")
+    return op.rshift(a, b)
 
 # Available operators
 operators = {
@@ -49,9 +51,9 @@ operators = {
     ast.BitXor: op.xor,
     ast.BitAnd: op.and_,
     ast.FloorDiv: op.floordiv,
-    ast.Pow: limited_power,
-    ast.LShift: limited_lshift,
-    ast.RShift: op.rshift,
+    ast.Pow: guarded_power,
+    ast.LShift: guarded_lshift,
+    ast.RShift: guarded_rshift,
     # unaryop
     ast.Invert: op.inv,
     ast.Not: op.not_,
@@ -69,7 +71,7 @@ operators = {
 }
 
 
-def limited_factorial(a):
+def guarded_factorial(a):
     # Any larger than this would be too long to output regardless
     if a > 100:
         raise CalcError("would take too long to calculate")
@@ -89,7 +91,7 @@ identifiers = {
 
     # Available functions
     "ceil": math.ceil,
-    "factorial": limited_factorial,
+    "factorial": guarded_factorial,
     "floor": math.floor,
     "isfinite": math.isfinite,
     "isinf": math.isinf,
@@ -115,7 +117,7 @@ class CalcEval(ast.NodeVisitor):
         return self.visit(node.body[0]) # Special case, since we're only dealing with one-liners
 
     def visit_Expr(self, node):
-        return self.visit(node.value)
+        return self.visit(node.value) # Reimplementation needed or it goes via generic_visit
 
     def visit_BinOp(self, node):
         left = self.visit(node.left)
@@ -162,7 +164,6 @@ class CalcError(Exception):
 
 class Calc(Plugin):
     """A plugin that calculates things.
-    Heavily based on http://stackoverflow.com/a/9558001/995325
     """
 
     def _calc(self, calc_str):
@@ -186,7 +187,6 @@ class Calc(Plugin):
 
     @Plugin.command('calc')
     def do_some_calc(self, e):
-        """
-        What? You don't have a calculator handy?
+        """What? You don't have a calculator handy?
         """
         e.reply(self._calc(e["data"]))
