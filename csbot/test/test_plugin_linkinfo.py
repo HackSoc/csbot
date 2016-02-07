@@ -3,7 +3,7 @@ import responses
 from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
 
-from csbot.test import BotTestCase
+from csbot.test import BotTestCase, run_client
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
@@ -120,6 +120,11 @@ class TestLinkInfoPlugin(BotTestCase):
     """
 
     PLUGINS = ['linkinfo']
+
+    def setUp(self):
+        super().setUp()
+        # Set nick, etc.
+        self.client.connection_made()
 
     @responses.activate
     def test_encoding_handling(self):
