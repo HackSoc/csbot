@@ -174,13 +174,14 @@ class BotTestCase(IRCClientTestCase):
     bot from :attr:`CONFIG`, binding it to ``self.bot``, and also binding every
     plugin in :attr:`PLUGINS` to ``self.plugin``.
     """
+    BOT_CLASS = Bot
     CONFIG = ""
     PLUGINS = []
 
     def setUp(self):
         """Create bot and plugin bindings."""
         # Client setup
-        self.CLIENT_CLASS = functools.partial(Bot, StringIO(dedent(self.CONFIG)))
+        self.CLIENT_CLASS = functools.partial(self.BOT_CLASS, StringIO(dedent(self.CONFIG)))
         super().setUp()
         self.client.bot_setup()
         # Keep old tests happy with an alias...
