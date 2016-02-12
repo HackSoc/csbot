@@ -17,9 +17,10 @@ class ImmediateEventRunner(object):
     a usable state if an exception propagates out of it in response to running
     an event.
     """
-    def __init__(self, handle_event):
+    def __init__(self, loop, handle_event):
         self.events = deque()
         self.running = False
+        self.loop = loop
         self.handle_event = handle_event
 
     def __enter__(self):

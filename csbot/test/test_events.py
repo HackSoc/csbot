@@ -1,19 +1,21 @@
 import unittest
 import datetime
-import functools
-
-import csbot.events
 import collections
 
+import csbot.events
+from csbot.test import AsyncTestCase, run_coroutine
 
-class TestImmediateEventRunner(unittest.TestCase):
+
+class TestImmediateEventRunner(AsyncTestCase):
     def setUp(self):
-        self.runner = csbot.events.ImmediateEventRunner(self.handle_event)
+        super().setUp()
+        self.runner = csbot.events.ImmediateEventRunner(self.loop, self.handle_event)
         self.handled_events = []
 
     def tearDown(self):
         self.runner = None
         self.handled_events = None
+        super().tearDown()
 
     def handle_event(self, event):
         """Record objects passed through the event handler in order.  If they

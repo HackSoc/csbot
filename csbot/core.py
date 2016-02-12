@@ -62,15 +62,6 @@ class Bot(SpecialPlugin, IRCClient):
         if config is not None:
             self.config_root.read_file(config)
 
-        # Plugin management
-        self.plugins = PluginManager([self], self.available_plugins,
-                                     self.config_get('plugins').split(),
-                                     [self])
-        self.commands = {}
-
-        # Event runner
-        self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
-
         # Initialise IRCClient from Bot configuration
         IRCClient.__init__(
             self,
@@ -87,6 +78,16 @@ class Bot(SpecialPlugin, IRCClient):
             self.reply = self.notice
         else:
             self.reply = self.msg
+
+        # Plugin management
+        self.plugins = PluginManager([self], self.available_plugins,
+                                     self.config_get('plugins').split(),
+                                     [self])
+        self.commands = {}
+
+        # Event runner
+        self.events = events.ImmediateEventRunner(self.loop,
+                                                  self.plugins.fire_hooks)
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
