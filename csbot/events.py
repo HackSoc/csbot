@@ -1,6 +1,7 @@
 from datetime import datetime
 from collections import deque
 import re
+import asyncio
 
 from csbot.util import parse_arguments
 
@@ -19,13 +20,15 @@ class ImmediateEventRunner(object):
     """
     def __init__(self, loop, handle_event):
         self.events = deque()
-        self.running = False
+        self.future = None
         self.loop = loop
+        if not asyncio.iscoroutinefunction(handle_event):
+            handle_event = asyncio.coroutine(handle_event)
         self.handle_event = handle_event
 
     def __enter__(self):
         """On entering the context, mark the event queue as running."""
-        self.running = True
+        pass
 
     def __exit__(self, exc_type, exc_value, traceback):
         """On exiting the context, reset to an empty non-running queue.
@@ -34,8 +37,8 @@ class ImmediateEventRunner(object):
         exiting abnormally, the rest of the event queue will be purged so that
         the next root event can be handled normally.
         """
-        self.running = False
         self.events.clear()
+        self.future = None
 
     def post_event(self, event):
         """Post *event* to be handled soon.
@@ -52,11 +55,16 @@ class ImmediateEventRunner(object):
         a breadth-first traversal of the event tree.
         """
         self.events.append(event)
-        if not self.running:
-            with self:
-                while len(self.events) > 0:
-                    e = self.events.popleft()
-                    self.handle_event(e)
+        if not self.future:
+            self.future = self.loop.create_task(self.run_events())
+        return self.future
+
+    @asyncio.coroutine
+    def run_events(self):
+        with self:
+            while len(self.events) > 0:
+                e = self.events.popleft()
+                yield from self.handle_event(e)
 
 
 class Event(dict):

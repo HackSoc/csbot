@@ -13,9 +13,9 @@ class TestImmediateEventRunner(AsyncTestCase):
         self.handled_events = []
 
     def tearDown(self):
+        super().tearDown()
         self.runner = None
         self.handled_events = None
-        super().tearDown()
 
     def handle_event(self, event):
         """Record objects passed through the event handler in order.  If they
@@ -24,17 +24,19 @@ class TestImmediateEventRunner(AsyncTestCase):
         if isinstance(event, collections.Callable):
             event()
 
+    @run_coroutine
     def test_values(self):
         """Check that basic values are passed through the event queue
         unmolested."""
         # Test that things actually get through
-        self.runner.post_event('foo')
+        yield from self.runner.post_event('foo')
         self.assertEqual(self.handled_events, ['foo'])
         # The event runner doesn't care what it's passing through
         for x in ['bar', 1.3, None, object]:
-            self.runner.post_event(x)
+            yield from self.runner.post_event(x)
             self.assertIs(self.handled_events[-1], x)
 
+    @run_coroutine
     def test_event_chain(self):
         """Check that chains of events get handled."""
         def f1():
@@ -46,9 +48,10 @@ class TestImmediateEventRunner(AsyncTestCase):
         def f3():
             pass
 
-        self.runner.post_event(f1)
+        yield from self.runner.post_event(f1)
         self.assertEqual(self.handled_events, [f1, f2, f3])
 
+    @run_coroutine
     def test_event_tree(self):
         """Check that trees of events are handled breadth-first."""
         def f1():
@@ -71,10 +74,11 @@ class TestImmediateEventRunner(AsyncTestCase):
         def f6():
             pass
 
-        self.runner.post_event(f1)
+        yield from self.runner.post_event(f1)
         self.assertEqual(self.handled_events,
                          [f1, f2, f3, f4, f5, f6, f3, f5, f6])
 
+    @run_coroutine
     def test_exception_recovery(self):
         """Check that exceptions propagate out of the event runner but don't
         leave it broken.
@@ -96,9 +100,10 @@ class TestImmediateEventRunner(AsyncTestCase):
         def f4():
             pass
 
-        self.assertRaises(Exception, self.runner.post_event, f1)
+        with self.assertRaises(Exception):
+            yield from self.runner.post_event(f1)
         self.assertEqual(self.handled_events, [f1])
-        self.runner.post_event(f3)
+        yield from self.runner.post_event(f3)
         self.assertEqual(self.handled_events, [f1, f3, f4])
 
 

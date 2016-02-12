@@ -153,6 +153,7 @@ class TestLinkInfoPlugin(BotTestCase):
                 result = self.linkinfo.get_link_info(url)
                 self.assert_(result.is_error)
 
+    @run_client
     def test_scan_privmsg(self):
         # Test cases as (message, URLs) pairs
         test_cases = [
@@ -162,8 +163,10 @@ class TestLinkInfoPlugin(BotTestCase):
         for msg, urls in test_cases:
             with self.subTest(msg=msg), mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
                 self.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
+                yield
                 get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
+    @run_client
     def test_scan_privmsg_rate_limit(self):
         """Test that we won't respond too frequently to URLs in messages.
 
@@ -175,7 +178,9 @@ class TestLinkInfoPlugin(BotTestCase):
         for i in range(count):
             with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
                 self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
+                yield
                 get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
         with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
             self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
+            yield
             self.assert_(not get_link_info.called)
