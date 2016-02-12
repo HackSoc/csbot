@@ -19,16 +19,29 @@ class MockStreamWriter(asyncio.StreamWriter):
         self._reader.feed_eof()
 
 
-class IRCClientTestCase(asyncio.test_utils.TestCase):
+class AsyncTestCase(asyncio.test_utils.TestCase):
+    def setUp(self):
+        super().setUp()
+        # Create event loop and ensure everything will be using it explicitly
+        self.loop = asyncio.new_event_loop()
+        self.set_event_loop(self.loop)  # Disables "default" event loop!
+
+    def tearDown(self):
+        # Give queued tasks a final chance to complete - borrowed from
+        # StreamReaderTests in tests/test_streams.py in asyncio.
+        asyncio.test_utils.run_briefly(self.loop)
+        self.loop.close()
+        gc.collect()
+        super().tearDown()
+
+
+class IRCClientTestCase(AsyncTestCase):
     #: The IRCClient (sub)class to instrument
     CLIENT_CLASS = None
 
     def setUp(self):
         assert self.CLIENT_CLASS is not None, "no CLIENT_CLASS set on test case"
         super().setUp()
-        # Create event loop and ensure everything will be using it explicitly
-        self.loop = asyncio.new_event_loop()
-        self.set_event_loop(self.loop)  # Disables "default" event loop!
         # Create client and make it use our event loop
         self.client = self.CLIENT_CLASS(loop=self.loop)
         # Create fake stream reader/writer
@@ -40,14 +53,6 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
 
         # Mock all the things!
         self.client.send_line = mock.Mock(wraps=self.client.send_line)
-
-    def tearDown(self):
-        # Give queued tasks a final chance to complete - borrowed from
-        # StreamReaderTests in tests/test_streams.py in asyncio.
-        asyncio.test_utils.run_briefly(self.loop)
-        self.loop.close()
-        gc.collect()
-        super().tearDown()
 
     def mock_open_connection(self):
         """Give a mock reader and writer when a stream connection is opened.
@@ -142,6 +147,15 @@ def run_client(f):
             # Cleanly end the read loop
             self.client.disconnect()
             self.loop.run_until_complete(run_fut)
+    return new_f
+
+
+def run_coroutine(f):
+    if not asyncio.iscoroutinefunction(f):
+        f = asyncio.coroutine(f)
+    @functools.wraps(f)
+    def new_f(self):
+        self.loop.run_until_complete(f(self))
     return new_f
 
 
