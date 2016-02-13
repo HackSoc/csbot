@@ -1,5 +1,7 @@
-import logging
 import collections
+import itertools
+
+import asyncio
 
 import configparser
 import straight.plugin
@@ -87,7 +89,7 @@ class Bot(SpecialPlugin, IRCClient):
 
         # Event runner
         self.events = events.ImmediateEventRunner(self.loop,
-                                                  self.plugins.fire_hooks)
+                                                  self._fire_hooks)
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -106,8 +108,14 @@ class Bot(SpecialPlugin, IRCClient):
         """
         self.plugins.teardown()
 
+    @asyncio.coroutine
+    def _fire_hooks(self, event):
+        results = self.plugins.fire_hooks(event)
+        futures = list(itertools.chain(*results))
+        return (yield from asyncio.gather(*futures, loop=self.loop))
+
     def post_event(self, event):
-        self.events.post_event(event)
+        return self.events.post_event(event)
 
     def register_command(self, cmd, metadata, f, tag=None):
         # Bail out if the command already exists
@@ -183,11 +191,10 @@ class Bot(SpecialPlugin, IRCClient):
     # Implement IRCClient events
 
     def emit_new(self, event_type, data=None):
-        """Shorthand for firing a new event; the new event is returned.
+        """Shorthand for firing a new event.
         """
         event = Event(self, event_type, data)
-        self.bot.post_event(event)
-        return event
+        return self.bot.post_event(event)
 
     def emit(self, event):
         """Shorthand for firing an existing event.
@@ -209,8 +216,9 @@ class Bot(SpecialPlugin, IRCClient):
         self.emit_new('core.raw.sent', {'message': line})
 
     def line_received(self, line):
-        self.emit_new('core.raw.received', {'message': line})
+        fut = self.emit_new('core.raw.received', {'message': line})
         super().line_received(line)
+        return fut
 
     def on_welcome(self):
         self.emit_new('core.self.connected')

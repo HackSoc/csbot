@@ -2,6 +2,7 @@ from functools import partial
 import collections
 import logging
 import os
+import asyncio
 
 
 def build_plugin_dict(plugins):
@@ -86,13 +87,14 @@ class PluginManager(collections.Mapping):
         It is assumed that the invoked method exists on all plugins, so this
         should probably only be used when the method call is part of the
         :class:`Plugin` base class.
+
+        Returns a list of the return value from each plugin.
         """
         if name.startswith('_'):
             raise AttributeError
 
         def f(*args):
-            for p in self.plugins.values():
-                getattr(p, name)(*args)
+            return [getattr(p, name)(*args) for p in self.plugins.values()]
         return f
 
     # Implement abstract "read-only" Mapping interface
@@ -258,9 +260,17 @@ class Plugin(object, metaclass=PluginMeta):
         return ProvidedByPlugin(other, kwargs)
 
     def fire_hooks(self, event):
-        """Execute all of this plugin's handlers for *event*."""
+        """Execute all of this plugin's handlers for *event*.
+
+        All handlers are treated as coroutine functions, and the return value is
+        a list of all the invoked coroutines.
+        """
+        coros = []
         for f in self.plugin_hooks.get(event.event_type, ()):
-            f(self, event)
+            if not asyncio.iscoroutinefunction(f):
+                f = asyncio.coroutine(f)
+            coros.append(f(self, event))
+        return coros
 
     def provide(self, plugin_name, **kwarg):
         """Provide a value for a :meth:`Plugin.use` usage."""

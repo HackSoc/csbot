@@ -162,8 +162,7 @@ class TestLinkInfoPlugin(BotTestCase):
 
         for msg, urls in test_cases:
             with self.subTest(msg=msg), mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-                self.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
-                yield
+                yield from self.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
                 get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
     @run_client
@@ -177,10 +176,8 @@ class TestLinkInfoPlugin(BotTestCase):
         count = int(self.linkinfo.config_get('rate_limit_count'))
         for i in range(count):
             with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-                self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
-                yield
+                yield from self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
                 get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
         with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-            self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
-            yield
+            yield from self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
             self.assert_(not get_link_info.called)
