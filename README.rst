@@ -22,6 +22,13 @@ If you want to develop features for the bot, create a uniquely named plugin (see
 ``csbot/plugins/`` for examples), try it out, preferably write some unit tests
 (see ``csbot/test/plugins/``) and submit a pull request.
 
+Deployment
+----------
+Create ``csbot.cfg``, and then use `Docker Compose`_ to build and launch the
+Docker containers (a MongoDB instance and the bot)::
+
+    $ docker-compose up
+
 Documentation
 -------------
 The code is documented to varying degrees, and Sphinx-based documentation is
@@ -57,3 +64,4 @@ We're also using Travis-CI for continuous integration and continuous deployment.
 .. _HackSoc: http://hacksoc.org/
 .. _asyncio: https://docs.python.org/3/library/asyncio.html
 .. _lxml: http://lxml.de/
+.. _Docker Compose: https://docs.docker.com/compose/

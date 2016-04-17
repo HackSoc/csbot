@@ -1,0 +1,11 @@
+bot:
+  build: .
+  links:
+  - mongodb
+  volumes:
+  - .:/app
+  environment:
+    MONGODB_URI: mongodb://mongodb:27017/csbot
+
+mongodb:
+  image: mongo:3.2
