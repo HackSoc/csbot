@@ -11,33 +11,30 @@ def is_too_long(n):
     return isinstance(n, int) and n != 0 and math.log10(abs(n)) > 127
 
 
-def limited_power(a, b):
+def guarded_power(a, b):
     """A limited power function to make sure that
     commands do not take too long to process.
     """
-    for n in (a, b):
-        if is_too_long(n):
-            # Neaten the error message
-            raise OverflowError("result is too long to be printed")
-
     if any(abs(n) > 1000 for n in [a, b]):
-        raise OverflowError("{}**{} would take too long to calculate".format(a, b))
-    return op.pow(a, b)
+        raise CalcError("would take too long to calculate")
+    try:
+        return op.pow(a, b)
+    except OverflowError:
+        raise CalcError("too large to represent as float")
 
 
-def limited_lshift(a, b):
-    if is_too_long(b):
-        # Neaten the error message
-        raise OverflowError("result is too long to be printed")
-
-    if not isinstance(a, int) or not isinstance(b, int):
-        # floats are handled more gracefully
-        pass
+def guarded_lshift(a, b):
+    if not (isinstance(a, int) and isinstance(b, int)):
+        raise CalcError("non-integer shift values")
     elif b.bit_length() > 64:
         # Only need to check how much the number is being shifted by
-        raise OverflowError("{} << {} would take too long to calculate".format(a, b))
+        raise CalcError("would take too long to calculate")
     return op.lshift(a, b)
 
+def guarded_rshift(a, b):
+    if not (isinstance(a, int) and isinstance(b, int)):
+        raise CalcError("non-integer shift values")
+    return op.rshift(a, b)
 
 # Available operators
 operators = {
@@ -54,9 +51,9 @@ operators = {
     ast.BitXor: op.xor,
     ast.BitAnd: op.and_,
     ast.FloorDiv: op.floordiv,
-    ast.Pow: limited_power,
-    ast.LShift: limited_lshift,
-    ast.RShift: op.rshift,
+    ast.Pow: guarded_power,
+    ast.LShift: guarded_lshift,
+    ast.RShift: guarded_rshift,
     # unaryop
     ast.Invert: op.inv,
     ast.Not: op.not_,
@@ -74,13 +71,10 @@ operators = {
 }
 
 
-def limited_factorial(a):
+def guarded_factorial(a):
     # Any larger than this would be too long to output regardless
     if a > 100:
-        if is_too_long(a):
-            # Neaten the error message
-            raise OverflowError("result is too long to be printed")
-        raise OverflowError("factorial({}) is too large to calculate".format(a))
+        raise CalcError("would take too long to calculate")
     return math.factorial(a)
 
 
@@ -89,7 +83,7 @@ identifiers = {
     "e": math.e,
     "pi": math.pi,
     "π": math.pi,
-    "F": 1.2096,            # Barrucadu's Constant (microfortnights in a second)
+    "F": 1.2096,            # Barrucadu's Constant (seconds in a microfortnight)
     "c": 299792458,         # m s-1
     "G": 6.6738480e-11,     # m3 kg-1 s-2
     "h": 6.6260695729e-34,  # J s
@@ -97,7 +91,7 @@ identifiers = {
 
     # Available functions
     "ceil": math.ceil,
-    "factorial": limited_factorial,
+    "factorial": guarded_factorial,
     "floor": math.floor,
     "isfinite": math.isfinite,
     "isinf": math.isinf,
@@ -118,51 +112,58 @@ identifiers = {
     "rad": math.radians,
 }
 
+class CalcEval(ast.NodeVisitor):
+    def visit_Module(self, node):
+        return self.visit(node.body[0]) # Special case, since we're only dealing with one-liners
 
-def calc_eval(node):
-    """Actually do the calculation.
-    """
-    # ast.Load is always preceded by something else
-    assert not isinstance(node, ast.Load)
+    def visit_Expr(self, node):
+        return self.visit(node.value) # Reimplementation needed or it goes via generic_visit
 
-    if isinstance(node, ast.Expr):  # Top level expression
-        return calc_eval(node.value)
-    elif isinstance(node, ast.Name):  # <constant>
-        if node.id in identifiers:
-            return identifiers[node.id]
-        else:
-            raise NotImplementedError(node.id)
-    elif isinstance(node, ast.Call):
-        eval_args = [calc_eval(arg) for arg in node.args]
-        try:
-            return calc_eval(node.func)(*eval_args)
-        except TypeError as ex:
-            raise ValueError(str(ex))
-    elif isinstance(node, ast.NameConstant):
-        return node.value
-    elif isinstance(node, ast.Num):  # <number>
-        return node.n
-    elif (isinstance(node, ast.operator) or
-          isinstance(node, ast.unaryop) or
-          isinstance(node, ast.cmpop)):  # <operator>
-        if type(node) in operators:
-            return operators[type(node)]
-        else:
-            raise KeyError(type(node).__name__.lower())
-    elif isinstance(node, ast.UnaryOp):  # <operator> <operand>
-        return calc_eval(node.op)(calc_eval(node.operand))
-    elif isinstance(node, ast.BinOp):  # <left> <operator> <right>
-        return calc_eval(node.op)(calc_eval(node.left), calc_eval(node.right))
-    elif isinstance(node, ast.Compare):  # boolean comparisons are more tricky
+    def visit_BinOp(self, node):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        if node.op.__class__ in (ast.Mod, ast.Div, ast.FloorDiv) and right == 0:
+            raise CalcError("division by zero")
+        operator = operators[node.op.__class__]
+        return operator(left, right)
+
+    def visit_UnaryOp(self, node):
+        operator = operators[node.op.__class__]
+        operand = self.visit(node.operand)
+        return operator(operand)
+
+    def visit_Compare(self, node):
         comparisons = zip(node.ops, pairwise([node.left] + node.comparators))
-        return all(calc_eval(op)(calc_eval(left), calc_eval(right)) for op, (left, right) in comparisons)
-    else:
-        raise TypeError(node)
+        try:
+            return all(operators[op.__class__](self.visit(left), self.visit(right)) for op, (left, right) in comparisons)
+        except KeyError:
+            raise CalcError("invalid operator")
 
+    def visit_Call(self, node):
+        args = [self.visit(arg) for arg in node.args]
+        func = self.visit(node.func)
+        try:
+            return func(*args)
+        except TypeError:
+            raise CalcError("invalid arguments")
+
+    def visit_Name(self, node):
+        try:
+            return identifiers[node.id]
+        except KeyError:
+            raise CalcError("unknown constant or function")
+
+    def visit_Num(self, node):
+        return node.n
+
+    def visit_NameConstant(self, node):
+        return node.value
+
+class CalcError(Exception):
+    pass
 
 class Calc(Plugin):
     """A plugin that calculates things.
-    Heavily based on http://stackoverflow.com/a/9558001/995325
     """
 
     def _calc(self, calc_str):
@@ -174,24 +175,18 @@ class Calc(Plugin):
             return "You want to calculate something? Type in an expression then!"
 
         try:
-            res = calc_eval(ast.parse(calc_str).body[0])
+            res = CalcEval().visit(ast.parse(calc_str))
+            if res is None:
+                raise CalcError("invalid calculation")
             if is_too_long(res):
-                raise OverflowError("result is too long to be printed")
+                raise CalcError("result too long to be printed")
             return str(res)
-        except KeyError as ex:
-            return "Error, invalid operator {}".format(str(ex))
-        except (OverflowError, ValueError, ZeroDivisionError) as ex:
-            # 1 ** 100000, 1 << -1, 1 / 0
+        except (CalcError, SyntaxError) as ex:
             return "Error, {}".format(str(ex))
-        except NotImplementedError as ex:  # "sgdsdg + 3"
-            return "Error, unknown or invalid value '{}'".format(str(ex))
-        except (TypeError, SyntaxError):  # "1 +"
-            return "Error, '{}' is not a valid calculation".format(calc_str)
 
 
     @Plugin.command('calc')
     def do_some_calc(self, e):
-        """
-        What? You don't have a calculator handy?
+        """What? You don't have a calculator handy?
         """
         e.reply(self._calc(e["data"]))
