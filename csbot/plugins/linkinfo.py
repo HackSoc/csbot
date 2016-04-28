@@ -242,15 +242,19 @@ class LinkInfo(Plugin):
                 parser = lxml.html.html_parser
 
             # Get only a chunk, in case Content-Length is absent on massive file
-            chunk = next(r.iter_content(int(self.config_get('max_response_size'))))
+            chunk = r.raw.read(int(self.config_get('max_response_size')))
             # Try to trim chunk to a tag end to help the HTML parser out
             try:
                 chunk = chunk[:chunk.rindex(b'>') + 1]
             except ValueError:
                 pass
 
-            # Attempt to get the <title> tag
+            # Attempt to parse as an HTML document
             html = lxml.etree.fromstring(chunk, parser)
+            if html is None:
+                return make_error('Response not usable as HTML')
+
+            # Attempt to get the <title> tag
             title = html.findtext('.//title') or ''
             # Normalise title whitespace
             title = ' '.join(title.strip().split())

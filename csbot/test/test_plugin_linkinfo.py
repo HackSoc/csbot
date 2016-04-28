@@ -130,7 +130,7 @@ class TestLinkInfoPlugin(BotTestCase):
     def test_encoding_handling(self):
         for url, content_type, body, _ in encoding_test_cases:
             responses.add(responses.GET, url, body=body,
-                          content_type=content_type)
+                          content_type=content_type, stream=True)
 
         for url, _, _, expected_title in encoding_test_cases:
             with self.subTest(url=url):
@@ -141,7 +141,7 @@ class TestLinkInfoPlugin(BotTestCase):
     def test_errors(self):
         for url, content_type, body in error_test_cases:
             responses.add(responses.GET, url, body=body,
-                          content_type=content_type)
+                          content_type=content_type, stream=True)
 
         for url, _, _ in error_test_cases:
             with self.subTest(url=url):
