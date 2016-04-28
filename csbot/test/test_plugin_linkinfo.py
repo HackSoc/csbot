@@ -110,6 +110,11 @@ error_test_cases = [
         "text/html",
         b'<html><head><title>   </title></head><body></body></html>',
     ),
+    (
+        "http://example.com/no-root-element",
+        "text/html",
+        b'<!DOCTYPE html><html ',
+    ),
 ]
 
 
