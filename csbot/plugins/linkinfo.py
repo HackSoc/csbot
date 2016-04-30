@@ -53,7 +53,7 @@ class LinkInfo(Plugin):
         # Maximum rate of URL responses over rate limiting period
         'rate_limit_count': 5,
         # Maximum response size
-        'max_response_size': 1048576,  # 1MB
+        'max_response_size': 2048,  # 2KiB
     }
 
     def __init__(self, *args, **kwargs):
@@ -241,8 +241,15 @@ class LinkInfo(Plugin):
             else:
                 parser = lxml.html.html_parser
 
-            # Get only a chunk, in case Content-Length is absent on massive file
-            chunk = r.raw.read(int(self.config_get('max_response_size')))
+            # In case Content-Length is absent on a massive file, get only a
+            # reasonable chunk instead. We don't just get the first chunk
+            # because chunk-encoded responses iterate over chunks rather than
+            # the size we request...
+            chunk = b''
+            for next_chunk in r.iter_content(self.config_get('max_response_size')):
+                chunk += next_chunk
+                if len(chunk) >= self.config_get('max_response_size'):
+                    break
             # Try to trim chunk to a tag end to help the HTML parser out
             try:
                 chunk = chunk[:chunk.rindex(b'>') + 1]
