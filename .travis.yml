@@ -22,6 +22,7 @@ notifications:
     channels:
     - irc.freenode.org#cs-york-dev
     skip_join: true
+    use_notice: true
 
 deploy:
   provider: heroku
