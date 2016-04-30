@@ -53,7 +53,7 @@ class LinkInfo(Plugin):
         # Maximum rate of URL responses over rate limiting period
         'rate_limit_count': 5,
         # Maximum response size
-        'max_response_size': 2048,  # 2KiB
+        'max_response_size': 1048576,  # 1MB
     }
 
     def __init__(self, *args, **kwargs):
