@@ -1,7 +1,7 @@
 import unittest
 from io import StringIO
 
-from csbot.test import TempEnvVars
+from csbot.test import TempEnvVars, BotTestCase
 import csbot.core
 import csbot.plugin
 
@@ -36,9 +36,12 @@ env_only = config3
 """
 
 
-class TestPluginConfig(unittest.TestCase):
+class TestPluginConfigWithotPluginSection(BotTestCase):
+    BOT_CLASS = MockBot
+    CONFIG = base_config
+
     def test_without_plugin_section(self):
-        bot = MockBot(StringIO(base_config))
+        bot = self.bot_
         # Check the test plugin was loaded
         self.assertTrue('mockplugin' in bot.plugins)
         plugin = bot.plugins['mockplugin']
@@ -65,8 +68,13 @@ class TestPluginConfig(unittest.TestCase):
                 self.assertEqual(plugin.config_get('multiple_env'),
                                  'highest priority')
 
+
+class TestPluginConfigWitPluginSection(BotTestCase):
+    BOT_CLASS = MockBot
+    CONFIG = base_config + plugin_config
+
     def test_with_plugin_section(self):
-        bot = MockBot(StringIO(base_config + plugin_config))
+        bot = self.bot_
         self.assertTrue('mockplugin' in bot.plugins)
         plugin = bot.plugins['mockplugin']
         # Check that values override defaults

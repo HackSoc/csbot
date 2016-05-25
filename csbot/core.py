@@ -1,6 +1,7 @@
-import logging
 import collections
-import signal
+import itertools
+
+import asyncio
 
 import configparser
 import straight.plugin
@@ -13,15 +14,12 @@ from csbot.events import Event, CommandEvent
 from .irc import IRCClient, IRCUser
 
 
-class Bot(SpecialPlugin):
-    """The IRC bot.
+class PluginError(Exception):
+    pass
 
-    Handles plugins, command dispatch, hook dispatch, etc.  Persistent across
-    losing and regaining connection.
 
-    *config* is an optional file-like object to read configuration from, which
-    is parsed with :mod:`configparser`.
-    """
+class Bot(SpecialPlugin, IRCClient):
+    # TODO: use IRCUser instances instead of raw user string
 
     #: Default configuration values
     CONFIG_DEFAULTS = {
@@ -53,8 +51,11 @@ class Bot(SpecialPlugin):
     available_plugins = build_plugin_dict(straight.plugin.load(
         'csbot.plugins', subclasses=Plugin))
 
-    def __init__(self, config=None):
-        super(Bot, self).__init__(self)
+    _WHO_IDENTIFY = ('1', '%na')
+
+    def __init__(self, config=None, loop=None):
+        # Initialise plugin
+        SpecialPlugin.__init__(self, self)
 
         # Load configuration
         self.config_root = configparser.ConfigParser(interpolation=None,
@@ -63,6 +64,23 @@ class Bot(SpecialPlugin):
         if config is not None:
             self.config_root.read_file(config)
 
+        # Initialise IRCClient from Bot configuration
+        IRCClient.__init__(
+            self,
+            loop=loop,
+            nick=self.config_get('nickname'),
+            username=self.config_get('username'),
+            host=self.config_get('irc_host'),
+            port=self.config_get('irc_port'),
+            password=self.config_get('password'),
+        )
+
+        # Plumb in reply(...) method
+        if self.config_getboolean('use_notice'):
+            self.reply = self.notice
+        else:
+            self.reply = self.msg
+
         # Plugin management
         self.plugins = PluginManager([self], self.available_plugins,
                                      self.config_get('plugins').split(),
@@ -70,7 +88,15 @@ class Bot(SpecialPlugin):
         self.commands = {}
 
         # Event runner
-        self.events = events.ImmediateEventRunner(self.plugins.fire_hooks)
+        self.events = events.ImmediateEventRunner(self.loop,
+                                                  self._fire_hooks)
+
+        # Keeps partial name lists between RPL_NAMREPLY and
+        # RPL_ENDOFNAMES events
+        self.names_accumulator = collections.defaultdict(list)
+
+        # Acknowledged capabilities
+        self.capabilities = set()
 
     def bot_setup(self):
         """Load plugins defined in configuration and run setup methods.
@@ -82,8 +108,23 @@ class Bot(SpecialPlugin):
         """
         self.plugins.teardown()
 
+    @asyncio.coroutine
+    def _fire_hooks(self, event):
+        results = self.plugins.fire_hooks(event)
+        futures = list(itertools.chain(*results))
+        for f in asyncio.as_completed(futures, loop=self.loop):
+            try:
+                yield from f
+            except Exception as e:
+                self.loop.call_exception_handler({
+                    'message': 'Unhandled exception in event handler',
+                    'exception': e,
+                    'future': f,
+                })
+
+
     def post_event(self, event):
-        self.events.post_event(event)
+        return self.events.post_event(event)
 
     def register_command(self, cmd, metadata, f, tag=None):
         # Bail out if the command already exists
@@ -116,14 +157,14 @@ class Bot(SpecialPlugin):
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
         for c in self.config_get('channels').split():
-            event.protocol.join(c)
+            event.bot.join(c)
 
     @Plugin.hook('core.message.privmsg')
     def privmsg(self, event):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
         command = CommandEvent.parse_command(
-            event, self.config_get('command_prefix'), event.protocol.nick)
+            event, self.config_get('command_prefix'), event.bot.nick)
         if command is not None:
             self.post_event(command)
 
@@ -156,50 +197,13 @@ class Bot(SpecialPlugin):
     def show_plugins(self, e):
         e.reply('loaded plugins: ' + ', '.join(self.plugins))
 
-
-class PluginError(Exception):
-    pass
-
-
-class BotClient(IRCClient):
-    # TODO: use IRCUser instances instead of raw user string
-
-    log = logging.getLogger('csbot.protocol')
-
-    _WHO_IDENTIFY = ('1', '%na')
-
-    def __init__(self, bot, loop=None):
-        # Initialise IRCClient from Bot configuration
-        super().__init__(
-            loop=loop,
-            nick=bot.config_get('nickname'),
-            username=bot.config_get('username'),
-            host=bot.config_get('irc_host'),
-            port=bot.config_get('irc_port'),
-            password=bot.config_get('password'),
-        )
-
-        # Plumb in reply(...) method
-        if bot.config_getboolean('use_notice'):
-            self.reply = self.notice
-        else:
-            self.reply = self.msg
-
-        self.bot = bot
-
-        # Keeps partial name lists between RPL_NAMREPLY and
-        # RPL_ENDOFNAMES events
-        self.names_accumulator = collections.defaultdict(list)
-
-        # Acknowledged capabilities
-        self.capabilities = set()
+    # Implement IRCClient events
 
     def emit_new(self, event_type, data=None):
-        """Shorthand for firing a new event; the new event is returned.
+        """Shorthand for firing a new event.
         """
         event = Event(self, event_type, data)
-        self.bot.post_event(event)
-        return event
+        return self.bot.post_event(event)
 
     def emit(self, event):
         """Shorthand for firing an existing event.
@@ -221,8 +225,9 @@ class BotClient(IRCClient):
         self.emit_new('core.raw.sent', {'message': line})
 
     def line_received(self, line):
-        self.emit_new('core.raw.received', {'message': line})
+        fut = self.emit_new('core.raw.received', {'message': line})
         super().line_received(line)
+        return fut
 
     def on_welcome(self):
         self.emit_new('core.self.connected')

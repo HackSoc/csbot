@@ -236,8 +236,8 @@ class IRCClient:
     def __init__(self, *, loop=None, **kwargs):
         self.loop = loop or asyncio.get_event_loop()
 
-        self.config = self.DEFAULTS()
-        self.config.update(**kwargs)
+        self.__config = self.DEFAULTS()
+        self.__config.update(**kwargs)
 
         self.reader, self.writer = None, None
         self._exiting = False
@@ -267,9 +267,9 @@ class IRCClient:
     @asyncio.coroutine
     def connect(self):
         """Connect to the IRC server."""
-        LOG.debug('connecting to {host}:{port}...'.format(**self.config))
-        self.reader, self.writer = yield from asyncio.open_connection(self.config['host'],
-                                                                      self.config['port'],
+        LOG.debug('connecting to {host}:{port}...'.format(**self.__config))
+        self.reader, self.writer = yield from asyncio.open_connection(self.__config['host'],
+                                                                      self.__config['port'],
                                                                       loop=self.loop)
 
     def disconnect(self):
@@ -297,11 +297,11 @@ class IRCClient:
         """
         LOG.debug('connection made')
 
-        if self.config['password']:
-            self.send(IRCMessage.create('PASS', [self.config['password']]))
+        if self.__config['password']:
+            self.send(IRCMessage.create('PASS', [self.__config['password']]))
 
-        nick = self.config['nick']
-        username = self.config['username'] or nick
+        nick = self.__config['nick']
+        username = self.__config['username'] or nick
         self.set_nick(nick)
         self.send(IRCMessage.create('USER', [username, '*', '*', nick]))
 

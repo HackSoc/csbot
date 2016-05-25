@@ -1,6 +1,7 @@
 from datetime import datetime
 from collections import deque
 import re
+import asyncio
 
 from csbot.util import parse_arguments
 
@@ -17,14 +18,17 @@ class ImmediateEventRunner(object):
     a usable state if an exception propagates out of it in response to running
     an event.
     """
-    def __init__(self, handle_event):
+    def __init__(self, loop, handle_event):
         self.events = deque()
-        self.running = False
+        self.future = None
+        self.loop = loop
+        if not asyncio.iscoroutinefunction(handle_event):
+            handle_event = asyncio.coroutine(handle_event)
         self.handle_event = handle_event
 
     def __enter__(self):
         """On entering the context, mark the event queue as running."""
-        self.running = True
+        pass
 
     def __exit__(self, exc_type, exc_value, traceback):
         """On exiting the context, reset to an empty non-running queue.
@@ -33,8 +37,8 @@ class ImmediateEventRunner(object):
         exiting abnormally, the rest of the event queue will be purged so that
         the next root event can be handled normally.
         """
-        self.running = False
         self.events.clear()
+        self.future = None
 
     def post_event(self, event):
         """Post *event* to be handled soon.
@@ -51,11 +55,16 @@ class ImmediateEventRunner(object):
         a breadth-first traversal of the event tree.
         """
         self.events.append(event)
-        if not self.running:
-            with self:
-                while len(self.events) > 0:
-                    e = self.events.popleft()
-                    self.handle_event(e)
+        if not self.future:
+            self.future = self.loop.create_task(self.run_events())
+        return self.future
+
+    @asyncio.coroutine
+    def run_events(self):
+        with self:
+            while len(self.events) > 0:
+                e = self.events.popleft()
+                yield from self.handle_event(e)
 
 
 class Event(dict):
@@ -64,18 +73,18 @@ class Event(dict):
     Events are dicts of event information, plus some attributes which are
     applicable for all events.
     """
-    #: The :class:`.BotProtocol` which triggered the event.
-    protocol = None
+    #: The :class:`.Bot` which triggered the event.
+    bot = None
     #: The name of the event.
     event_type = None
     #: The value of :meth:`datetime.datetime.now()` when the event was
     #: triggered.
     datetime = None
 
-    def __init__(self, protocol, event_type, data=None):
+    def __init__(self, bot, event_type, data=None):
         dict.__init__(self, data if data is not None else {})
 
-        self.protocol = protocol
+        self.bot = bot
         self.event_type = event_type
         self.datetime = datetime.now()
 
@@ -87,7 +96,7 @@ class Event(dict):
         event type, preserving existing information.  For example:
         """
         # Duplicate event information
-        e = cls(event.protocol,
+        e = cls(event.bot,
                 event.event_type,
                 event)
         e.datetime = event.datetime
@@ -103,15 +112,10 @@ class Event(dict):
     def reply(self, message):
         """Send a reply.
 
-        For messages that have a ``reply_to`` key, instruct the :attr:`protocol`
+        For messages that have a ``reply_to`` key, instruct the :attr:`bot`
         to send a reply.
         """
-        self.protocol.reply(self['reply_to'], message)
-
-    @property
-    def bot(self):
-        """Shortcut to ``self.protocol.bot``."""
-        return self.protocol.bot
+        self.bot.reply(self['reply_to'], message)
 
 
 class CommandEvent(Event):

@@ -1,5 +1,3 @@
-import unittest
-from unittest import mock
 import asyncio
 import asyncio.test_utils
 import os
@@ -9,7 +7,7 @@ import gc
 import functools
 from unittest import mock
 
-from csbot.core import Bot, BotClient
+from csbot.core import Bot
 
 
 class MockStreamReader(asyncio.StreamReader):
@@ -21,16 +19,29 @@ class MockStreamWriter(asyncio.StreamWriter):
         self._reader.feed_eof()
 
 
-class IRCClientTestCase(asyncio.test_utils.TestCase):
+class AsyncTestCase(asyncio.test_utils.TestCase):
+    def setUp(self):
+        super().setUp()
+        # Create event loop and ensure everything will be using it explicitly
+        self.loop = asyncio.new_event_loop()
+        self.set_event_loop(self.loop)  # Disables "default" event loop!
+
+    def tearDown(self):
+        # Give queued tasks a final chance to complete - borrowed from
+        # StreamReaderTests in tests/test_streams.py in asyncio.
+        asyncio.test_utils.run_briefly(self.loop)
+        self.loop.close()
+        gc.collect()
+        super().tearDown()
+
+
+class IRCClientTestCase(AsyncTestCase):
     #: The IRCClient (sub)class to instrument
     CLIENT_CLASS = None
 
     def setUp(self):
         assert self.CLIENT_CLASS is not None, "no CLIENT_CLASS set on test case"
         super().setUp()
-        # Create event loop and ensure everything will be using it explicitly
-        self.loop = asyncio.new_event_loop()
-        self.set_event_loop(self.loop)  # Disables "default" event loop!
         # Create client and make it use our event loop
         self.client = self.CLIENT_CLASS(loop=self.loop)
         # Create fake stream reader/writer
@@ -42,14 +53,6 @@ class IRCClientTestCase(asyncio.test_utils.TestCase):
 
         # Mock all the things!
         self.client.send_line = mock.Mock(wraps=self.client.send_line)
-
-    def tearDown(self):
-        # Give queued tasks a final chance to complete - borrowed from
-        # StreamReaderTests in tests/test_streams.py in asyncio.
-        asyncio.test_utils.run_briefly(self.loop)
-        self.loop.close()
-        gc.collect()
-        super().tearDown()
 
     def mock_open_connection(self):
         """Give a mock reader and writer when a stream connection is opened.
@@ -147,6 +150,15 @@ def run_client(f):
     return new_f
 
 
+def run_coroutine(f):
+    if not asyncio.iscoroutinefunction(f):
+        f = asyncio.coroutine(f)
+    @functools.wraps(f)
+    def new_f(self):
+        self.loop.run_until_complete(f(self))
+    return new_f
+
+
 class TempEnvVars(object):
     """A context manager for temporarily changing the values of environment
     variables."""
@@ -176,19 +188,18 @@ class BotTestCase(IRCClientTestCase):
     bot from :attr:`CONFIG`, binding it to ``self.bot``, and also binding every
     plugin in :attr:`PLUGINS` to ``self.plugin``.
     """
+    BOT_CLASS = Bot
     CONFIG = ""
     PLUGINS = []
 
     def setUp(self):
         """Create bot and plugin bindings."""
-        # Create bot
-        self.bot_ = Bot(StringIO(dedent(self.CONFIG)))
-        self.bot_.bot_setup()
         # Client setup
-        self.CLIENT_CLASS = functools.partial(BotClient, self.bot_)
+        self.CLIENT_CLASS = functools.partial(self.BOT_CLASS, StringIO(dedent(self.CONFIG)))
         super().setUp()
+        self.client.bot_setup()
         # Keep old tests happy with an alias...
-        self.protocol_ = self.client
+        self.bot_ = self.client
 
         for p in self.PLUGINS:
             setattr(self, p, self.bot_.plugins[p])
@@ -196,7 +207,6 @@ class BotTestCase(IRCClientTestCase):
     def tearDown(self):
         """Lose references to bot and plugins."""
         self.bot_ = None
-        self.protocol_ = None
         for p in self.PLUGINS:
             setattr(self, p, None)
         super().tearDown()

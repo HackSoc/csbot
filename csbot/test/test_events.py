@@ -1,17 +1,19 @@
 import unittest
 import datetime
-import functools
-
-import csbot.events
 import collections
 
+import csbot.events
+from csbot.test import AsyncTestCase, run_coroutine
 
-class TestImmediateEventRunner(unittest.TestCase):
+
+class TestImmediateEventRunner(AsyncTestCase):
     def setUp(self):
-        self.runner = csbot.events.ImmediateEventRunner(self.handle_event)
+        super().setUp()
+        self.runner = csbot.events.ImmediateEventRunner(self.loop, self.handle_event)
         self.handled_events = []
 
     def tearDown(self):
+        super().tearDown()
         self.runner = None
         self.handled_events = None
 
@@ -22,17 +24,19 @@ class TestImmediateEventRunner(unittest.TestCase):
         if isinstance(event, collections.Callable):
             event()
 
+    @run_coroutine
     def test_values(self):
         """Check that basic values are passed through the event queue
         unmolested."""
         # Test that things actually get through
-        self.runner.post_event('foo')
+        yield from self.runner.post_event('foo')
         self.assertEqual(self.handled_events, ['foo'])
         # The event runner doesn't care what it's passing through
         for x in ['bar', 1.3, None, object]:
-            self.runner.post_event(x)
+            yield from self.runner.post_event(x)
             self.assertIs(self.handled_events[-1], x)
 
+    @run_coroutine
     def test_event_chain(self):
         """Check that chains of events get handled."""
         def f1():
@@ -44,9 +48,10 @@ class TestImmediateEventRunner(unittest.TestCase):
         def f3():
             pass
 
-        self.runner.post_event(f1)
+        yield from self.runner.post_event(f1)
         self.assertEqual(self.handled_events, [f1, f2, f3])
 
+    @run_coroutine
     def test_event_tree(self):
         """Check that trees of events are handled breadth-first."""
         def f1():
@@ -69,10 +74,11 @@ class TestImmediateEventRunner(unittest.TestCase):
         def f6():
             pass
 
-        self.runner.post_event(f1)
+        yield from self.runner.post_event(f1)
         self.assertEqual(self.handled_events,
                          [f1, f2, f3, f4, f5, f6, f3, f5, f6])
 
+    @run_coroutine
     def test_exception_recovery(self):
         """Check that exceptions propagate out of the event runner but don't
         leave it broken.
@@ -94,22 +100,21 @@ class TestImmediateEventRunner(unittest.TestCase):
         def f4():
             pass
 
-        self.assertRaises(Exception, self.runner.post_event, f1)
+        with self.assertRaises(Exception):
+            yield from self.runner.post_event(f1)
         self.assertEqual(self.handled_events, [f1])
-        self.runner.post_event(f3)
+        yield from self.runner.post_event(f3)
         self.assertEqual(self.handled_events, [f1, f3, f4])
 
 
 class TestEvent(unittest.TestCase):
-    class DummyProtocol(object):
+    class DummyBot(object):
         pass
 
-    def _assert_events_equal(self, e1, e2, protocol=True, bot=True,
+    def _assert_events_equal(self, e1, e2, bot=True,
                              event_type=True, datetime=True, data=True):
         """Test helper for comparing two events.  ``<property>=False`` disables
         checking that property of the events."""
-        if protocol:
-            self.assertIs(e1.protocol, e2.protocol)
         if bot:
             self.assertIs(e1.bot, e2.bot)
         if event_type:
@@ -124,26 +129,18 @@ class TestEvent(unittest.TestCase):
         # Test data
         data = {'a': 1, 'b': 2, 'c': None}
         dt = datetime.datetime.now()
-        bot = object()
-        protocol = self.DummyProtocol()
-        protocol.bot = bot
+        bot = self.DummyBot()
 
         # Create the event
-        e = csbot.events.Event(protocol, 'event.type', data)
+        e = csbot.events.Event(bot, 'event.type', data)
         # Check that the event's datetime can be reasonably considered "now"
         self.assertTrue(dt <= e.datetime)
         self.assertTrue(abs(e.datetime - dt) < datetime.timedelta(seconds=1))
-        # Check that the protocol, event type and data made it through
-        self.assertIs(e.protocol, protocol)
+        # Check that the bot, event type and data made it through
         self.assertIs(e.bot, bot)
         self.assertEqual(e.event_type, 'event.type')
         for k, v in data.items():
             self.assertEqual(e[k], v)
-
-        # Check that .bot really is a shortcut to .protocol.bot
-        broken_protocol = self.DummyProtocol()
-        broken_event = csbot.events.Event(broken_protocol, 'broken')
-        self.assertRaises(AttributeError, lambda: broken_event.bot)
 
     def test_extend(self):
         # Test data
@@ -151,12 +148,10 @@ class TestEvent(unittest.TestCase):
         data2 = {'c': 'foo', 'd': 'bar'}
         et1 = 'event.type'
         et2 = 'other.event'
-        bot = object()
-        protocol = self.DummyProtocol()
-        protocol.bot = bot
+        bot = self.DummyBot()
 
         # Create an event
-        e1 = csbot.events.Event(protocol, et1, data1)
+        e1 = csbot.events.Event(bot, et1, data1)
 
         # Unchanged event
         e2 = csbot.events.Event.extend(e1)
