@@ -112,7 +112,16 @@ class Bot(SpecialPlugin, IRCClient):
     def _fire_hooks(self, event):
         results = self.plugins.fire_hooks(event)
         futures = list(itertools.chain(*results))
-        return (yield from asyncio.gather(*futures, loop=self.loop))
+        for f in asyncio.as_completed(futures, loop=self.loop):
+            try:
+                yield from f
+            except Exception as e:
+                self.loop.call_exception_handler({
+                    'message': 'Unhandled exception in event handler',
+                    'exception': e,
+                    'future': f,
+                })
+
 
     def post_event(self, event):
         return self.events.post_event(event)

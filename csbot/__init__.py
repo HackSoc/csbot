@@ -73,7 +73,12 @@ def main(config, debug, debug_irc, debug_asyncio, debug_all, colour_logging, use
         rollbar.init(os.environ['ROLLBAR_ACCESS_TOKEN'],
                      os.environ.get('ROLLBAR_ENV', 'development'))
         def handler(loop, context):
-            rollbar.report_exc_info()
+            exception = context.get('exception')
+            if exception is not None:
+                exc_info = (type(exception), exception, exception.__traceback__)
+            else:
+                exc_info = None
+            rollbar.report_exc_info(exc_info)
             loop.default_exception_handler(context)
         client.loop.set_exception_handler(handler)
 
