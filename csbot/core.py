@@ -168,6 +168,7 @@ class Bot(SpecialPlugin, IRCClient):
             self.post_event(command)
 
     @Plugin.hook('core.command')
+    @asyncio.coroutine
     def fire_command(self, event):
         """Dispatch a command event to its callback.
         """
@@ -176,7 +177,9 @@ class Bot(SpecialPlugin, IRCClient):
             return
 
         f, _, _ = self.commands[event['command']]
-        f(event)
+        if not asyncio.iscoroutinefunction(f):
+            f = asyncio.coroutine(f)
+        yield from f(event)
 
     @Plugin.command('help', help=('help [command]: show help for command, or '
                                   'show available commands'))

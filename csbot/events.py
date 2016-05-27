@@ -2,8 +2,12 @@ from datetime import datetime
 from collections import deque
 import re
 import asyncio
+import logging
 
 from csbot.util import parse_arguments
+
+
+LOG = logging.getLogger('csbot.events')
 
 
 class ImmediateEventRunner(object):
@@ -61,7 +65,7 @@ class ImmediateEventRunner(object):
 
 class AsyncEventRunner(object):
     def __init__(self, loop, handle_event):
-        self.events = deque()
+        self.pending = set()
         self.future = None
         self.loop = loop
         if not asyncio.iscoroutinefunction(handle_event):
@@ -69,24 +73,40 @@ class AsyncEventRunner(object):
         self.handle_event = handle_event
 
     def __enter__(self):
-        pass
+        LOG.debug('Entering async event runner')
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.events.clear()
+        LOG.debug('Exiting async event runner')
         self.future = None
 
     def post_event(self, event):
-        self.events.append(event)
+        self.pending.add(self.handle_event(event))
+        LOG.debug('Added event {}, pending={}'.format(event, len(self.pending)))
         if not self.future:
-            self.future = self.loop.create_task(self.run_events())
+            self.future = self.loop.create_task(self.run())
         return self.future
 
+    def _get_pending(self):
+        pending = self.pending
+        self.pending = set()
+        return pending
+
     @asyncio.coroutine
-    def run_events(self):
+    def run(self):
         with self:
-            while len(self.events) > 0:
-                e = self.events.popleft()
-                yield from self.handle_event(e)
+            not_done = self._get_pending()
+            while not_done:
+                # Run until an event handler completes. Wait for at most
+                # 1 second so new events can be added to the pending set.
+                done, not_done = yield from asyncio.wait(not_done,
+                                                         loop=self.loop,
+                                                         timeout=1,
+                                                         return_when=asyncio.FIRST_COMPLETED)
+                pending = self._get_pending()
+                LOG.debug('Event runner ran: done={}, not_done={}, pending={}'.format(
+                    len(done), len(not_done), len(pending),
+                ))
+                not_done |= pending
 
 
 class Event(dict):
