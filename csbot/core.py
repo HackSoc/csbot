@@ -88,8 +88,7 @@ class Bot(SpecialPlugin, IRCClient):
         self.commands = {}
 
         # Event runner
-        self.events = events.ImmediateEventRunner(self.loop,
-                                                  self._fire_hooks)
+        self.events = events.AsyncEventRunner(self.loop, self._fire_hooks)
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events

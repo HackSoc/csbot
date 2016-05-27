@@ -18,17 +18,14 @@ class ImmediateEventRunner(object):
     a usable state if an exception propagates out of it in response to running
     an event.
     """
-    def __init__(self, loop, handle_event):
+    def __init__(self, handle_event):
         self.events = deque()
-        self.future = None
-        self.loop = loop
-        if not asyncio.iscoroutinefunction(handle_event):
-            handle_event = asyncio.coroutine(handle_event)
+        self.running = False
         self.handle_event = handle_event
 
     def __enter__(self):
         """On entering the context, mark the event queue as running."""
-        pass
+        self.running = True
 
     def __exit__(self, exc_type, exc_value, traceback):
         """On exiting the context, reset to an empty non-running queue.
@@ -37,8 +34,8 @@ class ImmediateEventRunner(object):
         exiting abnormally, the rest of the event queue will be purged so that
         the next root event can be handled normally.
         """
+        self.running = False
         self.events.clear()
-        self.future = None
 
     def post_event(self, event):
         """Post *event* to be handled soon.
@@ -54,6 +51,31 @@ class ImmediateEventRunner(object):
         If a chain of events forms a tree, the handling order is equivalent to
         a breadth-first traversal of the event tree.
         """
+        self.events.append(event)
+        if not self.running:
+            with self:
+                while len(self.events) > 0:
+                    e = self.events.popleft()
+                    self.handle_event(e)
+
+
+class AsyncEventRunner(object):
+    def __init__(self, loop, handle_event):
+        self.events = deque()
+        self.future = None
+        self.loop = loop
+        if not asyncio.iscoroutinefunction(handle_event):
+            handle_event = asyncio.coroutine(handle_event)
+        self.handle_event = handle_event
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.events.clear()
+        self.future = None
+
+    def post_event(self, event):
         self.events.append(event)
         if not self.future:
             self.future = self.loop.create_task(self.run_events())
