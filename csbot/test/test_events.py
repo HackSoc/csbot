@@ -1,6 +1,8 @@
 import unittest
+from unittest import mock
 import datetime
 import collections
+import asyncio
 
 import csbot.events
 from csbot.test import AsyncTestCase, run_coroutine
@@ -103,20 +105,25 @@ class TestImmediateEventRunner(unittest.TestCase):
 class TestAsyncEventRunner(AsyncTestCase):
     def setUp(self):
         super().setUp()
-        self.runner = csbot.events.AsyncEventRunner(self.loop, self.handle_event)
+        self.runner = csbot.events.AsyncEventRunner(self.handle_event, self.loop)
         self.handled_events = []
+        self.exception_handler = mock.Mock()
+        self.loop.set_exception_handler(self.exception_handler)
 
     def tearDown(self):
         super().tearDown()
         self.runner = None
         self.handled_events = None
+        self.exception_handler = None
 
     def handle_event(self, event):
         """Record objects passed through the event handler in order.  If they
         are callable, call them."""
         self.handled_events.append(event)
-        if isinstance(event, collections.Callable):
-            event()
+        if asyncio.iscoroutinefunction(event):
+            return [event()]
+        else:
+            return []
 
     @run_coroutine
     def test_values(self):
@@ -133,72 +140,50 @@ class TestAsyncEventRunner(AsyncTestCase):
     @run_coroutine
     def test_event_chain(self):
         """Check that chains of events get handled."""
+        @asyncio.coroutine
         def f1():
             self.runner.post_event(f2)
 
+        @asyncio.coroutine
         def f2():
             self.runner.post_event(f3)
 
+        @asyncio.coroutine
         def f3():
             pass
 
         yield from self.runner.post_event(f1)
-        self.assertEqual(self.handled_events, [f1, f2, f3])
-
-    @run_coroutine
-    def test_event_tree(self):
-        """Check that trees of events are handled breadth-first."""
-        def f1():
-            self.runner.post_event(f2)
-            self.runner.post_event(f3)
-
-        def f2():
-            self.runner.post_event(f4)
-
-        def f3():
-            self.runner.post_event(f5)
-            self.runner.post_event(f6)
-
-        def f4():
-            self.runner.post_event(f3)
-
-        def f5():
-            pass
-
-        def f6():
-            pass
-
-        yield from self.runner.post_event(f1)
-        self.assertEqual(self.handled_events,
-                         [f1, f2, f3, f4, f5, f6, f3, f5, f6])
+        self.assertEqual(set(self.handled_events), {f1, f2, f3})
 
     @run_coroutine
     def test_exception_recovery(self):
-        """Check that exceptions propagate out of the event runner but don't
-        leave it broken.
-
-        (In an early version of ImmediateEventRunner, an exception would leave
-        the runner's queue non-empty and new root events would accumulate
-        instead of being processed.)
+        """Check that exceptions are handled but don't block other tasks or
+        leave the runner in a broken state.
         """
+        @asyncio.coroutine
         def f1():
             self.runner.post_event(f2)
             raise Exception()
 
+        @asyncio.coroutine
         def f2():
             pass
 
+        @asyncio.coroutine
         def f3():
             self.runner.post_event(f4)
 
+        @asyncio.coroutine
         def f4():
             pass
 
-        with self.assertRaises(Exception):
-            yield from self.runner.post_event(f1)
-        self.assertEqual(self.handled_events, [f1])
+        self.assertEqual(self.exception_handler.call_count, 0)
+        yield from self.runner.post_event(f1)
+        self.assertEqual(self.exception_handler.call_count, 1)
+        self.assertEqual(set(self.handled_events), {f1, f2})
         yield from self.runner.post_event(f3)
-        self.assertEqual(self.handled_events, [f1, f3, f4])
+        self.assertEqual(self.exception_handler.call_count, 1)
+        self.assertEqual(set(self.handled_events), {f1, f2, f3, f4})
 
 
 class TestEvent(unittest.TestCase):
