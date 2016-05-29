@@ -88,7 +88,7 @@ class Bot(SpecialPlugin, IRCClient):
         self.commands = {}
 
         # Event runner
-        self.events = events.AsyncEventRunner(self.loop, self._fire_hooks)
+        self.events = events.AsyncEventRunner(self._fire_hooks, self.loop)
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -107,20 +107,9 @@ class Bot(SpecialPlugin, IRCClient):
         """
         self.plugins.teardown()
 
-    @asyncio.coroutine
     def _fire_hooks(self, event):
         results = self.plugins.fire_hooks(event)
-        futures = list(itertools.chain(*results))
-        for f in asyncio.as_completed(futures, loop=self.loop):
-            try:
-                yield from f
-            except Exception as e:
-                self.loop.call_exception_handler({
-                    'message': 'Unhandled exception in event handler',
-                    'exception': e,
-                    'future': f,
-                })
-
+        return list(itertools.chain(*results))
 
     def post_event(self, event):
         return self.events.post_event(event)

@@ -64,49 +64,81 @@ class ImmediateEventRunner(object):
 
 
 class AsyncEventRunner(object):
-    def __init__(self, loop, handle_event):
-        self.pending = set()
-        self.future = None
-        self.loop = loop
-        if not asyncio.iscoroutinefunction(handle_event):
-            handle_event = asyncio.coroutine(handle_event)
+    def __init__(self, handle_event, loop=None):
         self.handle_event = handle_event
+        self.loop = loop
+
+        self.pending = set()
+        self.pending_event = asyncio.Event(loop=self.loop)
+        self.pending_event.clear()
+        self.future = None
 
     def __enter__(self):
         LOG.debug('Entering async event runner')
 
     def __exit__(self, exc_type, exc_value, traceback):
         LOG.debug('Exiting async event runner')
+        if self.future:
+            self.future.cancel()
         self.future = None
 
     def post_event(self, event):
-        self.pending.add(self.handle_event(event))
+        self._add_pending(event)
         LOG.debug('Added event {}, pending={}'.format(event, len(self.pending)))
         if not self.future:
             self.future = self.loop.create_task(self.run())
         return self.future
 
+    def _add_pending(self, event):
+        self.pending.update(self.handle_event(event))
+        self.pending_event.set()
+
     def _get_pending(self):
         pending = self.pending
         self.pending = set()
+        self.pending_event.clear()
         return pending
 
     @asyncio.coroutine
     def run(self):
+        # Use self as context manager so an escaping exception doesn't break
+        # the event runner instance permanently (i.e. we clean up the future)
         with self:
             not_done = self._get_pending()
+            # Use pending_event to wait for new tasks, so we can schedule them
+            # even if we were already in asyncio.wait()
+            new_pending = self.loop.create_task(self.pending_event.wait())
+            not_done.add(new_pending)
             while not_done:
-                # Run until an event handler completes. Wait for at most
-                # 1 second so new events can be added to the pending set.
+                # If we're only waiting on new tasks, time to exit
+                if not_done == {new_pending}:
+                    LOG.debug('Only pending_event.wait() remains')
+                    new_pending.cancel()
+                    break
+                # Run until 1 or more tasks complete (or more tasks are added)
                 done, not_done = yield from asyncio.wait(not_done,
                                                          loop=self.loop,
-                                                         timeout=1,
                                                          return_when=asyncio.FIRST_COMPLETED)
-                pending = self._get_pending()
-                LOG.debug('Event runner ran: done={}, not_done={}, pending={}'.format(
-                    len(done), len(not_done), len(pending),
+                # Handle exceptions raised by tasks
+                for f in done:
+                    e = f.exception()
+                    if e is not None:
+                        self.loop.call_exception_handler({
+                            'message': 'Unhandled exception in event task',
+                            'exception': e,
+                            'future': f,
+                        })
+                LOG.debug('Event runner ran: done={}, not_done={}'.format(
+                    len(done), len(not_done),
                 ))
-                not_done |= pending
+                # Grab new tasks?
+                if new_pending.done():
+                    pending = self._get_pending()
+                    LOG.debug('Events were added: pending={}'.format(len(pending)))
+                    not_done |= pending
+                    # New pending_event.wait(), because the old one was used up.
+                    new_pending = self.loop.create_task(self.pending_event.wait())
+                    not_done.add(new_pending)
 
 
 class Event(dict):
