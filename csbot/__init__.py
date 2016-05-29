@@ -14,6 +14,8 @@ from .core import Bot
               help='Turn on debug logging for the bot.')
 @click.option('--debug-irc', is_flag=True, default=False,
               help='Turn on debug logging for IRC client library.')
+@click.option('--debug-events', is_flag=True, default=False,
+              help='Turn on debug logging for event handler.')
 @click.option('--debug-asyncio', is_flag=True, default=False,
               help='Turn on debug logging for asyncio library.')
 @click.option('--debug-all', is_flag=True, default=False,
@@ -23,12 +25,12 @@ from .core import Bot
 @click.option('--rollbar/--no-rollbar', 'use_rollbar', default=False,
               help='Enable Rollbar error reporting.')
 @click.argument('config', type=click.File('r'))
-def main(config, debug, debug_irc, debug_asyncio, debug_all, colour_logging, use_rollbar):
+def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colour_logging, use_rollbar):
     """Run an IRC bot from a configuration file.
     """
     # Apply "debug all" option
     if debug_all:
-        debug = debug_irc = debug_asyncio = True
+        debug = debug_irc = debug_events = debug_asyncio = True
 
     # Configure logging
     logging.config.dictConfig({
@@ -56,6 +58,9 @@ def main(config, debug, debug_irc, debug_asyncio, debug_all, colour_logging, use
         'loggers': {
             'csbot.irc': {
                 'level': 'DEBUG' if debug_irc else 'INFO',
+            },
+            'csbot.events': {
+                'level': 'DEBUG' if debug_events else 'INFO',
             },
             'asyncio': {
                 # Default is WARNING because 'poll took x seconds' messages are annoying

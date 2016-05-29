@@ -8,6 +8,7 @@ from csbot.util import parse_arguments
 
 
 LOG = logging.getLogger('csbot.events')
+LOG.setLevel(logging.INFO)
 
 
 class ImmediateEventRunner(object):
@@ -64,6 +65,15 @@ class ImmediateEventRunner(object):
 
 
 class AsyncEventRunner(object):
+    """
+    An asynchronous event runner.
+
+    Runs on *loop*, and events are passed to *handle_event* which should return
+    an iterable of awaitables (coroutine objects, tasks, etc.).
+
+    :param handle_event: Function to turn an event into awaitables
+    :param loop: asyncio event loop to use (default: None, use current loop)
+    """
     def __init__(self, handle_event, loop=None):
         self.handle_event = handle_event
         self.loop = loop
@@ -83,10 +93,20 @@ class AsyncEventRunner(object):
         self.future = None
 
     def post_event(self, event):
+        """Post *event* to be handled soon.
+
+        All tasks resulting from calling :meth:`handle_event` on *event* are
+        created and a future that completes only when those tasks are complete
+        is returned.
+
+        The returned future may depend on more than just the tasks resulting
+        from *event*, because new tasks are aggregated into an existing future
+        if there are still outstanding tasks.
+        """
         self._add_pending(event)
         LOG.debug('Added event {}, pending={}'.format(event, len(self.pending)))
         if not self.future:
-            self.future = self.loop.create_task(self.run())
+            self.future = self.loop.create_task(self._run())
         return self.future
 
     def _add_pending(self, event):
@@ -100,7 +120,7 @@ class AsyncEventRunner(object):
         return pending
 
     @asyncio.coroutine
-    def run(self):
+    def _run(self):
         # Use self as context manager so an escaping exception doesn't break
         # the event runner instance permanently (i.e. we clean up the future)
         with self:
