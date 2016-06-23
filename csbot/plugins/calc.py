@@ -159,6 +159,9 @@ class CalcEval(ast.NodeVisitor):
     def visit_NameConstant(self, node):
         return node.value
 
+    def visit_Str(self, node):
+        raise CalcError("invalid argument")
+
 class CalcError(Exception):
     pass
 
