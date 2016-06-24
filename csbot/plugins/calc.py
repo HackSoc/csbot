@@ -125,7 +125,10 @@ class CalcEval(ast.NodeVisitor):
         if node.op.__class__ in (ast.Mod, ast.Div, ast.FloorDiv) and right == 0:
             raise CalcError("division by zero")
         operator = operators[node.op.__class__]
-        return operator(left, right)
+        try:
+            return operator(left, right)
+        except TypeError:
+            raise CalcError("invalid arguments")
 
     def visit_UnaryOp(self, node):
         operator = operators[node.op.__class__]
@@ -188,7 +191,7 @@ class Calc(Plugin):
             return "Error, {}".format(str(ex))
 
 
-    @Plugin.command('calc')
+    @Plugin.command('calc', help='For calculating, not interpreting')
     def do_some_calc(self, e):
         """What? You don't have a calculator handy?
         """
