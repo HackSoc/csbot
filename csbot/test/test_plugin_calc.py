@@ -49,3 +49,4 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("(lambda x: x)(1)"), "Error, unknown constant or function")
         self.assertEqual(self.calc._calc("10.0**1000"), "Error, too large to represent as float")
         self.assertEqual(self.calc._calc("'B' > 'H'"), "Error, invalid argument")
+        self.assertEqual(self.calc._calc("e ^ pi"), "Error, invalid arguments")
