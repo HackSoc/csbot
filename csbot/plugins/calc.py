@@ -191,7 +191,7 @@ class Calc(Plugin):
             return "Error, {}".format(str(ex))
 
 
-    @Plugin.command('calc')
+    @Plugin.command('calc', help='For calculating, not interpreting')
     def do_some_calc(self, e):
         """What? You don't have a calculator handy?
         """
