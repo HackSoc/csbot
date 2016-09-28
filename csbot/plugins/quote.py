@@ -33,7 +33,7 @@ class Quote(Plugin):
         #get quote
         quote["text"] = ""
         try:
-            quote["text"] = quotes[str(quote_num)]
+            quote["text"] = quotes[str(in_quote_num)]
         except:
             return (quote["ID"],"NOT FOUND")
 
@@ -61,7 +61,7 @@ class Quote(Plugin):
             raise self.QUOTEERROR("Can't find quote count in quote dictionary.")
         quotes[num_of_quotes] = in_quote_text
         quote["ID"] = num_of_quotes
-        quotes["quote_count"] = quotes[num_of_quotes] + 1
+        quotes["quote_count"] = num_of_quotes + 1
 
         #write quote file back
         try:
