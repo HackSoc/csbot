@@ -86,7 +86,7 @@ class Quote(Plugin):
 
     @Plugin.command('addquote',help="addquote <quote>")
     def addquote(self, e):
-        """add a quote to somebody
+        """add a quote
         """
         try:
             e.reply("\"{}\" added as quote #{}.".format(*self._addquote(e["data"])))
