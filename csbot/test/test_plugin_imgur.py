@@ -168,12 +168,21 @@ class TestImgurLinkInfoIntegration(BotTestCase):
 
     PLUGINS = ['linkinfo', 'imgur']
 
+    @responses.activate
+    def setUp(self):
+        # imgurpython calls this on init to get initial rate limits
+        responses.add(responses.GET, 'https://api.imgur.com/3/credits',
+                      status=200, body=read_fixture_file('imgur_credits.json'),
+                      content_type='application/json')
+        super().setUp()
+
+    @responses.activate
     def test_integration(self):
         for url, api_url, status, content_type, fixture, title in test_cases:
-            with self.subTest(url=url), responses.RequestsMock() as rsps:
-                rsps.add(responses.GET, api_url, status=status,
-                         body=read_fixture_file(fixture),
-                         content_type=content_type)
+            with self.subTest(url=url):
+                responses.add(responses.GET, api_url, status=status,
+                              body=read_fixture_file(fixture),
+                              content_type=content_type)
                 result = self.linkinfo.get_link_info(url)
                 if title is None:
                     self.assert_(result.is_error)
@@ -181,12 +190,13 @@ class TestImgurLinkInfoIntegration(BotTestCase):
                     self.assert_(not result.is_error)
                     self.assertEqual(title, result.text)
 
+    @responses.activate
     def test_integration_nsfw(self):
         for url, api_url, status, content_type, fixture, title in nsfw_test_cases:
-            with self.subTest(url=url), responses.RequestsMock() as rsps:
-                rsps.add(responses.GET, api_url, status=status,
-                         body=read_fixture_file(fixture),
-                         content_type=content_type)
+            with self.subTest(url=url):
+                responses.add(responses.GET, api_url, status=status,
+                              body=read_fixture_file(fixture),
+                              content_type=content_type)
                 result = self.linkinfo.get_link_info(url)
                 if title is None:
                     self.assert_(result.is_error)
@@ -194,9 +204,9 @@ class TestImgurLinkInfoIntegration(BotTestCase):
                     self.assert_(not result.is_error)
                     self.assertEqual(title, result.text)
 
+    @responses.activate
     def test_invalid_URL(self):
         """Test that an unrecognised URL never even results in a request."""
-        with responses.RequestsMock() as rsps:
-            result = self.linkinfo.get_link_info('http://imgur.com/invalid/url')
-            self.assert_(result.is_error)
-            self.assertEqual(len(rsps.calls), 0)
+        result = self.linkinfo.get_link_info('http://imgur.com/invalid/url')
+        self.assert_(result.is_error)
+        self.assertEqual(len(responses.calls), 0)
