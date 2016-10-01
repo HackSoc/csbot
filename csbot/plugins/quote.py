@@ -23,11 +23,11 @@ class Quote(Plugin):
         if len(quote_list) == 0:
             self.QuoteError("No quotes by", nick)
 
-        #Randomly pick quote from returned quotes
+        #Find returns cursor, convert cursor to list, randomly pick quote from returned quotes
         quote_list = list(quotes)
         quote = random.choice(quote_list)
 
-        return (quote["text"], quote["nick"])
+        return (quote["quote"], quote["nick"])
 
     def _quoteExists(self, quote_post):
         """Checks to see if a nick + quote already exists to stop repeats."""
