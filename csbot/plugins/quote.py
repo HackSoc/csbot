@@ -1,23 +1,24 @@
 import json
+import last
 from ..plugin import Plugin
 
 class Quote(Plugin):
     """Quote people out of context for fun and for profit.
        Add quotes, recall quotes
     """
-    class QUOTEERROR(Exception):
+    class QuoteError(Exception):
         pass
 
-    def _quote(self,in_quote_num=None):
+    def _quote(self, in_quote_num=None):
         quote = {}
         if in_quote_num == None:
-            raise self.QUOTEERROR("No quote number passed.")
+            raise self.QuoteError("No quote number passed.")
         #check format of quote_numb
         quote["ID"] = 0
         try:
             quote["ID"] = int(in_quote_num)
         except:
-            raise self.QUOTEERROR("Quote number passed not integer.")
+            raise self.QuoteError("Quote number passed not integer.")
 
         #open the quotes file, and read the quote
         quotes = {}
@@ -26,22 +27,22 @@ class Quote(Plugin):
                 try:
                     quotes = json.loads(q_file.read())
                 except:
-                    raise self.QUOTEERROR("Quotes JSON file format error.")
+                    raise self.QuoteError("Quotes JSON file format error.")
         except:
-            raise self.QUOTEERROR("Quote file doesn't exist yo.")
+            raise self.QuoteError("Quote file doesn't exist yo.")
 
         #get quote
         quote["text"] = ""
         try:
             quote["text"] = quotes[str(in_quote_num)]
         except:
-            return (quote["ID"],"NOT FOUND")
+            return (quote["ID"], "NOT FOUND")
 
-        return (quote["ID"],quote["text"])
+        return (quote["ID"], quote["text"])
 
-    def _addquote(self,in_quote_text=""):
+    def _addquote(self, in_quote_text=""):
         if in_quote_text == "":
-            raise self.QUOTEERROR("Empty quote!")
+            raise self.QuoteError("Empty quote!")
         quote = {} #output
 
         #open up quotes file
@@ -58,7 +59,7 @@ class Quote(Plugin):
         try:
             num_of_quotes = quotes["quote_count"]
         except:
-            raise self.QUOTEERROR("Can't find quote count in quote dictionary.")
+            raise self.QuoteError("Can't find quote count in quote dictionary.")
         quotes[num_of_quotes] = in_quote_text
         quote["ID"] = num_of_quotes
         quotes["quote_count"] = num_of_quotes + 1
@@ -68,27 +69,27 @@ class Quote(Plugin):
             with open("quotes.json","w+") as q_file:
                 q_file.write(json.dumps(quotes))
         except:
-            raise self.QUOTEERROR("Unable to write quote file back")
+            raise self.QuoteError("Unable to write quote file back")
 
         quote["text"] = in_quote_text
 
-        return(quote["text"],quote["ID"])
+        return(quote["text"], quote["ID"])
 
 
-    @Plugin.command('quote',help="quote <ID>")
+    @Plugin.command('quote', help="quote <ID>")
     def quote(self, e):
         """quote somebody
         """
         try:
             e.reply("#{}: {}".format(*self._quote(e["data"])))
-        except self.QUOTEERROR as ex:
+        except self.QuoteError as ex:
             e.reply(str(ex))
 
-    @Plugin.command('addquote',help="addquote <quote>")
+    @Plugin.command('addquote', help="addquote <quote>")
     def addquote(self, e):
         """add a quote
         """
         try:
             e.reply("\"{}\" added as quote #{}.".format(*self._addquote(e["data"])))
-        except self.QUOTEERROR as ex:
+        except self.QuoteError as ex:
             e.reply(str(ex))
