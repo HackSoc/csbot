@@ -18,13 +18,14 @@ class Quote(Plugin):
 
         #find quote by nick
         quotes = self.db.find({'nick': nick})
+        
+        #Find returns cursor, convert cursor iterator to list, 
         quote_list = list(quotes)
 
         if len(quote_list) == 0:
             self.QuoteError("No quotes by", nick)
 
-        #Find returns cursor, convert cursor to list, randomly pick quote from returned quotes
-        quote_list = list(quotes)
+        #Randomly pick quote from returned quotes
         quote = random.choice(quote_list)
 
         return (quote["quote"], quote["nick"])
