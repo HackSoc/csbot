@@ -11,25 +11,36 @@ class Whois(Plugin):
     whoisdb = Plugin.use('mongodb', collection='whois')
 
     def whois_lookup(self, nick, channel, db=None):
-        """Performs a whois lookup for a nick on a specific channel"""
+        """Performs a whois lookup for a nick"""
         db = db or self.whoisdb
 
         ident = self.identify_user(nick, channel)
         user = db.find_one(ident)
 
         if user is None:
-            return None
+            # try lookup the default one
+            ident = self.identify_user(nick)
+            user = db.find_one(ident)
+            if user is None:
+                return None
+            return user['data']
         else:
             return user['data']
 
-    def whois_set(self, nick, channel, whois_str, db=None):
+    def whois_set(self, nick, whois_str, channel=None, db=None):
         db = db or self.whoisdb
 
-        ident = self.identify_user(nick, channel)
-        db.remove(ident)
-
+        ident = self.whois_unset(nick, channel=channel)
         ident['data'] = whois_str
         db.insert(ident)
+
+    def whois_unset(self, nick, channel=None, db=None):
+        db = db or self.whoisdb
+
+        ident = self.identify_user(nick, channel=channel)
+        db.remove(ident)
+
+        return ident
 
     @Plugin.command('whois', help=('whois [nick]: show whois data for'
                                    ' a nick, or for yourself if omitted'))
@@ -44,20 +55,42 @@ class Whois(Plugin):
         else:
             e.reply('{}: {}'.format(nick_, str(res)))
 
+
+    @Plugin.command('whois.setdefault', help=('whois.setdefault [default_whois]: sets the default'
+                                              ' whois text for the user, used when no channel-specific'
+                                              ' one is set'))
+    def setdefault(self, e):
+        self.whois_set(nick(e['user']), e['data'], channel=None)
+
     @Plugin.command('whois.set')
     def set(self, e):
         """Allow a user to associate data with themselves for this channel."""
-        self.whois_set(nick(e['user']), e['channel'], e['data'])
+        self.whois_set(nick(e['user']), e['data'], channel=e['channel'])
 
-    def identify_user(self, nick, channel):
+
+    @Plugin.command('whois.unset')
+    def unset(self, e):
+        self.whois_unset(nick(e['user']), channel=e['channel'])
+
+    @Plugin.command('whois.unsetdefault')
+    def unset(self, e):
+        self.whois_unset(nick(e['user']))
+
+    def identify_user(self, nick, channel=None):
         """Identify a user: by account if authed, if not, by nick. Produces a dict
         suitable for throwing at mongo."""
 
         user = self.bot.plugins['usertrack'].get_user(nick)
 
         if user['account'] is not None:
-            return {'account': user['account'],
-                    'channel': channel}
+            acc = {'account': user['account']}
         else:
-            return {'nick': nick,
-                    'channel': channel}
+            acc = {'nick': nick}
+
+        if channel is not None:
+            acc['channel'] = channel
+        else:
+            acc['default'] = 'true'
+
+        return acc
+
