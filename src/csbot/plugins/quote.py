@@ -13,7 +13,7 @@ class Quote(Plugin):
     """Attach channel specific quotes to a user
     """
 
-    PLUGIN_DEPENDS = ['usertrack']
+    PLUGIN_DEPENDS = ['usertrack', 'auth']
 
     quotedb = Plugin.use('mongodb', collection='quotedb')
 
@@ -129,14 +129,14 @@ class Quote(Plugin):
                 if paste_link:
                     yield 'Full summary at: {}'.format(paste_link)
 
-    @Plugin.command('quote', help=("quote <nick> [<pattern>]: adds last quote that matches <pattern> to the database"))
-    def quote(self, e):
-        """Lookup the nick given
+    @Plugin.command('remember', help=("remember <nick> [<pattern>]: adds last quote that matches <pattern> to the database"))
+    def remember(self, e):
+        """Remembers something said
         """
         data = e['data'].split(maxsplit=1)
 
         if len(data) < 1:
-            return e.reply('Expected more arguments, see !help quote')
+            return e.reply('Expected more arguments, see !help remember')
 
         nick_ = data[0].strip()
 
@@ -153,10 +153,10 @@ class Quote(Plugin):
             else:
                 e.reply('Unknown nick {}'.format(nick_))
 
-    @Plugin.command('quotes', help=("quote [<nick> [<pattern>]]: looks up quotes from <nick>"
+    @Plugin.command('quote', help=("quote [<nick> [<pattern>]]: looks up quotes from <nick>"
                                     " (optionally only those matching <pattern>)"))
-    def quotes(self, e):
-        """Lookup the nick given
+    def quote(self, e):
+        """ Lookup quotes for the given channel/nick and outputs one
         """
         data = e['data'].split(maxsplit=1)
         channel = e['channel']
@@ -181,12 +181,15 @@ class Quote(Plugin):
             out = random.choice(res)
             e.reply(self.format_quote(out, show_channel=False))
 
-    @Plugin.command('quotes.list', help=("quotes.list [<pattern>]: looks up all quotes on the channel"))
+    @Plugin.command('quote.list', help=("quote.list [<pattern>]: looks up all quotes on the channel"))
     def quoteslist(self, e):
         """Lookup the nick given
         """
         channel = e['channel']
         nick_ = nick(e['user'])
+
+        if not self.bot.plugins['auth'].check_or_error(e, 'quote', channel):
+            return
 
         if nick_ == channel:
             # first argument must be a channel
@@ -209,12 +212,15 @@ class Quote(Plugin):
             for line in self.quote_summary(channel, pattern=pattern):
                 self.bot.reply(nick_, line)
 
-    @Plugin.command('quotes.remove', help=("quotes.remove <id> [, <id>]*: removes quotes from the database"))
+    @Plugin.command('quote.remove', help=("quote.remove <id> [, <id>]*: removes quotes from the database"))
     def quotes_remove(self, e):
         """Lookup the given quotes and remove them from the database transcationally
         """
         data = e['data'].split(',')
         channel = e['channel']
+
+        if not self.bot.plugins['auth'].check_or_error(e, 'quote', e['channel']):
+            return
 
         if len(data) < 1:
             return e.reply('Expected at least 1 quoteID to remove.')

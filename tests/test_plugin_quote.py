@@ -21,7 +21,11 @@ def failsafe(f):
 class TestQuotePlugin(BotTestCase):
     CONFIG = """\
     [@bot]
-    plugins = mongodb usertrack quote
+    plugins = mongodb usertrack auth quote
+
+    [auth]
+    nickaccount  = #First:quote
+    otheraccount = #Second:quote
 
     [mongodb]
     mode = mock
@@ -52,26 +56,26 @@ class TestQuotePlugin(BotTestCase):
     @run_client
     def test_client_quote_add(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
         self.assert_sent_quote('#First', 0, 'Nick', '#First', 'test data')
 
     @failsafe
     @run_client
     def test_client_quote_add_pattern_find(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#1')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
 
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#2')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
 
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes Nick data#2')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick data#2')
         self.assert_sent_quote('#First', 1, 'Nick', '#First', 'test data#2')
 
     @failsafe
     @run_client
     def test_client_quotes_not_exist(self):
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes Nick')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
         self.assert_sent('NOTICE {} :{}'.format('#First', 'No quotes recorded for Nick'))
 
     @failsafe
@@ -79,8 +83,8 @@ class TestQuotePlugin(BotTestCase):
     def test_client_quote_add_multi(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data')
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'other data')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick test')
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick test')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
         self.assert_sent_quote('#First', 0, 'Nick', '#First', 'test data')
 
     @failsafe
@@ -89,10 +93,10 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data')
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'other data')
 
-        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
         self.assert_sent('NOTICE {} :{}'.format('#Second', 'Unknown nick Nick'))
 
-        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quotes Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
         self.assert_sent('NOTICE {} :{}'.format('#Second', 'No quotes recorded for Nick'))
 
     @failsafe
@@ -101,12 +105,12 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data')
         yield from self._recv_privmsg('Nick!~user@host', '#Second', 'other data')
 
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
-        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quotes Nick')
         self.assert_sent_quote('#Second', 0, 'Nick', '#Second', 'other data')
 
-        yield from self._recv_privmsg('Another!~user@host', '#First', '!quote Nick')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quotes Nick')
+        yield from self._recv_privmsg('Another!~user@host', '#First', '!remember Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
         self.assert_sent_quote('#First', 1, 'Nick', '#First', 'test data')
 
     @failsafe
@@ -116,35 +120,40 @@ class TestQuotePlugin(BotTestCase):
             yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#{}'.format(i))
             yield from self._recv_privmsg('Nick!~user@host', '#Second', 'other data#{}'.format(i))
 
-        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick data#135')
-        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quotes Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick data#135')
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
         self.assert_sent_quote('#Second', 0, 'Nick', '#Second', 'other data#135')
 
     @failsafe
     @run_client
     def test_client_quotes_format(self):
-        """make sure the format !quotes.list yields is readable and goes to the right place
+        """make sure the format !quote.list yields is readable and goes to the right place
         """
-        yield from self._recv_privmsg('Nick!~user@host', '#First', 'data test')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
+        yield from self.client.line_received(":Other!~other@otherhost ACCOUNT otheraccount")
 
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quotes.list')
-        self.assert_sent('NOTICE Other :(0) - #First - <Nick> data test')
+        yield from self._recv_privmsg('Nick!~user@host', '#Second', 'data test')
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
+
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote.list')
+        self.assert_sent('NOTICE Other :(0) - #Second - <Nick> data test')
 
     @failsafe
     @run_client
     def test_client_quotes_list(self):
-        """ensure the list !quotes.list sends is short and redirects to pastebin
+        """ensure the list !quote.list sends is short and redirects to pastebin
         """
+        yield from self.client.line_received(":Nick!~user@host ACCOUNT nickaccount")
+        yield from self.client.line_received(":Other!~other@otherhost ACCOUNT otheraccount")
+
         # stick some quotes in a thing
         data = ['test data#{}'.format(i) for i in range(10)]
         for msg in data:
-            yield from self._recv_privmsg('Nick!~user@host', '#First', msg)
-            yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
+            yield from self._recv_privmsg('Nick!~user@host', '#Second', msg)
+            yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
 
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quotes.list')
+        yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote.list')
 
-        quotes = [{'nick': 'Nick', 'channel': '#First', 'message': d, 'quoteId': i} for i, d in enumerate(data)]
+        quotes = [{'nick': 'Nick', 'channel': '#Second', 'message': d, 'quoteId': i} for i, d in enumerate(data)]
         msgs = ['NOTICE {channel} :{msg}'.format(channel='Other',
                                                  msg=self.quote.format_quote(q, show_channel=True)) for q in quotes]
         self.assert_sent(msgs[:5])
@@ -159,34 +168,57 @@ class TestQuotePlugin(BotTestCase):
     @failsafe
     @run_client
     def test_client_quote_remove(self):
+        yield from self.client.line_received(":Nick!~user@host ACCOUNT nickaccount")
+
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#1')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
 
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#2')
-        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
 
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes.remove -1')
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes.remove 0')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote.remove -1')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote.remove 0')
 
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quotes Nick')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
         self.assert_sent('NOTICE {} :{}'.format('#First', 'No quotes recorded for Nick'))
 
     @failsafe
     @run_client
+    def test_client_quote_remove_no_permission(self):
+        yield from self.client.line_received(":Other!~other@otherhost ACCOUNT otheraccount")
+
+        yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#1')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote.remove -1')
+
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'error: otheraccount not authorised for #First:quote'))
+
+    @failsafe
+    @run_client
+    def test_client_quote_list_no_permission(self):
+        yield from self.client.line_received(":Other!~other@otherhost ACCOUNT otheraccount")
+
+        yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data#1')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!quote.list')
+
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'error: otheraccount not authorised for #First:quote'))
+
+    @run_client
     def test_client_quote_channelwide(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data!')
-        yield from self._recv_privmsg('Other!~other@host', '#First', '!quote Nick')
-        yield from self._recv_privmsg('Other!~other@host', '#First', '!quotes')
+        yield from self._recv_privmsg('Other!~other@host', '#First', '!remember Nick')
+        yield from self._recv_privmsg('Other!~other@host', '#First', '!quote')
         self.assert_sent_quote('#First', 0, 'Nick', '#First', 'test data!')
 
     @failsafe
     @run_client
     def test_client_quote_channelwide_with_pattern(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data!')
-        yield from self._recv_privmsg('Other!~other@host', '#First', '!quote Nick')
+        yield from self._recv_privmsg('Other!~other@host', '#First', '!remember Nick')
 
         yield from self._recv_privmsg('Other!~other@host', '#First', 'other data')
-        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Other')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!remember Other')
 
-        yield from self._recv_privmsg('Other!~other@host', '#First', '!quotes * other')
+        yield from self._recv_privmsg('Other!~other@host', '#First', '!quote * other')
         self.assert_sent_quote('#First', 1, 'Other', '#First', 'other data')
