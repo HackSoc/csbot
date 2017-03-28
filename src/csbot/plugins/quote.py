@@ -37,7 +37,7 @@ class Quote(Plugin):
         return fmt.format(quoteId=quoteId, channel=q['channel'], nick=q['nick'], message=q['message'])
 
     def paste_quotes(self, quotes):
-        paste_content = '\n'.join(self.format_quote(q) for q in quotes[:100])
+        paste_content = '\n'.join(self.format_quote(q, show_channel=True) for q in quotes[:100])
         if len(quotes) > 100:
             paste_content = 'Latest 100 quotes:\n' + paste_content
 
@@ -111,7 +111,7 @@ class Quote(Plugin):
                 yield quote
 
     def quote_summary(self, channel, pattern=None, dpaste=True):
-        quotes = list(self.quotedb.find({'channel': channel}, sort=[('quoteId', pymongo.ASCENDING)]))
+        quotes = list(self.quotedb.find({'channel': channel}, sort=[('quoteId', pymongo.DESCENDING)]))
         if not quotes:
             if pattern:
                 yield 'No quotes for channel {} that match "{}"'.format(channel, pattern)
@@ -191,7 +191,7 @@ class Quote(Plugin):
         if not self.bot.plugins['auth'].check_or_error(e, 'quote', channel):
             return
 
-        if nick_ == channel:
+        if channel == self.bot.nick:
             # first argument must be a channel
             data = e['data'].split(maxsplit=1)
             if len(data) < 1:
@@ -248,7 +248,7 @@ class Quote(Plugin):
 
         if invalid_ids:
             str_invalid_ids = ', '.join(str(id) for id in invalid_ids)
-            return e.reply('Cannot find quotes with ids {ids} (request aborted)'.format(ids=str_invalid_ids))
+            return e.reply('No quotes with id(s) {ids} (request aborted)'.format(ids=str_invalid_ids))
         else:
             for q in quotes:
                 self.quotedb.remove(q)
