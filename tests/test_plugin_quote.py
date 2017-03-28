@@ -135,7 +135,7 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
 
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote.list')
-        self.assert_sent('NOTICE Other :(0) - #Second - <Nick> data test')
+        self.assert_sent('NOTICE Other :[0] - #Second - <Nick> data test')
 
     @failsafe
     @run_client

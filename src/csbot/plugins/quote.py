@@ -30,9 +30,9 @@ class Quote(Plugin):
     def format_quote(self, q, show_channel=False):
         current = self.get_current_quote_id()
         len_current = len(str(current))
-        quoteId = str(q['quoteId']).ljust(len_current)
-        fmt_channel = '({quoteId}) - {channel} - <{nick}> {message}'
-        fmt_nochannel = '({quoteId}) <{nick}> {message}'
+        quoteId = str(q['quoteId']) if not show_channel else str(q['quoteId']).ljust(len_current)
+        fmt_channel = '[{quoteId}] - {channel} - <{nick}> {message}'
+        fmt_nochannel = '[{quoteId}] <{nick}> {message}'
         fmt = fmt_channel if show_channel else fmt_nochannel
         return fmt.format(quoteId=quoteId, channel=q['channel'], nick=q['nick'], message=q['message'])
 
