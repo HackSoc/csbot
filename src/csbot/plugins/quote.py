@@ -27,13 +27,29 @@ class Quote(Plugin):
         """
         return self.quotedb.find_one({'quoteId': quoteId})
 
-    def format_quote(self, q, show_channel=False):
-        current = self.get_current_quote_id()
-        len_current = len(str(current))
-        quoteId = str(q['quoteId']) if not show_channel else str(q['quoteId']).ljust(len_current)
-        fmt_channel = '[{quoteId}] - {channel} - <{nick}> {message}'
-        fmt_nochannel = '[{quoteId}] <{nick}> {message}'
-        fmt = fmt_channel if show_channel else fmt_nochannel
+    def format_quote_id(self, quote_id, long=False):
+        if long:
+            current = self.get_current_quote_id()
+            len_current = len(str(current))
+
+            if current == -1:  # no quotes yet
+                return str(quote_id)
+            return str(quote_id).ljust(len_current)
+        else:
+            return str(quote_id)
+
+    def format_quote(self, q, show_channel=False, show_id=True):
+        quoteId = self.format_quote_id(q['quoteId'], long=show_channel)
+
+        if show_channel:
+            fmt = '{channel} - <{nick}> {message}'
+            if show_id:
+                fmt = '[{quoteId}] - ' + fmt
+        else:
+            fmt = '<{nick}> {message}'
+            if show_id:
+                fmt = '[{quoteId}] ' + fmt
+
         return fmt.format(quoteId=quoteId, channel=q['channel'], nick=q['nick'], message=q['message'])
 
     def paste_quotes(self, quotes):
@@ -93,7 +109,8 @@ class Quote(Plugin):
         for udict in self.channel_logs[channel]:
             if subdict(user, udict):
                 if self.message_matches(udict['message'], pattern=pattern):
-                    return self.insert_quote(udict)
+                    self.insert_quote(udict)
+                    return udict
 
         return None
 
@@ -134,6 +151,8 @@ class Quote(Plugin):
         """Remembers something said
         """
         data = e['data'].split(maxsplit=1)
+        channel = e['channel']
+        user_nick = nick(e['user'])
 
         if len(data) < 1:
             return e.reply('Expected more arguments, see !help remember')
@@ -145,13 +164,15 @@ class Quote(Plugin):
         else:
             pattern = data[1].strip()
 
-        res = self.quote_set(nick_, e['channel'], pattern)
+        res = self.quote_set(nick_, channel, pattern)
 
         if res is None:
             if pattern:
                 e.reply('No data for {} found matching "{}"'.format(nick_, pattern))
             else:
                 e.reply('No data for {}'.format(nick_))
+        else:
+            self.bot.reply(user_nick, 'remembered "{}"'.format(self.format_quote(res, show_channel=False, show_id=False)))
 
     @Plugin.command('quote', help=("quote [<nick> [<pattern>]]: looks up quotes from <nick>"
                                     " (optionally only those matching <pattern>)"))

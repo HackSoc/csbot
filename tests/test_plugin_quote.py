@@ -49,6 +49,14 @@ class TestQuotePlugin(BotTestCase):
         self.assert_sent('NOTICE {} :{}'.format(channel, self.quote.format_quote(quote)))
 
     @failsafe
+    def test_quote_formatter(self):
+        quote = {'quoteId': 0, 'channel': '#First', 'message': 'test', 'nick': 'Nick'}
+        assert self.quote.format_quote(quote) == '[0] <Nick> test'
+        assert self.quote.format_quote(quote, show_id=False) == '<Nick> test'
+        assert self.quote.format_quote(quote, show_channel=True) == '[0] - #First - <Nick> test'
+        assert self.quote.format_quote(quote, show_channel=True, show_id=False) == '#First - <Nick> test'
+
+    @failsafe
     def test_quote_empty(self):
         assert list(self.quote.find_quotes('noQuotesForMe', '#anyChannel')) == []
 
@@ -59,6 +67,13 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
         self.assert_sent_quote('#First', 0, 'Nick', '#First', 'test data')
+
+    @failsafe
+    @run_client
+    def test_client_quote_remember_send_privmsg(self):
+        yield from self._recv_privmsg('Nick!~user@host', '#First', 'test data')
+        yield from self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
+        self.assert_sent('NOTICE Other :remembered "<Nick> test data"')
 
     @failsafe
     @run_client
@@ -154,6 +169,7 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote.list')
 
         quotes = [{'nick': 'Nick', 'channel': '#Second', 'message': d, 'quoteId': i} for i, d in enumerate(data)]
+        quotes = reversed(quotes)
         msgs = ['NOTICE {channel} :{msg}'.format(channel='Other',
                                                  msg=self.quote.format_quote(q, show_channel=True)) for q in quotes]
         self.assert_sent(msgs[:5])
