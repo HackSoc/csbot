@@ -76,7 +76,7 @@ class TestQuotePlugin(BotTestCase):
     @run_client
     def test_client_quotes_not_exist(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
-        self.assert_sent('NOTICE {} :{}'.format('#First', 'No quotes recorded for Nick'))
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'No data for Nick'))
 
     @failsafe
     @run_client
@@ -94,10 +94,10 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Nick!~user@host', '#First', 'other data')
 
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
-        self.assert_sent('NOTICE {} :{}'.format('#Second', 'Unknown nick Nick'))
+        self.assert_sent('NOTICE {} :{}'.format('#Second', 'No data for Nick'))
 
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
-        self.assert_sent('NOTICE {} :{}'.format('#Second', 'No quotes recorded for Nick'))
+        self.assert_sent('NOTICE {} :{}'.format('#Second', 'No data for Nick'))
 
     @failsafe
     @run_client
@@ -180,7 +180,7 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote.remove 0')
 
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
-        self.assert_sent('NOTICE {} :{}'.format('#First', 'No quotes recorded for Nick'))
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'No data for Nick'))
 
     @failsafe
     @run_client

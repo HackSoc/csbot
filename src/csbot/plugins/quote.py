@@ -114,9 +114,9 @@ class Quote(Plugin):
         quotes = list(self.quotedb.find({'channel': channel}, sort=[('quoteId', pymongo.ASCENDING)]))
         if not quotes:
             if pattern:
-                yield 'Cannot find quotes for channel {} that match "{}"'.format(channel, pattern)
+                yield 'No quotes for channel {} that match "{}"'.format(channel, pattern)
             else:
-                yield 'Cannot find quotes for channel {}'.format(channel)
+                yield 'No quotes for channel {}'.format(channel)
 
             return
 
@@ -149,9 +149,9 @@ class Quote(Plugin):
 
         if res is None:
             if pattern:
-                e.reply('Found no messages from {} found matching "{}"'.format(nick_, pattern))
+                e.reply('No data for {} found matching "{}"'.format(nick_, pattern))
             else:
-                e.reply('Unknown nick {}'.format(nick_))
+                e.reply('No data for {}'.format(nick_))
 
     @Plugin.command('quote', help=("quote [<nick> [<pattern>]]: looks up quotes from <nick>"
                                     " (optionally only those matching <pattern>)"))
@@ -174,9 +174,9 @@ class Quote(Plugin):
         res = list(self.find_quotes(nick_, channel, pattern))
         if not res:
             if nick_ == '*':
-                e.reply('No quotes recorded')
+                e.reply('No data')
             else:
-                e.reply('No quotes recorded for {}'.format(nick_))
+                e.reply('No data for {}'.format(nick_))
         else:
             out = random.choice(res)
             e.reply(self.format_quote(out, show_channel=False))
@@ -195,7 +195,7 @@ class Quote(Plugin):
             # first argument must be a channel
             data = e['data'].split(maxsplit=1)
             if len(data) < 1:
-                return e.reply('Expected at least <channel> argument in PRIVMSGs, see !help quotes.list')
+                return e.reply('No channel supplied. Syntax for privmsg version is !quote.list <channel> [<pattern>]')
 
             quote_channel = data[0]
 
@@ -223,7 +223,7 @@ class Quote(Plugin):
             return
 
         if len(data) < 1:
-            return e.reply('Expected at least 1 quoteID to remove.')
+            return e.reply('No quoteID supplied')
 
         ids = [qId.strip() for qId in data]
         invalid_ids = []
