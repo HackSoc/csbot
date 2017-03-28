@@ -1,4 +1,5 @@
 import re
+import random
 import functools
 import collections
 
@@ -26,21 +27,23 @@ class Quote(Plugin):
         """
         return self.quotedb.find_one({'quoteId': quoteId})
 
-    def format_quote(self, q):
+    def format_quote(self, q, show_channel=False):
         current = self.get_current_quote_id()
         len_current = len(str(current))
         quoteId = str(q['quoteId']).ljust(len_current)
-        return '{quoteId} - {channel} - <{nick}> {message}'.format(quoteId=quoteId,
-                                                                   channel=q['channel'],
-                                                                   nick=q['nick'],
-                                                                   message=q['message'])
+        fmt_channel = '({quoteId}) - {channel} - <{nick}> {message}'
+        fmt_nochannel = '({quoteId}) <{nick}> {message}'
+        fmt = fmt_channel if show_channel else fmt_nochannel
+        return fmt.format(quoteId=quoteId, channel=q['channel'], nick=q['nick'], message=q['message'])
 
     def paste_quotes(self, quotes):
-        if len(quotes) > 5:
-            paste_content = '\n'.join(self.format_quote(q) for q in quotes)
-            req = requests.post('http://dpaste.com/api/v2/', {'content': paste_content})
-            if req:
-                return req.content.decode('utf-8').strip()
+        paste_content = '\n'.join(self.format_quote(q) for q in quotes[:100])
+        if len(quotes) > 100:
+            paste_content = 'Latest 100 quotes:\n' + paste_content
+
+        req = requests.post('http://dpaste.com/api/v2/', {'content': paste_content})
+        if req:
+            return req.content.decode('utf-8').strip()
 
     def set_current_quote_id(self, id):
         """sets the last quote id
@@ -98,7 +101,11 @@ class Quote(Plugin):
         """finds and yields all quotes from nick
         on channel `channel` (optionally matching on `pattern`)
         """
-        user = self.identify_user(nick, channel)
+        if nick == '*':
+            user = {'channel': channel}
+        else:
+            user = self.identify_user(nick, channel)
+
         for quote in self.quotedb.find(user, sort=[('quoteId', pymongo.ASCENDING)]):
             if self.message_matches(quote['message'], pattern=pattern):
                 yield quote
@@ -114,12 +121,13 @@ class Quote(Plugin):
             return
 
         for q in quotes[:5]:
-            yield self.format_quote(q)
+            yield self.format_quote(q, show_channel=True)
 
         if dpaste:
-            paste_link = self.paste_quotes(quotes)
-            if paste_link:
-                yield 'Full summary at: {}'.format(paste_link)
+            if len(quotes) > 5:
+                paste_link = self.paste_quotes(quotes)
+                if paste_link:
+                    yield 'Full summary at: {}'.format(paste_link)
 
     @Plugin.command('quote', help=("quote <nick> [<pattern>]: adds last quote that matches <pattern> to the database"))
     def quote(self, e):
@@ -145,7 +153,7 @@ class Quote(Plugin):
             else:
                 e.reply('Unknown nick {}'.format(nick_))
 
-    @Plugin.command('quotes', help=("quote <nick> [<pattern>]: looks up quotes from <nick>"
+    @Plugin.command('quotes', help=("quote [<nick> [<pattern>]]: looks up quotes from <nick>"
                                     " (optionally only those matching <pattern>)"))
     def quotes(self, e):
         """Lookup the nick given
@@ -154,22 +162,24 @@ class Quote(Plugin):
         channel = e['channel']
 
         if len(data) < 1:
-            return e.reply('Expected arguments, see !help quote')
+            nick_ = '*'
+        else:
+            nick_ = data[0].strip()
 
-        nick_ = data[0].strip()
-
-        if len(data) == 1:
+        if len(data) <= 1:
             pattern = ''
         else:
             pattern = data[1].strip()
 
-        res = self.find_quotes(nick_, channel, pattern)
-        out = next(res, None)
-        if out is None:
-            e.reply('No quotes recorded for {}'.format(nick_))
+        res = list(self.find_quotes(nick_, channel, pattern))
+        if not res:
+            if nick_ == '*':
+                e.reply('No quotes recorded')
+            else:
+                e.reply('No quotes recorded for {}'.format(nick_))
         else:
-            e.reply('<{}> {}'.format(out['nick'], out['message']))
-
+            out = random.choice(res)
+            e.reply(self.format_quote(out, show_channel=False))
 
     @Plugin.command('quotes.list', help=("quotes.list [<pattern>]: looks up all quotes on the channel"))
     def quoteslist(self, e):
