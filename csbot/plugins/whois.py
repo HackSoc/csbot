@@ -14,18 +14,11 @@ class Whois(Plugin):
         """Performs a whois lookup for a nick"""
         db = db or self.whoisdb
 
-        ident = self.identify_user(nick, channel)
-        user = db.find_one(ident)
-
-        if user is None:
-            # try lookup the default one
-            ident = self.identify_user(nick)
+        for ident in (self.identify_user(nick, channel),  # lookup channel specific first
+                      self.identify_user(nick)):          # default fallback
             user = db.find_one(ident)
-            if user is None:
-                return None
-            return user['data']
-        else:
-            return user['data']
+            if user:
+                return user['data']
 
     def whois_set(self, nick, whois_str, channel=None, db=None):
         db = db or self.whoisdb
@@ -83,14 +76,8 @@ class Whois(Plugin):
         user = self.bot.plugins['usertrack'].get_user(nick)
 
         if user['account'] is not None:
-            acc = {'account': user['account']}
+            return {'account': user['account'],
+                    'channel': channel}
         else:
-            acc = {'nick': nick}
-
-        if channel is not None:
-            acc['channel'] = channel
-        else:
-            acc['default'] = 'true'
-
-        return acc
-
+            return {'nick': nick,
+                    'channel': channel}
