@@ -66,7 +66,7 @@ class Whois(Plugin):
         self.whois_unset(nick(e['user']), channel=e['channel'])
 
     @Plugin.command('whois.unsetdefault')
-    def unset(self, e):
+    def unsetdefault(self, e):
         self.whois_unset(nick(e['user']))
 
     def identify_user(self, nick, channel=None):

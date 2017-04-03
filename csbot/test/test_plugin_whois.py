@@ -133,7 +133,7 @@ class TestWhoisPlugin(BotTestCase):
 
     @failsafe
     @run_client
-    def test_client_reply_whois_setdefault_then_unset_channel(self):
+    def test_client_reply_whois_setdefault_then_set_channel(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
 
         yield from self._recv_privmsg('Nick!~user@host', '#Second', '!whois')
@@ -147,6 +147,22 @@ class TestWhoisPlugin(BotTestCase):
         self.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test first'))
         yield from self._recv_privmsg('Other!~other@otherhost', '#Second', '!whois Nick')
         self.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test data'))
+
+    @failsafe
+    @run_client
+    def test_client_reply_whois_setdefault_then_unset_channel(self):
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
+        yield from self._recv_privmsg('Nick!~user@host', '#Second', '!whois')
+        self.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test data'))
+
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.set test first')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois')
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test first'))
+
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.unset')
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois')
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test data'))
+
 
     @failsafe
     @run_client
