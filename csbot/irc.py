@@ -231,6 +231,7 @@ class IRCClient:
         host='irc.freenode.net',
         port=6667,
         password=None,
+        bind_addr=None,
     ))
 
     def __init__(self, *, loop=None, **kwargs):
@@ -268,9 +269,17 @@ class IRCClient:
     def connect(self):
         """Connect to the IRC server."""
         LOG.debug('connecting to {host}:{port}...'.format(**self.__config))
+
+        # Optionally bind to specific local address
+        local_addr = None
+        bind = self.__config['bind_addr']
+        if bind is not None:
+            local_addr = (bind, None)
+
         self.reader, self.writer = yield from asyncio.open_connection(self.__config['host'],
                                                                       self.__config['port'],
-                                                                      loop=self.loop)
+                                                                      loop=self.loop,
+                                                                      local_addr=local_addr)
 
     def disconnect(self):
         """Disconnect from the IRC server.

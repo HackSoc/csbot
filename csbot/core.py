@@ -31,6 +31,7 @@ class Bot(SpecialPlugin, IRCClient):
         'lineRate': '1',
         'irc_host': 'irc.freenode.net',
         'irc_port': '6667',
+        'bind_addr': None,
         'command_prefix': '!',
         'use_notice': True,
         'channels': ' '.join([
@@ -73,6 +74,7 @@ class Bot(SpecialPlugin, IRCClient):
             host=self.config_get('irc_host'),
             port=self.config_get('irc_port'),
             password=self.config_get('password'),
+            bind_addr=self.config_get('bind_addr'),
         )
 
         # Plumb in reply(...) method
