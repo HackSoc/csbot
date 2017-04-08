@@ -277,9 +277,11 @@ class IRCClient:
 
         Use :meth:`quit` for a more graceful disconnect.
         """
-        assert self.writer is not None, "disconnect() when not connected"
         self._exiting = True
-        self.writer.close()
+        if self.writer is None:
+            LOG.warning("disconnect() when not connected")
+        else:
+            self.writer.close()
 
     @asyncio.coroutine
     def read_loop(self):
