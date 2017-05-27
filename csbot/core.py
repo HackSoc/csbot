@@ -96,9 +96,6 @@ class Bot(SpecialPlugin, IRCClient):
         # RPL_ENDOFNAMES events
         self.names_accumulator = collections.defaultdict(list)
 
-        # Acknowledged capabilities
-        self.capabilities = set()
-
     def bot_setup(self):
         """Load plugins defined in configuration and run setup methods.
         """
@@ -205,8 +202,6 @@ class Bot(SpecialPlugin, IRCClient):
 
     def connection_made(self):
         super().connection_made()
-        # TODO: do this in on_welcome() instead?
-        self.request_capabilities(['account-notify', 'extended-join'])
         self.emit_new('core.raw.connected')
 
     def connection_lost(self, exc):
@@ -328,31 +323,13 @@ class Bot(SpecialPlugin, IRCClient):
             'raw_names': raw_names,
         })
 
-    # Implement "IRC Client Capabilities Extension"
+    # "IRC Client Capabilities"
 
-    def request_capabilities(self, capabilities):
-        """Request "IRC Client Capabilities".
-
-        Wait for an appropriate response (e.g. :meth:`on_capabilities_changed`)
-        before assuming the request was successful.
-        """
-        self.send_line('CAP REQ :' + ' '.join(capabilities))
-
-    def irc_CAP(self, msg):
-        """Handle "IRC Client Capabilities Extension" messages."""
-        _, subcmd, data = msg.params
-        data = data.split()
-        if subcmd == 'ACK':
-            self.capabilities |= set(data)
-            self.on_capabilities_changed(self.capabilities)
-        elif subcmd == 'NAK':
-            self.capabilities -= set(data)
-            self.on_capabilities_changed(self.capabilities)
-
-    def on_capabilities_changed(self, capabilities):
-        self.emit_new('core.self.capabilities', {
-            'capabilities': capabilities,
-        })
+    def on_capabilities_available(self, capabilities):
+        super().on_capabilities_available(capabilities)
+        for cap in ['account-notify', 'extended-join']:
+            if cap in capabilities and cap not in self.enabled_capabilities:
+                self.enable_capability(cap)
 
     # Implement active account discovery via "formatted WHO"
 
@@ -385,7 +362,7 @@ class Bot(SpecialPlugin, IRCClient):
         """Re-implement ``JOIN`` handler to account for ``extended-join`` info.
         """
         # Only do special handling if extended-join was enabled
-        if 'extended-join' not in self.capabilities:
+        if 'extended-join' not in self.enabled_capabilities:
             return super().irc_JOIN(msg)
 
         user = IRCUser.parse(msg.prefix)

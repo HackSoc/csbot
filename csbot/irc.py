@@ -234,6 +234,11 @@ class IRCClient:
         bind_addr=None,
     ))
 
+    #: Available client capabilities
+    available_capabilities = None
+    #: Enabled client capabilities
+    enabled_capabilities = None
+
     def __init__(self, *, loop=None, **kwargs):
         self.loop = loop or asyncio.get_event_loop()
 
@@ -248,6 +253,8 @@ class IRCClient:
         self.disconnected.set()
 
         self.nick = None
+        self.available_capabilities = set()
+        self.enabled_capabilities = set()
 
     @asyncio.coroutine
     def run(self, run_once=False):
@@ -308,6 +315,10 @@ class IRCClient:
         """
         LOG.debug('connection made')
 
+        # Discover available client capabilities, if any
+        self.send_line('CAP LS')
+        self.send_line('CAP END')
+
         if self.__config['password']:
             self.send(IRCMessage.create('PASS', [self.__config['password']]))
 
@@ -349,6 +360,26 @@ class IRCClient:
         self.send_line(msg.raw)
 
     # Specific commands for sending messages
+
+    def enable_capability(self, name):
+        """Enable client capability *name*.
+
+        Should wait for :meth:`on_capability_enabled` before assuming it is
+        enabled.
+        """
+        if name not in self.available_capabilities:
+            LOG.warning('Enabling client capability "{}" not in response to CAP LS'.format(name))
+        self.send_line('CAP REQ :{}'.format(name))
+
+    def disable_capability(self, name):
+        """Disable client capability *name*.
+
+        Should wait for :meth:`on_capability_disabled` befor assuming it is
+        disabled.
+        """
+        if name not in self.available_capabilities:
+            LOG.warning('Disabling client capability "{}" not in response to CAP LS'.format(name))
+        self.send_line('CAP REQ :-{}'.format(name))
 
     def set_nick(self, nick):
         """Ask the server to set our nick."""
@@ -450,6 +481,39 @@ class IRCClient:
         """IRC PING/PONG keepalive."""
         self.send_line('PONG :{}'.format(msg.params[-1]))
 
+    def irc_CAP(self, msg):
+        """Dispatch ``CAP`` subcommands to their own methods."""
+        self._dispatch_method('irc_{}_{}'.format(msg.command_name, msg.params[1]), msg)
+
+    def irc_CAP_LS(self, msg):
+        """Response to ``CAP LS``, giving list of available capabilities."""
+        _, _, data = msg.params
+        data = data.split()
+        self.available_capabilities = set(data)
+        self.on_capabilities_available(self.available_capabilities)
+
+    def irc_CAP_ACK(self, msg):
+        """Response to ``CAP REQ``, acknowledging capability changes."""
+        _, _, data = msg.params
+        data = data.split()
+        for name in data:
+            if name.startswith('-'):
+                name = name[1:]
+                try:
+                    self.enabled_capabilities.remove(name)
+                except KeyError:
+                    pass
+                self.on_capability_disabled(name)
+            else:
+                self.enabled_capabilities.add(name)
+                self.on_capability_enabled(name)
+
+    def irc_CAP_NAK(self, msg):
+        """Response to ``CAP REQ``, rejecting capability changes."""
+        _, _, data = msg.params
+        data = data.split()
+        LOG.error('Client capability change(s) rejected: {}'.format(data))
+
     def irc_NICK(self, msg):
         """Somebody's nick changed."""
         user = IRCUser.parse(msg.prefix)
@@ -537,6 +601,31 @@ class IRCClient:
     # TODO: on_mode_changed
 
     # Events regarding self
+
+    def on_capabilities_available(self, capabilities):
+        """Client capabilities are available.
+
+        Called with a set of client capability names when we get a response to
+        ``CAP LS``.
+        """
+        LOG.debug('capabilities available: {}'.format(capabilities))
+        pass
+
+    def on_capability_enabled(self, name):
+        """Client capability enabled.
+
+        Called when enabling client capability *name* has been acknowledged.
+        """
+        LOG.debug('capability enabled: {}'.format(name))
+        pass
+
+    def on_capability_disabled(self, name):
+        """Client capability disabled.
+
+        Called when disabling client capability *name* has been acknowledged.
+        """
+        LOG.debug('capability disabled: {}'.format(name))
+        pass
 
     def on_welcome(self):
         """Successfully signed on to the server."""
