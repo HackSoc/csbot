@@ -25,6 +25,7 @@ class Bot(SpecialPlugin, IRCClient):
     CONFIG_DEFAULTS = {
         'nickname': 'csyorkbot',
         'password': None,
+        'auth_method': 'pass',
         'username': 'csyorkbot',
         'realname': 'cs-york bot',
         'sourceURL': 'http://github.com/csyork/csbot/',
@@ -74,6 +75,7 @@ class Bot(SpecialPlugin, IRCClient):
             host=self.config_get('irc_host'),
             port=self.config_get('irc_port'),
             password=self.config_get('password'),
+            auth_method=self.config_get('auth_method'),
             bind_addr=self.config_get('bind_addr'),
         )
 
