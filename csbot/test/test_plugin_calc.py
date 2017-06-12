@@ -50,3 +50,5 @@ class TestCalcPlugin(BotTestCase):
         self.assertEqual(self.calc._calc("10.0**1000"), "Error, too large to represent as float")
         self.assertEqual(self.calc._calc("'B' > 'H'"), "Error, invalid argument")
         self.assertEqual(self.calc._calc("e ^ pi"), "Error, invalid arguments")
+        self.assertEqual(self.calc._calc("factorial(-42)"), "Error, factorial() not defined for negative values")
+        self.assertEqual(self.calc._calc("factorial(4.2)"), "Error, factorial() only accepts integral values")
