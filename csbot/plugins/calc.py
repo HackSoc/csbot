@@ -149,6 +149,8 @@ class CalcEval(ast.NodeVisitor):
             return func(*args)
         except TypeError:
             raise CalcError("invalid arguments")
+        except ValueError as e:
+            raise CalcError(e)
 
     def visit_Name(self, node):
         try:
