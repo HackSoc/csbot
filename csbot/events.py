@@ -88,8 +88,6 @@ class AsyncEventRunner(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         LOG.debug('Exiting async event runner')
-        if self.future:
-            self.future.cancel()
         self.future = None
 
     def post_event(self, event):
