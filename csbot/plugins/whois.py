@@ -48,24 +48,35 @@ class Whois(Plugin):
         else:
             e.reply('{}: {}'.format(nick_, str(res)))
 
-
-    @Plugin.command('whois.setdefault', help=('whois.setdefault [default_whois]: sets the default'
-                                              ' whois text for the user, used when no channel-specific'
-                                              ' one is set'))
-    def setdefault(self, e):
-        self.whois_set(nick(e['user']), e['data'], channel=None)
-
-    @Plugin.command('whois.set')
-    def set(self, e):
+    @Plugin.command('whois.setlocal', help=('whois.setlocal [whois_text]: sets the whois text'
+                                            ' for the user, but only for the current channel.'))
+    def setlocal(self, e):
         """Allow a user to associate data with themselves for this channel."""
         self.whois_set(nick(e['user']), e['data'], channel=e['channel'])
 
+    @Plugin.command('whois.setdefault', help=('whois.setdefault [default_whois]: sets the default'
+                                              ' whois text for the user, used when no channel-specific'
+                                              ' one is set.'))
+    def setdefault(self, e):
+        self.whois_set(nick(e['user']), e['data'], channel=None)
 
-    @Plugin.command('whois.unset')
+    @Plugin.command('whois.set', help=('Alias for whois.setdefault.'))
+    def set(self, e):
+        """Allow a user to associate data with themselves for this channel."""
+        return self.setdefault(e)   
+
+    @Plugin.command('whois.unset', help=('Alias for whois.unsetdefault'))
     def unset(self, e):
+        return self.unsetdefault(e)
+
+    @Plugin.command('whois.unsetlocal', help=('whois.unsetlocal: unsets the local whois text for the user'
+                                              ' but only for this channel'
+                                              ' (the global whois for the user is unaffected).'))
+    def unsetlocal(self, e):
         self.whois_unset(nick(e['user']), channel=e['channel'])
 
-    @Plugin.command('whois.unsetdefault')
+    @Plugin.command('whois.unsetdefault', help='whois.unsetdefault: unsets the global whois text for the user.'
+                                               ' Locally set whois texts will be unaffected.')
     def unsetdefault(self, e):
         self.whois_unset(nick(e['user']))
 
