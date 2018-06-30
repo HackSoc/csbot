@@ -54,7 +54,6 @@ class Quote(Plugin):
 
         >>> self.format_quote({'quoteId': 3})
         "[3] <Alan> some silly quote..."
-
         >>> self.format_quote({'quoteId': 3}, show_channel=True, show_id=False)
         "[1  ] - #test - <Alan> silly quote"
         """
