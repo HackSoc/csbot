@@ -7,6 +7,8 @@ import mongomock
 from csbot.util import subdict
 from csbot.test import BotTestCase, run_client
 
+from csbot.plugins.quote import QuoteRecord
+
 
 def failsafe(f):
     """forces the test to fail if not using a mock
@@ -17,6 +19,25 @@ def failsafe(f):
                           mongomock.Collection), 'Not mocking MongoDB -- may be writing to actual database (!) (aborted test)'
         return f(self, *args, **kwargs)
     return decorator
+
+class TestQuoteRecord:
+    def test_quote_formatter(self):
+        quote = QuoteRecord(quote_id=0, channel='#First', nick='Nick', message='test')
+        assert quote.format() == '[0] <Nick> test'
+        assert quote.format(show_id=False) == '<Nick> test'
+        assert quote.format(show_channel=True) == '[0] - #First - <Nick> test'
+        assert quote.format(show_channel=True, show_id=False) == '#First - <Nick> test'
+
+    def test_quote_deserialise(self):
+        udict = {'quoteId': 0, 'channel': '#First', 'message': 'test', 'nick': 'Nick'}
+        qr = QuoteRecord(quote_id=0, channel='#First', nick='Nick', message='test')
+        assert QuoteRecord.from_udict(udict) == qr
+
+    def test_quote_serialise(self):
+        udict = {'quoteId': 0, 'channel': '#First', 'message': 'test', 'nick': 'Nick'}
+        qr = QuoteRecord(quote_id=0, channel='#First', nick='Nick', message='test')
+        assert qr.to_udict() == udict
+
 
 class TestQuotePlugin(BotTestCase):
     CONFIG = """\
@@ -45,16 +66,11 @@ class TestQuotePlugin(BotTestCase):
         yield from self.client.line_received(':{} PRIVMSG {} :{}'.format(name, channel, msg))
 
     def assert_sent_quote(self, channel, quote_id, quoted_user, quoted_channel, quoted_text, show_channel=False):
-        quote = {'quoteId': quote_id, 'channel': quoted_channel, 'message': quoted_text, 'nick': quoted_user}
-        self.assert_sent('NOTICE {} :{}'.format(channel, self.quote.format_quote(quote)))
-
-    @failsafe
-    def test_quote_formatter(self):
-        quote = {'quoteId': 0, 'channel': '#First', 'message': 'test', 'nick': 'Nick'}
-        assert self.quote.format_quote(quote) == '[0] <Nick> test'
-        assert self.quote.format_quote(quote, show_id=False) == '<Nick> test'
-        assert self.quote.format_quote(quote, show_channel=True) == '[0] - #First - <Nick> test'
-        assert self.quote.format_quote(quote, show_channel=True, show_id=False) == '#First - <Nick> test'
+        quote = QuoteRecord(quote_id=quote_id,
+                            channel=quoted_channel,
+                            nick=quoted_user,
+                            message=quoted_text)
+        self.assert_sent('NOTICE {} :{}'.format(channel, quote.format()))
 
     @failsafe
     def test_quote_empty(self):
@@ -168,10 +184,10 @@ class TestQuotePlugin(BotTestCase):
 
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!quote.list')
 
-        quotes = [{'nick': 'Nick', 'channel': '#Second', 'message': d, 'quoteId': i} for i, d in enumerate(data)]
+        quotes = [QuoteRecord(quote_id=i, channel='#Second', nick='Nick', message=d) for i, d in enumerate(data)]
         quotes = reversed(quotes)
         msgs = ['NOTICE {channel} :{msg}'.format(channel='Other',
-                                                 msg=self.quote.format_quote(q, show_channel=True)) for q in quotes]
+                                                 msg=q.format(show_channel=True)) for q in quotes]
         self.assert_sent(msgs[:5])
 
         # manually unroll the call args to map subdict over it
@@ -208,6 +224,14 @@ class TestQuotePlugin(BotTestCase):
         yield from self._recv_privmsg('Other!~user@host', '#First', '!quote.remove -1')
 
         self.assert_sent('NOTICE {} :{}'.format('#First', 'error: otheraccount not authorised for #First:quote'))
+
+    @failsafe
+    @run_client
+    def test_client_quote_remove_no_quotes(self):
+        yield from self.client.line_received(":Nick!~user@host ACCOUNT nickaccount")
+        yield from self._recv_privmsg('Nick!~user@host', '#First', '!quote.remove -1')
+
+        self.assert_sent('NOTICE {} :{}'.format('#First', 'Error: could not remove quote(s) with ID: -1'))
 
     @failsafe
     @run_client

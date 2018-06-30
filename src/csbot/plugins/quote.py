@@ -3,62 +3,29 @@ import random
 import functools
 import collections
 
+import attr
 import pymongo
 import requests
 
 from csbot.plugin import Plugin
 from csbot.util import nick, subdict
 
-class Quote(Plugin):
-    """Attach channel specific quotes to a user
-    """
 
-    PLUGIN_DEPENDS = ['usertrack', 'auth']
+@attr.s
+class QuoteRecord:
+    quote_id = attr.ib()
+    channel = attr.ib()
+    nick = attr.ib()
+    message = attr.ib()
 
-    quotedb = Plugin.use('mongodb', collection='quotedb')
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.channel_logs = collections.defaultdict(functools.partial(collections.deque, maxlen=100))
-
-    def quote_from_id(self, quoteId):
-        """gets a quote with some `quoteId` from the database
-        returns None if no such quote exists
-        """
-        return self.quotedb.find_one({'quoteId': quoteId})
-
-    def format_quote_id(self, quote_id, pad=False):
-        """Formats the quote_id as a string.
-
-        Can ask for a long-form version, which pads and aligns, or a short version:
-
-        >>> self.format_quote_id(3)
-        '3'
-        >>> self.format_quote_id(23, pad=True)
-        '23   '
-        """
-
-        if not pad:
-            return str(quote_id)
-        else:
-            current = self.get_current_quote_id()
-
-            if current == -1:  # quote_id is the first quote
-                return str(quote_id)
-
-            length = len(str(current))
-            return '{:<{length}}'.format(quote_id, length=length)
-
-    def format_quote(self, q, show_channel=False, show_id=True):
+    def format(self, show_channel=False, show_id=True):
         """ Formats a quote into a prettified string.
 
-        >>> self.format_quote({'quoteId': 3})
+        >>> self.format()
         "[3] <Alan> some silly quote..."
-        >>> self.format_quote({'quoteId': 3}, show_channel=True, show_id=False)
-        "[1  ] - #test - <Alan> silly quote"
+        >>> self.format(show_channel=True, show_id=False)
+        "#test - <Alan> silly quote"
         """
-        quote_id_fmt = self.format_quote_id(q['quoteId'], pad=show_channel)
-
         if show_channel and show_id:
             fmt = '[{quoteId}] - {channel} - <{nick}> {message}'
         elif show_channel and not show_id:
@@ -68,7 +35,31 @@ class Quote(Plugin):
         else:
             fmt = '<{nick}> {message}'
 
-        return fmt.format(quoteId=quote_id_fmt, channel=q['channel'], nick=q['nick'], message=q['message'])
+        return fmt.format(quoteId=self.quote_id, channel=self.channel, nick=self.nick, message=self.message)
+
+    def __bool__(self):
+        return True
+
+    def to_udict(self):
+        return {'quoteId': self.quote_id, 'nick': self.nick, 'channel': self.channel, 'message': self.message}
+
+    @classmethod
+    def from_udict(cls, udict):
+        return cls(quote_id=udict['quoteId'],
+                   channel=udict['channel'],
+                   nick=udict['nick'],
+                   message=udict['message'],
+                   )
+
+class QuoteDB:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def quote_from_id(self, quote_id):
+        """gets a quote with some `quoteId` from the database
+        returns None if no such quote exists
+        """
+        return QuoteRecord.from_udict(self.quotedb.find_one({'quoteId': quote_id}))
 
     def set_current_quote_id(self, id):
         """ Sets the last quote id
@@ -90,7 +81,7 @@ class Quote(Plugin):
 
         return current_id
 
-    def insert_quote(self, udict):
+    def insert_quote(self, quote):
         """ Remember a quote by storing it in the database
 
         Inserts a {'user': user, 'channel': channel, 'message': msg}
@@ -100,32 +91,65 @@ class Quote(Plugin):
 
         id = self.get_current_quote_id()
         sId = id + 1
-        udict['quoteId'] = sId
-        self.quotedb.insert(udict)
+        quote.quote_id = sId
+        self.quotedb.insert(quote.to_udict())
         self.set_current_quote_id(sId)
         return sId
 
-    def message_matches(self, msg, pattern=None):
-        """ Check whether the given message matches the given pattern
+    def remove_quote(self, quote_id):
+        """ Remove a given quote from the database
 
-        If there is no pattern, it is treated as a wildcard and all messages match.
+        Returns False if the quoteId is invalid or does not exist.
         """
-        if pattern is None:
-            return True
 
-        return re.search(pattern, msg) is not None
+        try:
+            id = int(quote_id)
+        except ValueError:
+            return False
+        else:
+            q = self.quote_from_id(id)
+            if not q:
+                return False
+
+            self.quotedb.remove({'quoteId': q.quote_id})
+
+        return True
+
+    def find_quotes(self, nick=None, channel=None, pattern=None, direction=pymongo.ASCENDING):
+        """ Finds and yields all quotes for a particular nick on a given channel
+        """
+        if nick is None or nick == '*':
+            user = {'channel': channel}
+        elif channel is not None:
+            user = {'channel': channel, 'nick': nick}
+        else:
+            user = {'nick': nick}
+
+        for quote in self.quotedb.find(user, sort=[('quoteId', direction)]):
+            if message_matches(quote['message'], pattern=pattern):
+                yield QuoteRecord.from_udict(quote)
+
+
+class Quote(Plugin, QuoteDB):
+    """Attach channel specific quotes to a user
+    """
+    quotedb = Plugin.use('mongodb', collection='quotedb')
+
+    PLUGIN_DEPENDS = ['usertrack', 'auth']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.channel_logs = collections.defaultdict(functools.partial(collections.deque, maxlen=100))
 
     def quote_set(self, nick, channel, pattern=None):
         """ Insert the last matching quote from a user on a particular channel into the quotes database.
         """
         user = self.identify_user(nick, channel)
 
-        for udict in self.channel_logs[channel]:
-            if subdict(user, udict):
-                if self.message_matches(udict['message'], pattern=pattern):
-                    self.insert_quote(udict)
-                    return udict
-
+        for q in self.channel_logs[channel]:
+            if nick == q.nick and channel == q.channel and message_matches(q.message, pattern=pattern):
+                self.insert_quote(q)
+                return q
         return None
 
     @Plugin.command('remember', help=("remember <nick> [<pattern>]: adds last quote that matches <pattern> to the database"))
@@ -138,25 +162,23 @@ class Quote(Plugin):
 
         m = re.fullmatch(r'(?P<nick>\S+)', data)
         if m:
-            print('fullmatch nick!')
             return self.remember_quote(e, user_nick, m.group('nick'), channel, None)
 
         m = re.fullmatch(r'(?P<nick>\S+)\s+(?P<pattern>.+)', data)
         if m:
-            print('fullmatch pat')
             return self.remember_quote(e, user_nick, m.group('nick'), channel, m.group('pattern').strip())
 
-        e.reply('Invalid nick or pattern')
+        e.reply('Error: invalid command')
 
     def remember_quote(self, e, user, nick, channel, pattern):
-        res = self.quote_set(nick, channel, pattern)
-        if res is None:
+        quote = self.quote_set(nick, channel, pattern)
+        if quote is None:
             if pattern is not None:
                 e.reply(f'No data for {nick} found matching "{pattern}"')
             else:
                 e.reply( f'No data for {nick}')
         else:
-            self.bot.reply(user, 'remembered "{}"'.format(self.format_quote(res, show_id=False)))
+            self.bot.reply(user, 'remembered "{}"'.format(quote.format(show_id=False)))
 
     @Plugin.command('quote', help=("quote [<nick> [<pattern>]]: looks up quotes from <nick>"
                                    " (optionally only those matching <pattern>)"))
@@ -167,7 +189,7 @@ class Quote(Plugin):
         channel = e['channel']
 
         if data.strip() == '':
-            return e.reply(self.find_a_quote('*', channel, None))
+            return e.reply(self.find_a_quote(None, channel, None))
 
         m = re.fullmatch(r'(?P<nick>\S+)', data)
         if m:
@@ -184,25 +206,13 @@ class Quote(Plugin):
         """
         res = list(self.find_quotes(nick, channel, pattern))
         if not res:
-            if nick == '*':
+            if nick is None:
                 return 'No data'
             else:
                 return 'No data for {}'.format(nick)
         else:
             out = random.choice(res)
-            return self.format_quote(out, show_channel=False)
-
-    def find_quotes(self, nick, channel, pattern=None):
-        """ Finds and yields all quotes for a particular nick on a given channel
-        """
-        if nick == '*':
-            user = {'channel': channel}
-        else:
-            user = self.identify_user(nick, channel)
-
-        for quote in self.quotedb.find(user, sort=[('quoteId', pymongo.ASCENDING)]):
-            if self.message_matches(quote['message'], pattern=pattern):
-                yield quote
+            return out.format(show_channel=False)
 
     @Plugin.command('quote.list', help=("quote.list [<pattern>]: looks up all quotes on the channel"))
     def quote_list(self, e):
@@ -245,7 +255,7 @@ class Quote(Plugin):
 
         Returns the last 5 matching quotes only, the remainder are added to a pastebin.
         """
-        quotes = list(self.quotedb.find({'channel': channel}, sort=[('quoteId', pymongo.DESCENDING)]))
+        quotes = list(self.find_quotes(nick=None, channel=channel, pattern=pattern, direction=pymongo.DESCENDING))
         if not quotes:
             if pattern:
                 yield 'No quotes for channel {} that match "{}"'.format(channel, pattern)
@@ -255,7 +265,7 @@ class Quote(Plugin):
             return
 
         for q in quotes[:5]:
-            yield self.format_quote(q, show_channel=True)
+            yield q.format(show_channel=True)
 
         if dpaste and len(quotes) > 5:
             paste_link = self.paste_quotes(quotes)
@@ -267,7 +277,7 @@ class Quote(Plugin):
     def paste_quotes(self, quotes):
         """ Pastebins a the last 100 quotes and returns the url
         """
-        paste_content = '\n'.join(self.format_quote(q, show_channel=True) for q in quotes[:100])
+        paste_content = '\n'.join(q.format(show_channel=True) for q in quotes[:100])
         if len(quotes) > 100:
             paste_content = 'Latest 100 quotes:\n' + paste_content
 
@@ -295,33 +305,20 @@ class Quote(Plugin):
         for id in ids:
             if id == '-1':
                 # special case -1, to be the last
-                _id = self.quotedb.find_one({'channel': channel}, sort=[('quoteId', pymongo.DESCENDING)])
-                if _id:
-                    id = _id['quoteId']
+                try:
+                    q = next(self.find_quotes(nick=None, channel=channel, pattern=None, direction=pymongo.DESCENDING))
+                except StopIteration:
+                    invalid_ids.append(id)
+                    continue
+
+                id = q.quote_id
 
             if not self.remove_quote(id):
                 invalid_ids.append(id)
 
         if invalid_ids:
             str_invalid_ids = ', '.join(str(id) for id in invalid_ids)
-            return e.reply('Could not remove quotes with IDs: {ids} (error: quote does not exist)'.format(ids=str_invalid_ids))
-
-    def remove_quote(self, quoteId):
-        """ Remove a given quote from the database
-
-        Returns False if the quoteId is invalid or does not exist.
-        """
-
-        try:
-            id = int(quoteId)
-        except ValueError:
-            return False
-        else:
-            q = self.quote_from_id(id)
-            if not q:
-                return False
-
-            self.quotedb.remove(q)
+            return e.reply('Error: could not remove quote(s) with ID: {ids}'.format(ids=str_invalid_ids))
 
     @Plugin.hook('core.message.privmsg')
     def log_privmsgs(self, e):
@@ -335,7 +332,8 @@ class Quote(Plugin):
         ident = self.identify_user(user, channel)
         ident['message'] = msg
         ident['nick'] = user  # even for auth'd user, save their nick
-        self.channel_logs[channel].appendleft(ident)
+        quote = QuoteRecord(None, channel, user, msg)
+        self.channel_logs[channel].appendleft(quote)
 
     def identify_user(self, nick, channel):
         """Identify a user: by account if authed, if not, by nick. Produces a dict
@@ -349,3 +347,13 @@ class Quote(Plugin):
         else:
             return {'nick': nick,
                     'channel': channel}
+
+def message_matches(msg, pattern=None):
+    """ Check whether the given message matches the given pattern
+
+    If there is no pattern, it is treated as a wildcard and all messages match.
+    """
+    if pattern is None:
+        return True
+
+    return re.search(pattern, msg) is not None
