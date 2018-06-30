@@ -61,7 +61,7 @@ class Whois(Plugin):
     @Plugin.command('whois.setdefault', help=set_help)
     def setdefault(self, e):
         self.whois_set(nick(e['user']), e['data'], channel=None)
-
+        e.reply('Set global whois for {}'.format(nick(e['user'])))
 
     @Plugin.command('whois.unsetlocal', help=('whois.unsetlocal: unsets the local whois text for the user'
                                               ' but only for this channel'
@@ -74,7 +74,13 @@ class Whois(Plugin):
     @Plugin.command('whois.unset', help=unset_help)
     @Plugin.command('whois.unsetdefault', help=unset_help)
     def unsetdefault(self, e):
-        self.whois_unset(nick(e['user']))
+        nick_ = nick(e['user'])
+        whois = self.whois_lookup(nick_, e['channel'])
+        self.whois_unset(nick_)
+        if whois:
+            e.reply('Unset global whois for {} (was: {})'.format(nick_, str(whois)))
+        else:
+            e.reply('Unset global whois for {}')
 
     def identify_user(self, nick, channel=None):
         """Identify a user: by account if authed, if not, by nick. Produces a dict
