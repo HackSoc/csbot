@@ -144,8 +144,6 @@ class Quote(Plugin, QuoteDB):
     def quote_set(self, nick, channel, pattern=None):
         """ Insert the last matching quote from a user on a particular channel into the quotes database.
         """
-        user = self.identify_user(nick, channel)
-
         for q in self.channel_logs[channel]:
             if nick == q.nick and channel == q.channel and message_matches(q.message, pattern=pattern):
                 self.insert_quote(q)
@@ -329,24 +327,8 @@ class Quote(Plugin, QuoteDB):
 
         channel = e['channel']
         user = nick(e['user'])
-        ident = self.identify_user(user, channel)
-        ident['message'] = msg
-        ident['nick'] = user  # even for auth'd user, save their nick
         quote = QuoteRecord(None, channel, user, msg)
         self.channel_logs[channel].appendleft(quote)
-
-    def identify_user(self, nick, channel):
-        """Identify a user: by account if authed, if not, by nick. Produces a dict
-        suitable for throwing at mongo."""
-
-        user = self.bot.plugins['usertrack'].get_user(nick)
-
-        if user['account'] is not None:
-            return {'account': user['account'],
-                    'channel': channel}
-        else:
-            return {'nick': nick,
-                    'channel': channel}
 
 def message_matches(msg, pattern=None):
     """ Check whether the given message matches the given pattern
