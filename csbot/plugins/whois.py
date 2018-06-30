@@ -14,11 +14,23 @@ class Whois(Plugin):
         """Performs a whois lookup for a nick"""
         db = db or self.whoisdb
 
-        for ident in (self.identify_user(nick, channel),  # lookup channel specific first
-                      self.identify_user(nick)):          # default fallback
-            user = db.find_one(ident)
-            if user:
-                return user['data']
+        for d in (self.whois_lookup_channel(nick, channel),
+                  self.whois_lookup_global(nick)):
+            if d:
+                return d
+
+    def whois_lookup_channel(self, nick, channel):
+        return self._lookup(self.identify_user(nick, channel))
+
+    def whois_lookup_global(self, nick):
+        return self._lookup(self.identify_user(nick))
+
+    def _lookup(self, ident):
+        user = self.whoisdb.find_one(ident)
+        if user:
+            return user['data']
+
+        return None
 
     def whois_set(self, nick, whois_str, channel=None, db=None):
         db = db or self.whoisdb
@@ -75,12 +87,12 @@ class Whois(Plugin):
     @Plugin.command('whois.unsetdefault', help=unset_help)
     def unsetdefault(self, e):
         nick_ = nick(e['user'])
-        whois = self.whois_lookup(nick_, e['channel'])
+        old_whois = self.whois_lookup_global(nick_)
         self.whois_unset(nick_)
-        if whois:
-            e.reply('Unset global whois for {} (was: {})'.format(nick_, str(whois)))
+        if old_whois:
+            e.reply('Unset global whois for {} (was: {})'.format(nick_, str(old_whois)))
         else:
-            e.reply('Unset global whois for {}')
+            e.reply('Unset global whois for {}'.format(nick_))
 
     def identify_user(self, nick, channel=None):
         """Identify a user: by account if authed, if not, by nick. Produces a dict
