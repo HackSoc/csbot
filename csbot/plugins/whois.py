@@ -54,20 +54,14 @@ class Whois(Plugin):
         """Allow a user to associate data with themselves for this channel."""
         self.whois_set(nick(e['user']), e['data'], channel=e['channel'])
 
-    @Plugin.command('whois.setdefault', help=('whois.setdefault [default_whois]: sets the default'
-                                              ' whois text for the user, used when no channel-specific'
-                                              ' one is set'))
+    set_help = ('whois.setdefault [default_whois]: sets the default'
+                ' whois text for the user, used when no channel-specific'
+                ' one is set')
+    @Plugin.command('whois.set', help=set_help)
+    @Plugin.command('whois.setdefault', help=set_help)
     def setdefault(self, e):
         self.whois_set(nick(e['user']), e['data'], channel=None)
 
-    @Plugin.command('whois.set', help=('Alias for whois.setdefault.'))
-    def set(self, e):
-        """Allow a user to associate data with themselves for this channel."""
-        return self.setdefault(e)   
-
-    @Plugin.command('whois.unset', help=('Alias for whois.unsetdefault'))
-    def unset(self, e):
-        return self.unsetdefault(e)
 
     @Plugin.command('whois.unsetlocal', help=('whois.unsetlocal: unsets the local whois text for the user'
                                               ' but only for this channel'
@@ -75,8 +69,10 @@ class Whois(Plugin):
     def unsetlocal(self, e):
         self.whois_unset(nick(e['user']), channel=e['channel'])
 
-    @Plugin.command('whois.unsetdefault', help='whois.unsetdefault: unsets the global whois text for the user.'
-                                               ' Locally set whois texts will be unaffected')
+    unset_help = ('whois.unsetdefault: unsets the global whois text for the user.'
+                  ' Locally set whois texts will be unaffected')
+    @Plugin.command('whois.unset', help=unset_help)
+    @Plugin.command('whois.unsetdefault', help=unset_help)
     def unsetdefault(self, e):
         self.whois_unset(nick(e['user']))
 
