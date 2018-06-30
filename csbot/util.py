@@ -84,7 +84,8 @@ def simple_http_get(url, stream=False):
 
     This should be used for the vast majority of HTTP GET requests.  It turns
     off SSL certificate verification and sets a non-default User-Agent, thereby
-    succeeding at most "just get the content" requests.
+    succeeding at most "just get the content" requests. Note that it can
+    generate a ConnectionError exception if the url is not resolvable.
 
     *stream* controls the "streaming mode" of the HTTP client, i.e. deferring
     the acquisition of the response body.  Use this if you need to impose a

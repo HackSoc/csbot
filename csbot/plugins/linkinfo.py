@@ -204,7 +204,10 @@ class LinkInfo(Plugin):
                     return make_error('URL excluded')
             # Invoke the default handler if not excluded
             else:
-                return self.scrape_html_title(url)
+                try:
+                    return self.scrape_html_title(url)
+                except requests.exceptions.ConnectionError:
+                    return make_error('Connection error')
 
     def scrape_html_title(self, url):
         """Scrape the ``<title>`` tag contents from the HTML page at *url*.
