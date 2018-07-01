@@ -64,55 +64,59 @@ class Whois(Plugin):
                                             ' for the user, but only for the current channel'))
     def setlocal(self, e):
         """Allow a user to associate data with themselves for this channel."""
-        nick_ = nick(e['user'])
-        channel = e['channel']
-        old_whois = self.whois_lookup_global(nick_)
-        self.whois_set(nick_, e['data'], channel=channel)
-
-        if old_whois:
-            self.bot.reply(nick_, 'set local whois on {} (was: "{}")'.format(channel, str(old_whois)))
-        else:
-            self.bot.reply(nick_, 'set local whois on {}'.format(channel))
+        self.whois_set(nick(e['user']), e['data'], channel=e['channel'])
 
     set_help = ('whois.setdefault [default_whois]: sets the default'
                 ' whois text for the user, used when no channel-specific'
                 ' one is set')
-    @Plugin.command('whois.set', help=set_help)
     @Plugin.command('whois.setdefault', help=set_help)
     def setdefault(self, e):
+        self.whois_set(nick(e['user']), e['data'], channel=None)
+
+    @Plugin.command('whois.set', help='sets the whois text for this channel')
+    def set(self, e):
         nick_ = nick(e['user'])
+        channel = e['channel']
         old_whois = self.whois_lookup_global(nick_)
-        self.whois_set(nick_, e['data'], channel=None)
-        if old_whois:
-            self.bot.reply(nick_, 'set global whois (was: "{}")'.format(str(old_whois)))
+        local_whois = self.whois_lookup_channel(nick_, channel)
+
+        if local_whois:
+            self.setlocal(e)
+            fmt = 'set new local whois for {} (was: "{}"). use whois.setdefault to set for all channels'
+            self.bot.reply(nick_, fmt.format(channel, str(local_whois)))
+        elif old_whois:
+            self.setlocal(e)
+            fmt = 'set new local whois for {}. use whois.setdefault to set for all channels'
+            self.bot.reply(nick_, fmt.format(channel))
         else:
-            self.bot.reply(nick_, 'set new global whois')
+            self.setdefault(e)
+            self.bot.reply(nick_, 'set default whois for all channels')
 
     @Plugin.command('whois.unsetlocal', help=('whois.unsetlocal: unsets the local whois text for the user'
-                                              ' but only for this channel'
-                                              ' (the global whois for the user is unaffected'))
+                                              ' but only for this channel'))
     def unsetlocal(self, e):
-        nick_ = nick(e['user'])
-        old_whois = self.whois_lookup_global(nick_)
-        channel = e['channel']
-        self.whois_unset(nick_, channel=channel)
-        if old_whois:
-            self.bot.reply(nick_, 'unset local whois on {} (was: "{}")'.format(channel, str(old_whois)))
-        else:
-            self.bot.reply(nick_, 'unset local whois on {}'.format(channel))
+        self.whois_unset(nick(e['user']), channel=e['channel'])
 
-    unset_help = ('whois.unsetdefault: unsets the global whois text for the user,'
-                  ' local whois text is unaffected')
-    @Plugin.command('whois.unset', help=unset_help)
+    unset_help = ('whois.unsetdefault: unsets the default whois text for the user.'
+                  ' local, channel-specific, whois text is unaffected')
     @Plugin.command('whois.unsetdefault', help=unset_help)
     def unsetdefault(self, e):
+        self.whois_unset(nick(e['user']))
+
+    @Plugin.command('whois.unset', help='unsets the currently set whois for this channel')
+    def unset(self, e):
         nick_ = nick(e['user'])
-        old_whois = self.whois_lookup_global(nick_)
-        self.whois_unset(nick_)
-        if old_whois:
-            self.bot.reply(nick_, 'unset global whois (was: "{}")'.format(str(old_whois)))
-        else:
-            self.bot.reply(nick_, 'unset global whois')
+        old_local_whois = self.whois_lookup_channel(nick_, e['channel'])
+        old_global_whois = self.whois_lookup_global(nick_)
+
+        if old_local_whois:
+            self.unsetlocal(e)
+            fmt = 'unset local whois for {} (was: "{}"), use whois.unsetdefault to unset the global default'
+            self.bot.reply(nick_, fmt.format(e['channel'], str(old_local_whois)))
+        elif old_global_whois:
+            self.unsetdefault(e)
+            fmt = 'unset default whois for all channels (was: {}). use whois.setdefault to re-set it'
+            self.bot.reply(nick_, fmt.format(str(old_global_whois)))
 
     def identify_user(self, nick, channel=None):
         """Identify a user: by account if authed, if not, by nick. Produces a dict
