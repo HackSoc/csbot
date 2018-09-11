@@ -1,4 +1,6 @@
-from csbot.test import BotTestCase, run_client
+import pytest
+
+from csbot.test import BotTestCase
 
 
 class TestUserTrackPlugin(BotTestCase):
@@ -9,18 +11,19 @@ class TestUserTrackPlugin(BotTestCase):
 
     PLUGINS = ['usertrack']
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def extra_bot_setup(self, bot_setup):
         # Enable client capabilities that the tests rely upon
         self.client.line_received(":server CAP self ACK :account-notify extended-join")
 
     def _assert_channels(self, nick, channels):
-        self.assertEqual(self.usertrack.get_user(nick)['channels'], channels)
+        assert self.usertrack.get_user(nick)['channels'] == channels
 
     def _assert_account(self, nick, account):
-        self.assertEqual(self.usertrack.get_user(nick)['account'], account)
+        assert self.usertrack.get_user(nick)['account'] == account
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_join_part(self):
         self._assert_channels('Nick', set())
         yield from self.client.line_received(":Nick!~user@hostname JOIN #channel accountname :Other Info")
@@ -37,7 +40,8 @@ class TestUserTrackPlugin(BotTestCase):
         yield from self.client.line_received(":Other!~user@hostname PART #channel")
         self._assert_channels('Other', {'#other'})
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_join_names(self):
         self._assert_channels('Nick', set())
         self._assert_channels('Other', set())
@@ -48,26 +52,29 @@ class TestUserTrackPlugin(BotTestCase):
         self._assert_channels('Nick', {'#channel'})
         self._assert_channels('Other', {'#channel'})
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_quit_channels(self):
         yield from self.client.line_received(":Nick!~user@hostname JOIN #channel * :Other Info")
         self._assert_channels('Nick', {'#channel'})
         yield from self.client.line_received(":Nick!~user@hostname QUIT :Quit message")
         self._assert_channels('Nick', set())
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_nick_changed(self):
         self._assert_channels('Nick', set())
         yield from self.client.line_received(":Nick!~user@hostname JOIN #channel * :Other Info")
         self._assert_channels('Nick', {'#channel'})
         self._assert_channels('Other', set())
-        self.assertEqual(self.usertrack.get_user('Nick')['nick'], 'Nick')
+        assert self.usertrack.get_user('Nick')['nick'] == 'Nick'
         yield from self.client.line_received(':Nick!~user@hostname NICK :Other')
         self._assert_channels('Nick', set())
         self._assert_channels('Other', {'#channel'})
-        self.assertEqual(self.usertrack.get_user('Other')['nick'], 'Other')
+        assert self.usertrack.get_user('Other')['nick'] == 'Other'
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_account_discovery_on_join(self):
         self._assert_account('Nick', None)
         # Check that account name is discovered from "extended join" information
@@ -77,7 +84,8 @@ class TestUserTrackPlugin(BotTestCase):
         yield from self.client.line_received(":Nick!~user@hostname JOIN #channel * :Other Info")
         self._assert_account('Nick', None)
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_account_forgotten_on_lost_visibility(self):
         # User joins channels, account discovered by extended-join
         self._assert_account('Nick', None)
@@ -93,14 +101,16 @@ class TestUserTrackPlugin(BotTestCase):
         yield from self.client.line_received(":Nick!~user@hostname PART #other")
         self._assert_account('Nick', None)
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_account_forgotten_on_quit(self):
         yield from self.client.line_received(":Nick!~user@hostname JOIN #channel accountname :Other Info")
         self._assert_account('Nick', 'accountname')
         yield from self.client.line_received(":Nick!~user@hostname QUIT :Quit message")
         self._assert_account('Nick', None)
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_account_notify(self):
         self._assert_account('Nick', None)
         self._assert_channels('Nick', set())
@@ -114,7 +124,8 @@ class TestUserTrackPlugin(BotTestCase):
         self._assert_account('Nick', None)
         self._assert_channels('Nick', {'#channel'})
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_account_kept_on_nick_changed(self):
         self._assert_account('Nick', None)
         self._assert_account('Other', None)

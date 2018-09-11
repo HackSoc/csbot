@@ -3,14 +3,15 @@ from unittest import mock
 
 import pytest
 
-from csbot.test import IRCClientTestCase, run_client
+from csbot.test import IRCClientTestCase
 from csbot.irc import *
 
 
 class TestIRCClientLineProtocol(IRCClientTestCase):
     CLIENT_CLASS = IRCClient
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_buffer(self):
         """Check that incoming data is converted to a line-oriented protocol."""
         with self.patch('line_received') as m:
@@ -38,7 +39,8 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
                 mock.call(':nick!user@host JOIN #bar'),
             ])
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_decode_ascii(self):
         """Check that plain ASCII ends up as a (unicode) string."""
         with self.patch('line_received') as m:
@@ -46,7 +48,8 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
             yield
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :hello')
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_decode_utf8(self):
         """Check that incoming UTF-8 is properly decoded."""
         with self.patch('line_received') as m:
@@ -54,7 +57,8 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
             yield
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :ಠ')
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_decode_cp1252(self):
         """Check that incoming CP1252 is properly decoded.
 
@@ -75,15 +79,17 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
 class TestIRCClientBehaviour(IRCClientTestCase):
     CLIENT_CLASS = IRCClient
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_auto_reconnect(self):
         with self.patch('connect') as m:
             assert not m.called
-            self.reader.feed_eof()
+            self.client.reader.feed_eof()
             yield from self.client.disconnected.wait()
             m.assert_called_once_with()
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_disconnect(self):
         with self.patch('connect') as m:
             self.client.disconnect()
@@ -269,19 +275,21 @@ class TestIRCClientCommands(IRCClientTestCase):
         self.client.quit('reason')
         self.assert_sent('QUIT :reason')
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_quit_no_reconnect(self):
         with self.patch('connect') as m:
             self.client.quit(reconnect=False)
-            self.reader.feed_eof()
+            self.client.reader.feed_eof()
             yield from self.client.disconnected.wait()
             assert not m.called
 
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_quit_reconnect(self):
         with self.patch('connect') as m:
             self.client.quit(reconnect=True)
-            self.reader.feed_eof()
+            self.client.reader.feed_eof()
             yield from self.client.disconnected.wait()
             assert m.called
 

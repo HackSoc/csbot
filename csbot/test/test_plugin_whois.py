@@ -1,8 +1,9 @@
 import functools
 
+import pytest
 import mongomock
 
-from csbot.test import BotTestCase, run_client
+from csbot.test import BotTestCase
 
 
 def failsafe(f):
@@ -98,22 +99,25 @@ class TestWhoisPlugin(BotTestCase):
         assert self.whois.whois_lookup('Nick', '#First') is None
         assert self.whois.whois_lookup('Nick', '#Second') is None
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_after_set(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.set test1')
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois')
         self.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test1'))
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_different_channel(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.set test1')
         yield from self._recv_privmsg('Nick!~user@host', '#Second', '!whois')
         self.assert_sent('NOTICE {} :{}'.format('#Second', 'No data for Nick'))
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_multiple_users_channels(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.set test1')
         yield from self._recv_privmsg('Nick!~user@host', '#Second', '!whois.set test2')
@@ -124,15 +128,17 @@ class TestWhoisPlugin(BotTestCase):
         yield from self._recv_privmsg('Other!~user@host', '#Second', '!whois Nick')
         self.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test2'))
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_self(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.set test1')
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois')
         self.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test1'))
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_setdefault_then_set_channel(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
 
@@ -148,8 +154,9 @@ class TestWhoisPlugin(BotTestCase):
         yield from self._recv_privmsg('Other!~other@otherhost', '#Second', '!whois Nick')
         self.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test data'))
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_setdefault_then_unset_channel(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
         yield from self._recv_privmsg('Nick!~user@host', '#Second', '!whois')
@@ -163,9 +170,9 @@ class TestWhoisPlugin(BotTestCase):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois')
         self.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test data'))
 
-
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     @failsafe
-    @run_client
     def test_client_reply_whois_setdefault_then_unsetdefault(self):
         yield from self._recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
 
