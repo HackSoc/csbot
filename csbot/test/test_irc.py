@@ -81,19 +81,19 @@ class TestIRCClientBehaviour(IRCClientTestCase):
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_auto_reconnect(self):
+    async def test_auto_reconnect(self):
         with self.patch('connect') as m:
             assert not m.called
             self.client.reader.feed_eof()
-            yield from self.client.disconnected.wait()
+            await self.client.disconnected.wait()
             m.assert_called_once_with()
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_disconnect(self):
+    async def test_disconnect(self):
         with self.patch('connect') as m:
             self.client.disconnect()
-            yield from self.client.disconnected.wait()
+            await self.client.disconnected.wait()
             assert not m.called
 
     def test_PING_PONG(self):
@@ -277,20 +277,20 @@ class TestIRCClientCommands(IRCClientTestCase):
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_quit_no_reconnect(self):
+    async def test_quit_no_reconnect(self):
         with self.patch('connect') as m:
             self.client.quit(reconnect=False)
             self.client.reader.feed_eof()
-            yield from self.client.disconnected.wait()
+            await self.client.disconnected.wait()
             assert not m.called
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_quit_reconnect(self):
+    async def test_quit_reconnect(self):
         with self.patch('connect') as m:
             self.client.quit(reconnect=True)
             self.client.reader.feed_eof()
-            yield from self.client.disconnected.wait()
+            await self.client.disconnected.wait()
             assert m.called
 
     def test_msg(self):
