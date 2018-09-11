@@ -7,6 +7,8 @@ import gc
 import functools
 from unittest import mock
 
+import pytest
+
 from csbot.core import Bot
 
 
@@ -35,15 +37,25 @@ class AsyncTestCase(asyncio.test_utils.TestCase):
         super().tearDown()
 
 
-class IRCClientTestCase(AsyncTestCase):
+class IRCClientTestCase:
     #: The IRCClient (sub)class to instrument
     CLIENT_CLASS = None
 
-    def setUp(self):
+    loop = None
+    client = None
+    reader = None
+    writer = None
+
+    @pytest.fixture
+    def irc_client_class(self):
         assert self.CLIENT_CLASS is not None, "no CLIENT_CLASS set on test case"
-        super().setUp()
+        return self.CLIENT_CLASS
+
+    @pytest.fixture(autouse=True)
+    def irc_client(self, event_loop, irc_client_class):
+        self.loop = event_loop
         # Create client and make it use our event loop
-        self.client = self.CLIENT_CLASS(loop=self.loop)
+        self.client = irc_client_class(loop=self.loop)
         # Create fake stream reader/writer
         self.reader = MockStreamReader(loop=self.loop)
         self.writer = MockStreamWriter(None, None, self.reader, self.loop)
@@ -101,7 +113,7 @@ class IRCClientTestCase(AsyncTestCase):
         contain what was checked by this call.
         """
         sent = b''.join(args[0] for args, _ in self.writer.write.call_args_list)
-        self.assertEqual(sent, bytes)
+        assert sent == bytes
         self.writer.write.reset_mock()
 
     def receive(self, lines):

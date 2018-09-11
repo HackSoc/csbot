@@ -1,6 +1,8 @@
 import unittest
 from unittest import mock
 
+import pytest
+
 from csbot.test import IRCClientTestCase, run_client
 from csbot.irc import *
 
@@ -14,7 +16,7 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
         with self.patch('line_received') as m:
             self.receive_bytes(b':nick!user@host PRIVMSG')
             yield
-            self.assertFalse(m.called)
+            assert not m.called
             self.receive_bytes(b' #channel :hello\r\nPING')
             yield
             m.assert_has_calls([
@@ -76,7 +78,7 @@ class TestIRCClientBehaviour(IRCClientTestCase):
     @run_client
     def test_auto_reconnect(self):
         with self.patch('connect') as m:
-            self.assertFalse(m.called)
+            assert not m.called
             self.reader.feed_eof()
             yield from self.client.disconnected.wait()
             m.assert_called_once_with()
@@ -86,7 +88,7 @@ class TestIRCClientBehaviour(IRCClientTestCase):
         with self.patch('connect') as m:
             self.client.disconnect()
             yield from self.client.disconnected.wait()
-            self.assertFalse(m.called)
+            assert not m.called
 
     def test_PING_PONG(self):
         self.receive('PING :i.am.a.server')
@@ -97,9 +99,9 @@ class TestIRCClientBehaviour(IRCClientTestCase):
         be reflected by the client's behaviour."""
         with self.patch('on_nick_changed') as m:
             self.client.set_nick('foo_bar')
-            self.assertEqual(self.client.nick, 'foo_bar')
+            assert self.client.nick == 'foo_bar'
             self.receive(':a.server 001 foo_b :Welcome to the server')
-            self.assertEqual(self.client.nick, 'foo_b')
+            assert self.client.nick == 'foo_b'
             # Check events were fired for both nick changes (the initial request
             # and the truncated nick)
             m.assert_has_calls([mock.call('foo_bar'), mock.call('foo_b')])
@@ -112,7 +114,7 @@ class TestIRCClientBehaviour(IRCClientTestCase):
         self.receive(':a.server 433 * {} :Nickname is already in use.'.format(original_nick))
         new_nick = original_nick + '_'
         self.assert_sent('NICK {}'.format(new_nick))
-        self.assertEqual(self.client.nick, new_nick)
+        assert self.client.nick == new_nick
 
     def test_ERR_NICKNAMEINUSE_truncated(self):
         """IRC server might truncate requested nicks, so we should use a
@@ -120,17 +122,17 @@ class TestIRCClientBehaviour(IRCClientTestCase):
         self.client.set_nick('a_very_long_nick')
         self.receive(':a.server 433 * a_very_long_nick :Nickname is already in use.')
         # Should have triggered the same behaviour as above, appending _
-        self.assertEqual(self.client.nick, 'a_very_long_nick_')
+        assert self.client.nick == 'a_very_long_nick_'
         # Except oops, server truncated it to the same in-use nick!
         self.receive(':a.server 433 * a_very_long_nick :Nickname is already in use.')
         # Next nick tried should be the same length with some _ replacements
-        self.assertEqual(self.client.nick, 'a_very_long_nic_')
+        assert self.client.nick == 'a_very_long_nic_'
         # Not stateful, so if this in use it'll try append first
         self.receive(':a.server 433 * a_very_long_nic_ :Nickname is already in use.')
-        self.assertEqual(self.client.nick, 'a_very_long_nic__')
+        assert self.client.nick == 'a_very_long_nic__'
         # But yet again, if that request got truncated, it'll replace a character
         self.receive(':a.server 433 * a_very_long_nic_ :Nickname is already in use.')
-        self.assertEqual(self.client.nick, 'a_very_long_ni__')
+        assert self.client.nick == 'a_very_long_ni__'
 
 
 class TestIRCClientEvents(IRCClientTestCase):
@@ -155,18 +157,15 @@ class TestIRCClientEvents(IRCClientTestCase):
          'on_ctcp_reply_FOO', [IRCUser.parse('nick!user@host'), '#channel', 'bar'], {}),
     ]
 
-    def test_routing(self):
+    @pytest.mark.parametrize("raw,method,args,kwargs", TEST_ROUTING)
+    def test_routing(self, raw, method, args, kwargs):
         """Run every routing test case."""
-        # Iterate over test cases
-        for raw, method, args, kwargs in self.TEST_ROUTING:
-            # Inform unittest which test case we're running
-            with self.subTest(raw=raw, method=method):
-                # Patch the expected method (creating it if necessary)
-                with self.patch(method, create=True) as m:
-                    # Handle the raw IRC message
-                    self.receive(raw)
-                    # Check for the call
-                    m.assert_called_once_with(*args, **kwargs)
+        # Patch the expected method (creating it if necessary)
+        with self.patch(method, create=True) as m:
+            # Handle the raw IRC message
+            self.receive(raw)
+            # Check for the call
+            m.assert_called_once_with(*args, **kwargs)
 
     ME = IRCUser.parse('csbot!bot@robot.land')
     USER = IRCUser.parse('nick!person@their.server')
@@ -181,8 +180,6 @@ class TestIRCClientEvents(IRCClientTestCase):
         (':a.server 001 {me.nick} :Welcome to the server', 'on_welcome', [], {}),
         # Our nick changed by the server
         (':{me.raw} NICK :csbot2', 'on_nick_changed', ['csbot2'], {}),
-        # (Change our nick back for the rest of the tests)
-        (':csbot2!user@host NICK :{me.nick}', 'on_nick_changed', [ME.nick], {}),
         # Somebody else's nick changed
         (':{user.raw} NICK :nick2', 'on_user_renamed', [USER.nick, 'nick2'], {}),
         # We joined a channel
@@ -223,20 +220,16 @@ class TestIRCClientEvents(IRCClientTestCase):
          'on_topic_changed', [USER, '#channel', None], {}),
     ]
 
-    def test_events(self):
+    @pytest.mark.parametrize("raw,method,args,kwargs", TEST_EVENTS, )
+    def test_events(self, raw, method, args, kwargs):
         """Run every event test case."""
-        # Iterate over test cases
-        for raw, method, args, kwargs in self.TEST_EVENTS:
-            # Perform substitutions
-            raw = raw.format(**self.VALUES)
-            # Inform unittest which test case we're running
-            with self.subTest(raw=raw, method=method):
-                # Patch the expected method
-                with self.patch(method) as m:
-                    # Handle the raw IRC message
-                    self.receive(raw)
-                    # Check for the call
-                    m.assert_called_once_with(*args, **kwargs)
+        raw = raw.format(**self.VALUES)
+        # Patch the expected method
+        with self.patch(method) as m:
+            # Handle the raw IRC message
+            self.receive(raw)
+            # Check for the call
+            m.assert_called_once_with(*args, **kwargs)
 
     def test_parse_failure(self):
         """Test something that doesn't parse as a message.
@@ -244,7 +237,8 @@ class TestIRCClientEvents(IRCClientTestCase):
         Most things will parse as a message, technically speaking, but the
         empty string won't!
         """
-        self.assertRaises(IRCParseError, self.receive, '')
+        with pytest.raises(IRCParseError):
+            self.receive('')
 
 
 class TestIRCClientCommands(IRCClientTestCase):
@@ -252,16 +246,11 @@ class TestIRCClientCommands(IRCClientTestCase):
     sent to the server."""
     CLIENT_CLASS = IRCClient
 
-    def setUp(self):
-        super().setUp()
-        # All of these tests send things, so connect the mock transport
-        self.client.connect()
-
     def test_set_nick(self):
         with self.patch('on_nick_changed') as m:
             self.client.set_nick('new_nick')
             self.assert_sent('NICK new_nick')
-            self.assertEqual(self.client.nick, 'new_nick')
+            assert self.client.nick == 'new_nick'
             m.assert_called_once_with('new_nick')
 
     def test_join(self):
@@ -286,7 +275,7 @@ class TestIRCClientCommands(IRCClientTestCase):
             self.client.quit(reconnect=False)
             self.reader.feed_eof()
             yield from self.client.disconnected.wait()
-            self.assertFalse(m.called)
+            assert not m.called
 
     @run_client
     def test_quit_reconnect(self):
@@ -294,7 +283,7 @@ class TestIRCClientCommands(IRCClientTestCase):
             self.client.quit(reconnect=True)
             self.reader.feed_eof()
             yield from self.client.disconnected.wait()
-            self.assertTrue(m.called)
+            assert m.called
 
     def test_msg(self):
         self.client.msg('#channel', 'a message')
@@ -337,16 +326,16 @@ class TestIRCMessage(unittest.TestCase):
     def test_PING(self):
         """Parse a simple message."""
         m = IRCMessage.parse('PING :i.am.a.server')
-        self.assertEqual(m.raw, 'PING :i.am.a.server')
-        self.assertEqual(m.prefix, None)
-        self.assertEqual(m.command, 'PING')
-        self.assertEqual(m.command_name, 'PING')
-        self.assertEqual(m.params, ['i.am.a.server'])
+        assert m.raw == 'PING :i.am.a.server'
+        assert m.prefix == None
+        assert m.command == 'PING'
+        assert m.command_name == 'PING'
+        assert m.params == ['i.am.a.server']
 
     def test_RPL_WELCOME(self):
         """Parse a more complex command, which also involves a numeric reply."""
         m = IRCMessage.parse(':a.server 001 nick :Welcome to the server')
-        self.assertEqual(m.prefix, 'a.server')
-        self.assertEqual(m.command, '001')
-        self.assertEqual(m.command_name, 'RPL_WELCOME')
-        self.assertEqual(m.params, ['nick', 'Welcome to the server'])
+        assert m.prefix == 'a.server'
+        assert m.command == '001'
+        assert m.command_name == 'RPL_WELCOME'
+        assert m.params, ['nick' == 'Welcome to the server']
