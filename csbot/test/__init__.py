@@ -2,7 +2,6 @@ import asyncio
 import os
 from io import StringIO
 from textwrap import dedent
-import gc
 import functools
 from unittest import mock
 
@@ -53,7 +52,7 @@ class IRCClientTestCase:
         return self.client
 
     @pytest.fixture
-    async def run_client(self, event_loop, irc_client):
+    def run_client(self, event_loop, irc_client):
         """Fixture for tests that require actually running the client.
 
         A test decorated with this function should be a coroutine, i.e. at some
@@ -67,15 +66,17 @@ class IRCClientTestCase:
         ...         yield
         ...         self.assert_sent('PRIVMSG #channel :what do you mean, hello?')
         """
+        # Deliberately written in "synchronous" style with run_until_complete()
+        # instead of await because async generators don't work in Python 3.5.
         with self.mock_open_connection():
             # Start the client
             run_fut = event_loop.create_task(irc_client.run())
-            await irc_client.connected.wait()
+            event_loop.run_until_complete(irc_client.connected.wait())
             # Allow the test to run
             yield
             # Cleanly end the read loop and wait for client to exit
             irc_client.disconnect()
-            await run_fut
+            event_loop.run_until_complete(run_fut)
 
     def mock_open_connection(self):
         """Give a mock reader and writer when a stream connection is opened.
