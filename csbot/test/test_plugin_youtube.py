@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from distutils.version import StrictVersion
 
+import pytest
 import responses
 import urllib.parse as urlparse
 import apiclient
@@ -82,21 +83,23 @@ class TestYoutubePlugin(BotTestCase):
 
     PLUGINS = ['youtube']
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def pre_irc_client(self):
         # Use fixture JSON for API client setup
         http = HttpMock(fixture_file('google-discovery-youtube-v3.json'),
                         {'status': '200'})
         with patch.object(Youtube, 'http', wraps=http):
-            super().setUp()
+            yield
 
-    def test_ids(self):
-        for vid_id, status, fixture, expected in json_test_cases:
-            http = HttpMock(fixture_file(fixture), {'status': status})
-            with self.subTest(vid_id=vid_id), patch.object(self.youtube, 'http', wraps=http):
-                if expected is YoutubeError:
-                    self.assertRaises(YoutubeError, self.youtube._yt, urlparse.urlparse(vid_id))
-                else:
-                    self.assertEqual(self.youtube._yt(urlparse.urlparse(vid_id)), expected)
+    @pytest.mark.parametrize("vid_id, status, fixture, expected", json_test_cases)
+    def test_ids(self, vid_id, status, fixture, expected):
+        http = HttpMock(fixture_file(fixture), {'status': status})
+        with patch.object(self.youtube, 'http', wraps=http):
+            if expected is YoutubeError:
+                with pytest.raises(YoutubeError):
+                    self.youtube._yt(urlparse.urlparse(vid_id))
+            else:
+                assert self.youtube._yt(urlparse.urlparse(vid_id)) == expected
 
 
 class TestYoutubeLinkInfoIntegration(BotTestCase):
@@ -107,35 +110,38 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
 
     PLUGINS = ['linkinfo', 'youtube']
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def pre_irc_client(self):
         # Use fixture JSON for API client setup
         http = HttpMock(fixture_file('google-discovery-youtube-v3.json'),
                         {'status': '200'})
         with patch.object(Youtube, 'http', wraps=http):
-            super().setUp()
+            yield
 
+    @pytest.fixture(autouse=True)
+    def extra_bot_setup(self, bot_setup):
         # Make sure URLs don't try to fall back to the default handler
         self.linkinfo.register_exclude(lambda url: url.netloc in {"m.youtube.com",
                                                                   "youtu.be",
                                                                   "www.youtube.com"})
 
-    @responses.activate
-    def test_integration(self):
-        url_types = {"https://www.youtube.com/watch?v={}",
-                     "http://m.youtube.com/details?v={}",
-                     "https://www.youtube.com/v/{}",
-                     "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
-                     "http://youtu.be/{}"}
-        for vid_id, status, fixture, response in json_test_cases:
-            for url in url_types:
-                http = HttpMock(fixture_file(fixture), {'status': status})
-                with self.subTest(vid_id=vid_id, url=url), patch.object(self.youtube, 'http', wraps=http):
-                    url = url.format(vid_id)
-                    result = self.linkinfo.get_link_info(url)
-                    if response is None or response is YoutubeError:
-                        self.assertTrue(result.is_error)
-                    else:
-                        for key in response:
-                            if key == "link":
-                                continue
-                            self.assertIn(response[key], result.text)
+    @pytest.mark.parametrize("vid_id, status, fixture, response", json_test_cases)
+    @pytest.mark.parametrize("url", [
+        "https://www.youtube.com/watch?v={}",
+        "http://m.youtube.com/details?v={}",
+        "https://www.youtube.com/v/{}",
+        "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
+        "http://youtu.be/{}",
+    ])
+    def test_integration(self, vid_id, status, fixture, response, url):
+        http = HttpMock(fixture_file(fixture), {'status': status})
+        with patch.object(self.youtube, 'http', wraps=http):
+            url = url.format(vid_id)
+            result = self.linkinfo.get_link_info(url)
+            if response is None or response is YoutubeError:
+                assert result.is_error
+            else:
+                for key in response:
+                    if key == "link":
+                        continue
+                    assert response[key] in result.text

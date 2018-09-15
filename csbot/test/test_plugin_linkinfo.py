@@ -1,9 +1,10 @@
 # coding=utf-8
-import responses
 from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
 
-from csbot.test import BotTestCase, run_client
+import pytest
+
+from csbot.test import BotTestCase
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
@@ -126,46 +127,35 @@ class TestLinkInfoPlugin(BotTestCase):
 
     PLUGINS = ['linkinfo']
 
-    def setUp(self):
-        super().setUp()
-        # Set nick, etc.
+    @pytest.fixture(autouse=True)
+    def extra_bot_setup(self, bot_setup):
         self.client.connection_made()
 
-    @responses.activate
-    def test_encoding_handling(self):
-        for url, content_type, body, _ in encoding_test_cases:
-            responses.add(responses.GET, url, body=body,
-                          content_type=content_type, stream=True)
+    @pytest.mark.parametrize("url, content_type, body, expected_title", encoding_test_cases,
+                             ids=[_[0] for _ in encoding_test_cases])
+    def test_encoding_handling(self, responses, url, content_type, body, expected_title):
+        responses.add(responses.GET, url, body=body, content_type=content_type, stream=True)
+        result = self.linkinfo.get_link_info(url)
+        assert result.text == expected_title
 
-        for url, _, _, expected_title in encoding_test_cases:
-            with self.subTest(url=url):
-                result = self.linkinfo.get_link_info(url)
-                self.assertEqual(result.text, expected_title, url)
+    @pytest.mark.parametrize("url, content_type, body", error_test_cases,
+                             ids=[_[0] for _ in error_test_cases])
+    def test_errors(self, responses, url, content_type, body):
+        responses.add(responses.GET, url, body=body,
+                      content_type=content_type, stream=True)
+        result = self.linkinfo.get_link_info(url)
+        assert result.is_error
 
-    @responses.activate
-    def test_errors(self):
-        for url, content_type, body in error_test_cases:
-            responses.add(responses.GET, url, body=body,
-                          content_type=content_type, stream=True)
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
+    def test_scan_privmsg(self, msg, urls):
+        with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
+            yield from self.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
+            get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
-        for url, _, _ in error_test_cases:
-            with self.subTest(url=url):
-                result = self.linkinfo.get_link_info(url)
-                self.assert_(result.is_error)
-
-    @run_client
-    def test_scan_privmsg(self):
-        # Test cases as (message, URLs) pairs
-        test_cases = [
-            ('http://example.com', ['http://example.com']),
-        ]
-
-        for msg, urls in test_cases:
-            with self.subTest(msg=msg), mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
-                yield from self.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
-                get_link_info.assert_has_calls([mock.call(url) for url in urls])
-
-    @run_client
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
     def test_scan_privmsg_rate_limit(self):
         """Test that we won't respond too frequently to URLs in messages.
 
@@ -180,4 +170,4 @@ class TestLinkInfoPlugin(BotTestCase):
                 get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
         with mock.patch.object(self.linkinfo, 'get_link_info') as get_link_info:
             yield from self.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
-            self.assert_(not get_link_info.called)
+            assert not get_link_info.called

@@ -254,7 +254,7 @@ class IRCClient:
         self.disconnected = asyncio.Event(loop=self.loop)
         self.disconnected.set()
 
-        self.nick = None
+        self.nick = self.__config['nick']
         self.available_capabilities = set()
         self.enabled_capabilities = set()
 

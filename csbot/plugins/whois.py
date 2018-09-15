@@ -25,13 +25,13 @@ class Whois(Plugin):
 
         ident = self.whois_unset(nick, channel=channel)
         ident['data'] = whois_str
-        db.insert(ident)
+        db.insert_one(ident)
 
     def whois_unset(self, nick, channel=None, db=None):
         db = db or self.whoisdb
 
         ident = self.identify_user(nick, channel=channel)
-        db.remove(ident)
+        db.delete_many(ident)
 
         return ident
 
