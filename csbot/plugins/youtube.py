@@ -70,7 +70,7 @@ class Youtube(Plugin):
         self.client = google_api('youtube',  'v3', developerKey=self.config_get('api_key'), http=self.http)
 
     def get_video_json(self, id):
-        response = self.client.videos().list(id=id, part='snippet,contentDetails,statistics').execute(http=self.http)
+        response = self.client.videos().list(id=id, hl='en', part='snippet,contentDetails,statistics').execute(http=self.http)
         if len(response['items']) == 0:
             return None
         else:
@@ -102,7 +102,10 @@ class Youtube(Plugin):
             return None
 
         try:
-            vid_info["title"] = json["snippet"]["title"]
+            if json["snippet"]["localized"]:
+                vid_info["title"] = json["snippet"]["localized"]["title"]
+            else:
+                vid_info["title"] = json["snippet"]["title"]
         except KeyError:
             vid_info["title"] = "N/A"
 

@@ -1,0 +1,104 @@
+{
+ "kind": "youtube#videoListResponse",
+ "etag": "\"XI7nbFXulYBIpL0ayR_gDh3eu1k/5DNJZI_v0PmGuwLy9l6W4i5LDeg\"",
+ "pageInfo": {
+  "totalResults": 1,
+  "resultsPerPage": 1
+ },
+ "items": [
+  {
+   "kind": "youtube#video",
+   "etag": "\"XI7nbFXulYBIpL0ayR_gDh3eu1k/qhnmsNO7JrfPBbjxT-gcZtgAtw0\"",
+   "id": "539OnO-YImk",
+   "snippet": {
+    "publishedAt": "2018-07-14T11:45:00.000Z",
+    "channelId": "UCg3qsVzHeUt5_cPpcRtoaJQ",
+    "title": "パンツで包丁作り、はじめました",
+    "description": "ある日、ワールドカップを観戦しながらパンツを畳む男。\n男はふとした瞬間にパンツを持ちながらつぶやく。\n「なんで！すぐシュートを打たない？」\nしかし、すぐに我に返るパンツを畳む男。\nテレビで見てあれこれ言うのは簡単だ。\n全く同じ状況下でプレーしてみないと、\n選手が下した決断を評価することなんてできない。\nましてや海外のプロ選手と、まともに張り合ったことのない\n自分が、そんなことを言うのは非常に愚かなことである。\nどんなことでも、第三者が口で言うのは簡単なことだ。\n実際に自分が体験してみると、何もできなのが世の常である。\n仕事でもやってみせて、言って聞かせる、\n言っているだけでは人を納得させることは出来ない\n\nそんな男は手に持ったパンツを見て思う。\n\nちょっと考えただけでパンツで包丁なんて簡単に作れるだろう！\nいや、待てよ！\n実際に作ってみたらとても困難かもしれない・・・\n「パンツで包丁を作れる！」なんて口で言うのは簡単だ。\nやってみなくてはわからない！\n\n男はパンツで包丁を作ることを決心するのであった・・\n\n※天然繊維と化学繊維の特徴を利用し、パンツの強度をどこまで向上できるかチャレンジする、パンツのパンツによるパンツのための科学ドキュメンタリー動画です。\n※asmr用バイノーラルマイクで録音してみました。\nイヤフォンで変化するように左右の音声ちょっと頑張りました\n※動画は安全に十分な配慮をして制作しておりますので\n絶対にマネしないでください",
+    "thumbnails": {
+     "default": {
+      "url": "https://i.ytimg.com/vi/539OnO-YImk/default.jpg",
+      "width": 120,
+      "height": 90
+     },
+     "medium": {
+      "url": "https://i.ytimg.com/vi/539OnO-YImk/mqdefault.jpg",
+      "width": 320,
+      "height": 180
+     },
+     "high": {
+      "url": "https://i.ytimg.com/vi/539OnO-YImk/hqdefault.jpg",
+      "width": 480,
+      "height": 360
+     },
+     "standard": {
+      "url": "https://i.ytimg.com/vi/539OnO-YImk/sddefault.jpg",
+      "width": 640,
+      "height": 480
+     },
+     "maxres": {
+      "url": "https://i.ytimg.com/vi/539OnO-YImk/maxresdefault.jpg",
+      "width": 1280,
+      "height": 720
+     }
+    },
+    "channelTitle": "圧倒的不審者の極み!",
+    "tags": [
+     "kiwami",
+     "作ってみた",
+     "作り方",
+     "作成",
+     "作製",
+     "自作",
+     "How",
+     "to",
+     "Make",
+     "stropping",
+     "kitchen knife",
+     "sharpest",
+     "sharp",
+     "Sharpen",
+     "包丁",
+     "研ぐ",
+     "砥石",
+     "Whetstone",
+     "圧倒的不審者の極み",
+     "研ぎ方",
+     "研ぎ",
+     "asmr",
+     "Diamond whetstone",
+     "パンツ",
+     "トランクス",
+     "ボクサーパンツ",
+     "下着",
+     "布",
+     "ナイロン",
+     "Underwear"
+    ],
+    "categoryId": "28",
+    "liveBroadcastContent": "none",
+    "defaultLanguage": "ja",
+    "localized": {
+     "title": "sharpest Underwear kitchen knife in the world",
+     "description": "sharpest Underwear kitchen knife in the world"
+    },
+    "defaultAudioLanguage": "ja"
+   },
+   "contentDetails": {
+    "duration": "PT12M24S",
+    "dimension": "2d",
+    "definition": "hd",
+    "caption": "false",
+    "licensedContent": true,
+    "projection": "rectangular"
+   },
+   "statistics": {
+    "viewCount": "2710723",
+    "likeCount": "52212",
+    "dislikeCount": "2209",
+    "favoriteCount": "0",
+    "commentCount": "14802"
+   }
+  }
+ ]
+}

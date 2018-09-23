@@ -45,6 +45,16 @@ json_test_cases = [
          'views': '2,271,999', 'link': 'http://youtu.be/sw4hmqVPe0E'}
     ),
 
+    # Localized title
+    (
+        "539OnO-YImk",
+        200,
+        "youtube_539OnO-YImk.json",
+        {'title': 'sharpest Underwear kitchen knife in the world', 'likes': '+52,212/-2,209',
+         'duration': '12:24', 'uploader': '圧倒的不審者の極み!', 'uploaded': '2018-07-14',
+         'views': '2,710,723', 'link': 'http://youtu.be/539OnO-YImk'}
+    ),
+
     # Non-existent ID
     (
         "flibble",
