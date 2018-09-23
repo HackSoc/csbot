@@ -83,6 +83,12 @@ encoding_test_cases = [
         """,
         '15.7. logging \u2014 Logging facility for Python \u2014 Python v2.7.3 documentation'
     ),
+    (
+        "http://example.com/invalid-charset",
+        "text/html; charset=utf-flibble",
+        b'<html><head><title>Flibble</title></head><body></body></html>',
+        'Flibble'
+    ),
 ]
 
 # Add HTML5 test-cases if libxml2 is new enough (<meta charset=...> encoding

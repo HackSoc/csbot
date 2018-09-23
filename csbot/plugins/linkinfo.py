@@ -237,12 +237,15 @@ class LinkInfo(Plugin):
                                               self.config_get('max_response_size')))
 
             # Get the correct parser
+            # If present, charset attribute in HTTP Content-Type header takes
+            # precedence, but fallback to default if encoding isn't recognised
+            parser = lxml.html.html_parser
             if 'charset=' in r.headers['content-type']:
-                # If present, HTTP Content-Type header charset takes precedence
-                parser = lxml.html.HTMLParser(
-                    encoding=r.headers['content-type'].rsplit('=', 1)[1])
-            else:
-                parser = lxml.html.html_parser
+                encoding = r.headers['content-type'].rsplit('=', 1)[1]
+                try:
+                    parser = lxml.html.HTMLParser(encoding=encoding)
+                except LookupError:
+                    pass # Oh well
 
             # In case Content-Length is absent on a massive file, get only a
             # reasonable chunk instead. We don't just get the first chunk
