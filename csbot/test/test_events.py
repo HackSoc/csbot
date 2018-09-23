@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 import datetime
-import collections
+import collections.abc
 import asyncio
 
 import pytest
@@ -22,7 +22,7 @@ class TestImmediateEventRunner(unittest.TestCase):
         """Record objects passed through the event handler in order.  If they
         are callable, call them."""
         self.handled_events.append(event)
-        if isinstance(event, collections.Callable):
+        if isinstance(event, collections.abc.Callable):
             event()
 
     def test_values(self):
