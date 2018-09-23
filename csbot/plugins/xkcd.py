@@ -1,7 +1,7 @@
+import html
 import json
 import random
 import requests
-import lxml.html
 
 from ..plugin import Plugin
 from ..util import simple_http_get, cap_string, is_ascii
@@ -9,18 +9,20 @@ from .linkinfo import LinkInfoResult
 
 
 def fix_json_unicode(data):
-    """Fixes the unicode silliness that is included in the json data.
-    Why Randall, Why?"""
+    """Attempts to fix the unicode & HTML silliness that is included in the
+    json data.  Why Randall, Why?
+    """
     for tag in data:
-        # Skip non-strings and empty strings (the latter due to bug in lxml)
-        if type(data[tag]) != str or not data[tag]:
+        # Skip non-strings
+        if type(data[tag]) != str:
             continue
 
         # Remove HTML escape characters
-        data[tag] = lxml.html.fromstring(data[tag]).text
+        data[tag] = html.unescape(data[tag])
 
         if is_ascii(data[tag]):
             continue
+
         try:
             data[tag] = data[tag].encode("latin-1").decode("utf-8")
         except (UnicodeEncodeError, UnicodeDecodeError):
