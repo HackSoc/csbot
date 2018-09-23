@@ -39,7 +39,7 @@ Testing
 -------
 csbot has some unit tests.  (It'd be nice to have more.)  To run them::
 
-    $ ./run_tests.py
+    $ pytest
 
 We're also using Travis-CI for continuous integration and continuous deployment.
 
