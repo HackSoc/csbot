@@ -3,8 +3,10 @@ from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
 
 import pytest
+import requests
 
 from csbot.test import BotTestCase
+from csbot.util import simple_http_get
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
@@ -146,10 +148,18 @@ class TestLinkInfoPlugin(BotTestCase):
 
     @pytest.mark.parametrize("url, content_type, body", error_test_cases,
                              ids=[_[0] for _ in error_test_cases])
-    def test_errors(self, responses, url, content_type, body):
+    def test_html_title_errors(self, responses, url, content_type, body):
         responses.add(responses.GET, url, body=body,
                       content_type=content_type, stream=True)
         result = self.linkinfo.get_link_info(url)
+        assert result.is_error
+
+    def test_connection_error(self, responses):
+        # Check our assumptions: should be connection error because "responses" library is mocking the internet
+        with pytest.raises(requests.ConnectionError):
+            simple_http_get('http://example.com/foo/bar')
+        # Should result in an error message from linkinfo (and implicitly no exception raised)
+        result = self.linkinfo.get_link_info('http://example.com/foo/bar')
         assert result.is_error
 
     @pytest.mark.usefixtures("run_client")
