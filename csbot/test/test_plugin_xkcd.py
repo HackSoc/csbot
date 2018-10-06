@@ -61,6 +61,15 @@ json_test_cases = [
         "application/json; charset=utf-8",
         'xkcd_1506.json',
         ('http://xkcd.com/1506', 'xkcloud', '')
+    ),
+
+    # HTML-alikes in alt text
+    (
+        "2043",
+        "http://xkcd.com/2043/info.0.json",
+        "application/json; charset=utf-8",
+        'xkcd_2043.json',
+        ('http://xkcd.com/2043', 'Boathouses and Houseboats', 'The <x> that is held by <y> is also a <y><x>, so if you go to a food truck, the stuff you buy is truck food. A phone ...')
     )
 ]
 

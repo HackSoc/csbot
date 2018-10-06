@@ -46,6 +46,10 @@ class Hoogle(Plugin):
             self.log.warn('invalid JSON received from Hoogle')
             return
 
+        if 'parseError' in hresp.json():
+            e.reply(hresp.json()['parseError'].replace('\n', ' '))
+            return
+
         allresults = hresp.json()['results']
         totalresults = len(allresults)
         results = allresults[0:maxresults]

@@ -70,6 +70,21 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
             yield
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :“”')
 
+    @pytest.mark.usefixtures("run_client")
+    @pytest.mark.asyncio
+    def test_decode_invalid_sequence(self):
+        """Check that incoming invalid byte sequence is properly handled.
+
+        This tests invalid byte sequences which are definitely illegal in
+        UTF-8 and CP1252, to check that nothing breaks and that it correctly
+        replaces the character.
+        """
+        with self.patch('line_received') as m:
+
+            self.receive_bytes(b':nick!user@host PRIVMSG #channel : ono\x81\r\n')
+            yield
+            m.assert_called_once_with(':nick!user@host PRIVMSG #channel : ono�')
+
     def test_encode(self):
         """Check that outgoing data is encoded as UTF-8."""
         self.client.send_line('PRIVMSG #channel :ಠ_ಠ')

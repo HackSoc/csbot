@@ -1,18 +1,17 @@
 csbot - an IRC bot
 ==================
 This is an IRC bot developed by members of HackSoc_ to provide various features
-in the #cs-york channel on Freenode.
+in the #cs-york channel (and a few others) on Freenode.
 
 Development
 -----------
-csbot is written for Python 3.4 and based on the asyncio_ library which became
-part of the Python standard library in 3.4.  It *may* also work on Python 3.3
-with the asyncio package installed, but this is currently untested.
+csbot is written for Python 3.5 and based on the asyncio_ library which became
+part of the standard library in 3.4.  Python 3.6 & 3.7 are also supported.
 
 It's recommend to develop within a virtual environment.  This should get you up
 and running [1]_::
 
-    $ virtualenv -p python3 venv3
+    $ python3 -m venv venv3
     $ source venv3/bin/activate
     $ pip install -r requirements.txt
     $ ./run_csbot.py --help
@@ -39,7 +38,7 @@ Testing
 -------
 csbot has some unit tests.  (It'd be nice to have more.)  To run them::
 
-    $ ./run_tests.py
+    $ pytest
 
 We're also using Travis-CI for continuous integration and continuous deployment.
 

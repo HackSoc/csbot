@@ -186,7 +186,7 @@ class IRCCodec(codecs.Codec):
         try:
             return codecs.decode(input, 'utf-8', errors)
         except UnicodeDecodeError:
-            return codecs.decode(input, 'cp1252', errors)
+            return codecs.decode(input, 'cp1252', 'replace')
 
 
 class IRCClient:

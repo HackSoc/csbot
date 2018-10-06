@@ -45,6 +45,7 @@ pip-log.txt
 nosetests.xml
 _trial_temp/
 htmlcov
+.pytest_cache/
 
 #Translations
 *.mo
