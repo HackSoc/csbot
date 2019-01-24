@@ -180,6 +180,9 @@ class Event(dict):
         self.event_type = event_type
         self.datetime = datetime.now()
 
+    def __str__(self):
+        return f'<Event {self.event_type!r} {self!r}>'
+
     @classmethod
     def extend(cls, event, event_type=None, data=None):
         """Create a new event by extending an existing event.

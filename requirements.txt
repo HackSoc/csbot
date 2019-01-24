@@ -7,11 +7,13 @@ lxml>=2.3.5
 google-api-python-client>=1.4.1,<2.0.0
 imgurpython>=1.1.6,<2.0.0
 isodate>=0.5.1
+aiohttp>=3.5.1,<4.0
 rollbar
 
 # Requirements for unit testing
 pytest==3.8.0
 pytest-asyncio==0.9.0
+pytest-aiohttp==0.3.0
 pytest-cov==2.6.0
 responses
 python-coveralls>=2.6.0,<2.7.0
