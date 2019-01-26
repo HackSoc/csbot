@@ -5,11 +5,12 @@ import pytest
 import responses as responses_
 
 from csbot import test
+from csbot.irc import IRCClient
 
 
 @pytest.fixture
 def irc_client_class():
-    raise NotImplementedError
+    return IRCClient
 
 
 @pytest.fixture

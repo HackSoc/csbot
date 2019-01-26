@@ -6,7 +6,6 @@ import functools
 from unittest import mock
 
 import pytest
-import responses
 
 from csbot.core import Bot
 
