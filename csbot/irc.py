@@ -258,24 +258,22 @@ class IRCClient:
         self.available_capabilities = set()
         self.enabled_capabilities = set()
 
-    @asyncio.coroutine
-    def run(self, run_once=False):
+    async def run(self, run_once=False):
         """Run the bot, reconnecting when the connection is lost."""
         self._exiting = run_once
         while True:
-            yield from self.connect()
+            await self.connect()
             self.connected.set()
             self.disconnected.clear()
             self.connection_made()
-            yield from self.read_loop()
+            await self.read_loop()
             self.connection_lost(self.reader.exception())
             self.connected.clear()
             self.disconnected.set()
             if self._exiting:
                 break
 
-    @asyncio.coroutine
-    def connect(self):
+    async def connect(self):
         """Connect to the IRC server."""
         LOG.debug('connecting to {host}:{port}...'.format(**self.__config))
 
@@ -285,10 +283,10 @@ class IRCClient:
         if bind is not None:
             local_addr = (bind, None)
 
-        self.reader, self.writer = yield from asyncio.open_connection(self.__config['host'],
-                                                                      self.__config['port'],
-                                                                      loop=self.loop,
-                                                                      local_addr=local_addr)
+        self.reader, self.writer = await asyncio.open_connection(self.__config['host'],
+                                                                 self.__config['port'],
+                                                                 loop=self.loop,
+                                                                 local_addr=local_addr)
 
     def disconnect(self):
         """Disconnect from the IRC server.
@@ -301,11 +299,10 @@ class IRCClient:
         else:
             self.writer.close()
 
-    @asyncio.coroutine
-    def read_loop(self):
+    async def read_loop(self):
         """Read and dispatch lines until the connection closes."""
         while True:
-            line = yield from self.reader.readline()
+            line = await self.reader.readline()
             if not line.endswith(b'\r\n'):
                 break
             self.line_received(self.codec.decode(line[:-2]))
