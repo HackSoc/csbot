@@ -15,26 +15,22 @@ def irc_client_class():
 class TestIRCClientLineProtocol(IRCClientTestCase):
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_buffer(self):
+    async def test_buffer(self):
         """Check that incoming data is converted to a line-oriented protocol."""
         with self.patch('line_received') as m:
-            self.receive_bytes(b':nick!user@host PRIVMSG')
-            yield
+            await self.receive_bytes(b':nick!user@host PRIVMSG')
             assert not m.called
-            self.receive_bytes(b' #channel :hello\r\nPING')
-            yield
+            await self.receive_bytes(b' #channel :hello\r\nPING')
             m.assert_has_calls([
                 mock.call(':nick!user@host PRIVMSG #channel :hello'),
             ])
-            self.receive_bytes(b' :server.name\r\n')
-            yield
+            await self.receive_bytes(b' :server.name\r\n')
             m.assert_has_calls([
                 mock.call(':nick!user@host PRIVMSG #channel :hello'),
                 mock.call('PING :server.name'),
             ])
-            self.receive_bytes(b':nick!user@host JOIN #foo\r\n'
-                               b':nick!user@host JOIN #bar\r\n')
-            yield
+            await self.receive_bytes(b':nick!user@host JOIN #foo\r\n'
+                                     b':nick!user@host JOIN #bar\r\n')
             m.assert_has_calls([
                 mock.call(':nick!user@host PRIVMSG #channel :hello'),
                 mock.call('PING :server.name'),
@@ -44,38 +40,35 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_decode_ascii(self):
+    async def test_decode_ascii(self):
         """Check that plain ASCII ends up as a (unicode) string."""
         with self.patch('line_received') as m:
-            self.receive_bytes(b':nick!user@host PRIVMSG #channel :hello\r\n')
-            yield
+            await self.receive_bytes(b':nick!user@host PRIVMSG #channel :hello\r\n')
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :hello')
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_decode_utf8(self):
+    async def test_decode_utf8(self):
         """Check that incoming UTF-8 is properly decoded."""
         with self.patch('line_received') as m:
-            self.receive_bytes(b':nick!user@host PRIVMSG #channel :\xe0\xb2\xa0\r\n')
-            yield
+            await self.receive_bytes(b':nick!user@host PRIVMSG #channel :\xe0\xb2\xa0\r\n')
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :ಠ')
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_decode_cp1252(self):
+    async def test_decode_cp1252(self):
         """Check that incoming CP1252 is properly decoded.
 
         This tests a CP1252 sequences which is definitely illegal in UTF-8, to
         check that the fallback decoding works.
         """
         with self.patch('line_received') as m:
-            self.receive_bytes(b':nick!user@host PRIVMSG #channel :\x93\x94\r\n')
-            yield
+            await self.receive_bytes(b':nick!user@host PRIVMSG #channel :\x93\x94\r\n')
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel :“”')
 
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    def test_decode_invalid_sequence(self):
+    async def test_decode_invalid_sequence(self):
         """Check that incoming invalid byte sequence is properly handled.
 
         This tests invalid byte sequences which are definitely illegal in
@@ -83,9 +76,7 @@ class TestIRCClientLineProtocol(IRCClientTestCase):
         replaces the character.
         """
         with self.patch('line_received') as m:
-
-            self.receive_bytes(b':nick!user@host PRIVMSG #channel : ono\x81\r\n')
-            yield
+            await self.receive_bytes(b':nick!user@host PRIVMSG #channel : ono\x81\r\n')
             m.assert_called_once_with(':nick!user@host PRIVMSG #channel : ono�')
 
     def test_encode(self):

@@ -1,3 +1,4 @@
+import asyncio
 from unittest import mock
 
 import pytest
@@ -53,9 +54,10 @@ class IRCClientHelper:
                                       wraps=getattr(self.client, attr, None))
                     for attr in attrs]
 
-    def receive_bytes(self, bytes):
+    async def receive_bytes(self, bytes):
         """Shortcut for pushing received data to the client."""
         self.client.reader.feed_data(bytes)
+        await asyncio.sleep(0)
 
     def assert_bytes_sent(self, bytes):
         """Check the raw bytes that have been sent via the transport.
