@@ -121,28 +121,6 @@ def async_runner(event_loop):
 
 
 class TestAsyncEventRunner:
-    def setUp(self):
-        super().setUp()
-        self.runner = csbot.events.AsyncEventRunner(self.handle_event, self.loop)
-        self.handled_events = []
-        self.exception_handler = mock.Mock()
-        self.loop.set_exception_handler(self.exception_handler)
-
-    def tearDown(self):
-        super().tearDown()
-        self.runner = None
-        self.handled_events = None
-        self.exception_handler = None
-
-    def handle_event(self, event):
-        """Record objects passed through the event handler in order.  If they
-        are callable, call them."""
-        self.handled_events.append(event)
-        if asyncio.iscoroutinefunction(event):
-            return [event()]
-        else:
-            return []
-
     @pytest.mark.asyncio
     def test_values(self, async_runner):
         """Check that basic values are passed through the event queue

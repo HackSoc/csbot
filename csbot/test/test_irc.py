@@ -7,9 +7,12 @@ from csbot.test import IRCClientTestCase
 from csbot.irc import *
 
 
-class TestIRCClientLineProtocol(IRCClientTestCase):
-    CLIENT_CLASS = IRCClient
+@pytest.fixture
+def irc_client_class():
+    return IRCClient
 
+
+class TestIRCClientLineProtocol(IRCClientTestCase):
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
     def test_buffer(self):

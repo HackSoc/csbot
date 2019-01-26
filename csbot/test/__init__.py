@@ -20,131 +20,50 @@ class MockStreamWriter(asyncio.StreamWriter):
         self._reader.feed_eof()
 
 
+def mock_open_connection(loop):
+    """Give a mock reader and writer when a stream connection is opened.
+
+    >>> with mock_open_connection(loop):
+    ...     await self.client.connect()
+    ...     irc_client.quit('blah')
+    ...     irc_client_helper.assert_bytes_sent(client, b'QUIT :blah\r\n')
+    """
+    def create_connection(*args, **kwargs):
+        reader = MockStreamReader(loop=loop)
+        writer = MockStreamWriter(None, None, reader, loop)
+        writer.write = mock.Mock()
+        fut = asyncio.Future(loop=loop)
+        fut.set_result((reader, writer))
+        return fut
+    return mock.patch('asyncio.open_connection', side_effect=create_connection)
+
+
 class IRCClientTestCase:
-    #: The IRCClient (sub)class to instrument
-    CLIENT_CLASS = None
-
-    loop = None
     client = None
-
-    @pytest.fixture
-    def irc_client_class(self):
-        assert self.CLIENT_CLASS is not None, "no CLIENT_CLASS set on test case"
-        return self.CLIENT_CLASS
-
-    @pytest.fixture
-    def pre_irc_client(self):
-        """Hook for running a fixture before client is created."""
-        pass
+    client_helper = None
 
     @pytest.fixture(autouse=True)
-    def irc_client(self, event_loop, irc_client_class, pre_irc_client):
-        self.loop = event_loop
-        # Create client and make it use our event loop
-        self.client = irc_client_class(loop=self.loop)
-        # Connect fake stream reader/writer (for tests that don't need the read loop)
-        with self.mock_open_connection():
-            self.loop.run_until_complete(self.client.connect())
-
-        # Mock all the things!
-        self.client.send_line = mock.Mock(wraps=self.client.send_line)
-
-        return self.client
-
-    @pytest.fixture
-    def run_client(self, event_loop, irc_client):
-        """Fixture for tests that require actually running the client.
-
-        A test decorated with this function should be a coroutine, i.e. at some
-        point it should ``yield`` in some way to allow the client to progress.
-
-        >>> class TestFoo(IRCClientTestCase):
-        ...     @pytest.mark.parametrize("run_client")
-        ...     @pytest.mark.asyncio
-        ...     def test_something(self):
-        ...         self.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
-        ...         yield
-        ...         self.assert_sent('PRIVMSG #channel :what do you mean, hello?')
-        """
-        # Deliberately written in "synchronous" style with run_until_complete()
-        # instead of await because async generators don't work in Python 3.5.
-        with self.mock_open_connection():
-            # Start the client
-            run_fut = event_loop.create_task(irc_client.run())
-            event_loop.run_until_complete(irc_client.connected.wait())
-            # Allow the test to run
-            yield
-            # Cleanly end the read loop and wait for client to exit
-            irc_client.disconnect()
-            event_loop.run_until_complete(run_fut)
-
-    def mock_open_connection(self):
-        """Give a mock reader and writer when a stream connection is opened.
-
-        >>> with self.mock_open_connection():
-        ...     self.loop.run_until_complete(self.client.connect())
-        ...     self.client.quit('blah')
-        ...     self.assert_bytes_sent(b'QUIT :blah\r\n')
-        """
-        def create_connection(*args, **kwargs):
-            reader = MockStreamReader(loop=self.loop)
-            writer = MockStreamWriter(None, None, reader, self.loop)
-            writer.write = mock.Mock()
-            fut = asyncio.Future(loop=self.loop)
-            fut.set_result((reader, writer))
-            return fut
-        return mock.patch('asyncio.open_connection', side_effect=create_connection)
+    def bind_client(self, irc_client, irc_client_helper):
+        self.client = irc_client
+        self.client_helper = irc_client_helper
 
     def reset_mock(self):
-        self.client.send_line.reset_mock()
-        self.client.writer.write.reset_mock()
+        return self.client_helper.reset_mock()
 
-    def patch(self, attrs, create=False):
-        """Shortcut for patching attribute(s) of the client.
+    def patch(self, *args, **kwargs):
+        return self.client_helper.patch(*args, **kwargs)
 
-        If the attribute exists it is wrapped by the mock so that calls aren't
-        blocked.
-        """
-        if isinstance(attrs, str):
-            return mock.patch.object(self.client, attrs, create=create,
-                                     wraps=getattr(self.client, attrs, None))
-        else:
-            return [mock.patch.object(self.client, attr, create=create,
-                                      wraps=getattr(self.client, attr, None))
-                    for attr in attrs]
+    def receive_bytes(self, *args, **kwargs):
+        return self.client_helper.receive_bytes(*args, **kwargs)
 
-    def receive_bytes(self, bytes):
-        """Shortcut for pushing received data to the client."""
-        self.client.reader.feed_data(bytes)
+    def assert_bytes_sent(self, *args, **kwargs):
+        return self.client_helper.assert_bytes_sent(*args, **kwargs)
 
-    def assert_bytes_sent(self, bytes):
-        """Check the raw bytes that have been sent via the transport.
+    def receive(self, *args, **kwargs):
+        return self.client_helper.receive(*args, **kwargs)
 
-        Compares *bytes* to the collection of everything sent to
-        ``transport.write(...)``.  Resets the mock so the next call will not
-        contain what was checked by this call.
-        """
-        sent = b''.join(args[0] for args, _ in self.client.writer.write.call_args_list)
-        assert sent == bytes
-        self.client.writer.write.reset_mock()
-
-    def receive(self, lines):
-        """Shortcut to push a series of lines to the client."""
-        if isinstance(lines, str):
-            lines = [lines]
-        for l in lines:
-            self.client.line_received(l)
-
-    def assert_sent(self, lines):
-        """Check that a list of (unicode) strings have been sent.
-
-        Resets the mock so the next call will not contain what was checked by
-        this call.
-        """
-        if isinstance(lines, str):
-            lines = [lines]
-        self.client.send_line.assert_has_calls([mock.call(l) for l in lines])
-        self.client.send_line.reset_mock()
+    def assert_sent(self, *args, **kwargs):
+        return self.client_helper.assert_sent(*args, **kwargs)
 
 
 class TempEnvVars(object):
@@ -199,11 +118,6 @@ class BotTestCase(IRCClientTestCase):
         self.bot_ = None
         for p in self.PLUGINS:
             setattr(self, p, None)
-
-    @pytest.fixture
-    def responses(self):
-        with responses.RequestsMock() as rsps:
-            yield rsps
 
 
 def fixture_file(*path):
