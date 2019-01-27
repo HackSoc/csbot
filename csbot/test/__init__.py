@@ -37,34 +37,6 @@ def mock_open_connection(loop):
     return mock.patch('asyncio.open_connection', side_effect=create_connection)
 
 
-class IRCClientTestCase:
-    client = None
-    client_helper = None
-
-    @pytest.fixture(autouse=True)
-    def bind_client(self, irc_client, irc_client_helper):
-        self.client = irc_client
-        self.client_helper = irc_client_helper
-
-    def reset_mock(self):
-        return self.client_helper.reset_mock()
-
-    def patch(self, *args, **kwargs):
-        return self.client_helper.patch(*args, **kwargs)
-
-    def receive_bytes(self, *args, **kwargs):
-        return self.client_helper.receive_bytes(*args, **kwargs)
-
-    def assert_bytes_sent(self, *args, **kwargs):
-        return self.client_helper.assert_bytes_sent(*args, **kwargs)
-
-    def receive(self, *args, **kwargs):
-        return self.client_helper.receive(*args, **kwargs)
-
-    def assert_sent(self, *args, **kwargs):
-        return self.client_helper.assert_sent(*args, **kwargs)
-
-
 class TempEnvVars(object):
     """A context manager for temporarily changing the values of environment
     variables."""
@@ -85,38 +57,6 @@ class TempEnvVars(object):
                 os.environ[k] = self.restore[k]
             else:
                 del os.environ[k]
-
-
-class BotTestCase(IRCClientTestCase):
-    """Common functionality for bot test case.
-
-    A :class:`unittest.TestCase` with bot and plugin test fixtures.  Creates a
-    bot from :attr:`CONFIG`, binding it to ``self.bot``, and also binding every
-    plugin in :attr:`PLUGINS` to ``self.plugin``.
-    """
-    BOT_CLASS = Bot
-    CONFIG = ""
-    PLUGINS = []
-    bot_ = None
-
-    @pytest.fixture
-    def irc_client_class(self):
-        return functools.partial(self.BOT_CLASS, StringIO(dedent(self.CONFIG)))
-
-    @pytest.fixture(autouse=True)
-    def bot_setup(self, irc_client):
-        """Create/destroy bot and plugin bindings."""
-        irc_client.bot_setup()
-        # Keep old tests happy with an alias...
-        self.bot_ = irc_client
-        for p in self.PLUGINS:
-            setattr(self, p, self.bot_.plugins[p])
-
-        yield
-
-        self.bot_ = None
-        for p in self.PLUGINS:
-            setattr(self, p, None)
 
 
 def fixture_file(*path):

@@ -118,7 +118,7 @@ class Bot(SpecialPlugin, IRCClient):
     def register_command(self, cmd, metadata, f, tag=None):
         # Bail out if the command already exists
         if cmd in self.commands:
-            self.log.warn('tried to overwrite command: {}'.format(cmd))
+            self.log.warning('tried to overwrite command: {}'.format(cmd))
             return False
 
         self.commands[cmd] = (f, metadata, tag)

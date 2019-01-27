@@ -2,12 +2,11 @@ from unittest.mock import patch
 from distutils.version import StrictVersion
 
 import pytest
-import responses
 import urllib.parse as urlparse
 import apiclient
 from apiclient.http import HttpMock
 
-from csbot.test import BotTestCase, fixture_file
+from csbot.test import fixture_file
 from csbot.plugins.youtube import Youtube, YoutubeError
 
 
@@ -85,55 +84,46 @@ if StrictVersion(apiclient.__version__) > StrictVersion("1.4.1"):
     ]
 
 
-class TestYoutubePlugin(BotTestCase):
-    CONFIG = """\
+@pytest.fixture
+def pre_irc_client():
+    # Use fixture JSON for API client setup
+    http = HttpMock(fixture_file('google-discovery-youtube-v3.json'),
+                    {'status': '200'})
+    with patch.object(Youtube, 'http', wraps=http):
+        yield
+
+
+@pytest.mark.bot(config="""\
     [@bot]
     plugins = youtube
-    """
-
-    PLUGINS = ['youtube']
-
-    @pytest.fixture(autouse=True)
-    def pre_irc_client(self):
-        # Use fixture JSON for API client setup
-        http = HttpMock(fixture_file('google-discovery-youtube-v3.json'),
-                        {'status': '200'})
-        with patch.object(Youtube, 'http', wraps=http):
-            yield
-
+    """)
+class TestYoutubePlugin:
     @pytest.mark.parametrize("vid_id, status, fixture, expected", json_test_cases)
-    def test_ids(self, vid_id, status, fixture, expected):
+    def test_ids(self, bot_helper, vid_id, status, fixture, expected):
         http = HttpMock(fixture_file(fixture), {'status': status})
-        with patch.object(self.youtube, 'http', wraps=http):
+        with patch.object(bot_helper['youtube'], 'http', wraps=http):
             if expected is YoutubeError:
                 with pytest.raises(YoutubeError):
-                    self.youtube._yt(urlparse.urlparse(vid_id))
+                    bot_helper['youtube']._yt(urlparse.urlparse(vid_id))
             else:
-                assert self.youtube._yt(urlparse.urlparse(vid_id)) == expected
+                assert bot_helper['youtube']._yt(urlparse.urlparse(vid_id)) == expected
 
 
-class TestYoutubeLinkInfoIntegration(BotTestCase):
-    CONFIG = """\
+@pytest.mark.bot(config="""\
     [@bot]
     plugins = linkinfo youtube
-    """
-
-    PLUGINS = ['linkinfo', 'youtube']
-
-    @pytest.fixture(autouse=True)
-    def pre_irc_client(self):
-        # Use fixture JSON for API client setup
-        http = HttpMock(fixture_file('google-discovery-youtube-v3.json'),
-                        {'status': '200'})
-        with patch.object(Youtube, 'http', wraps=http):
-            yield
-
-    @pytest.fixture(autouse=True)
-    def extra_bot_setup(self, bot_setup):
+    """)
+class TestYoutubeLinkInfoIntegration:
+    @pytest.fixture
+    def bot_helper(self, bot_helper):
         # Make sure URLs don't try to fall back to the default handler
-        self.linkinfo.register_exclude(lambda url: url.netloc in {"m.youtube.com",
-                                                                  "youtu.be",
-                                                                  "www.youtube.com"})
+        bot_helper['linkinfo'].register_exclude(
+            lambda url: url.netloc in {
+                "m.youtube.com",
+                "youtu.be",
+                "www.youtube.com",
+            })
+        return bot_helper
 
     @pytest.mark.parametrize("vid_id, status, fixture, response", json_test_cases)
     @pytest.mark.parametrize("url", [
@@ -143,11 +133,11 @@ class TestYoutubeLinkInfoIntegration(BotTestCase):
         "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
         "http://youtu.be/{}",
     ])
-    def test_integration(self, vid_id, status, fixture, response, url):
+    def test_integration(self, bot_helper, vid_id, status, fixture, response, url):
         http = HttpMock(fixture_file(fixture), {'status': status})
-        with patch.object(self.youtube, 'http', wraps=http):
+        with patch.object(bot_helper['youtube'], 'http', wraps=http):
             url = url.format(vid_id)
-            result = self.linkinfo.get_link_info(url)
+            result = bot_helper['linkinfo'].get_link_info(url)
             if response is None or response is YoutubeError:
                 assert result.is_error
             else:

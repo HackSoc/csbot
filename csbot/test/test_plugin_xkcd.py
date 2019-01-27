@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from csbot.test import BotTestCase, read_fixture_file
+from csbot.test import read_fixture_file
 
 
 #: Tests are (number, url, content-type, fixture, expected)
@@ -74,16 +74,13 @@ json_test_cases = [
 ]
 
 
-class TestXKCDPlugin(BotTestCase):
-    CONFIG = """\
+@pytest.mark.bot(config="""\
     [@bot]
     plugins = xkcd
-    """
-
-    PLUGINS = ['xkcd']
-
+    """)
+class TestXKCDPlugin:
     @pytest.fixture
-    def populate_responses(self, responses):
+    def populate_responses(self, bot_helper, responses):
         """Populate all data into responses, don't assert that every request is fired."""
         responses.assert_all_requests_are_fired = False
         for num, url, content_type, fixture, expected in json_test_cases:
@@ -93,30 +90,30 @@ class TestXKCDPlugin(BotTestCase):
     @pytest.mark.usefixtures("populate_responses")
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
-    def test_correct(self, num, url, content_type, fixture, expected):
-        result = self.xkcd._xkcd(num)
+    def test_correct(self, bot_helper, num, url, content_type, fixture, expected):
+        result = bot_helper['xkcd']._xkcd(num)
         assert result == expected
 
     @pytest.mark.usefixtures("populate_responses")
-    def test_latest_success(self):
+    def test_latest_success(self, bot_helper):
         # Also test the empty string
         num, url, content_type, fixture, expected = json_test_cases[0]
-        assert self.xkcd._xkcd("") == expected
+        assert bot_helper['xkcd']._xkcd("") == expected
 
     @pytest.mark.usefixtures("populate_responses")
-    def test_random(self):
+    def test_random(self, bot_helper):
         # !xkcd 221
         num, url, content_type, fixture, expected = json_test_cases[1]
         with patch("random.randint", return_value=1):
-            assert self.xkcd._xkcd("rand") == expected
+            assert bot_helper['xkcd']._xkcd("rand") == expected
 
-    def test_error(self, responses):
+    def test_error(self, bot_helper, responses):
         num, url, content_type, fixture, _ = json_test_cases[0]  # Latest
         # Test if the comics are unavailable by making the latest return a 404
         responses.add(responses.GET, url, body="404 - Not Found",
                       content_type="text/html", status=404)
-        with pytest.raises(self.xkcd.XKCDError):
-            self.xkcd._xkcd("")
+        with pytest.raises(bot_helper['xkcd'].XKCDError):
+            bot_helper['xkcd']._xkcd("")
         responses.reset()
 
         # Now override the actual 404 page and the latest "properly"
@@ -134,20 +131,17 @@ class TestXKCDPlugin(BotTestCase):
         ]
 
         for case in error_cases:
-            with pytest.raises(self.xkcd.XKCDError):
-                self.xkcd._xkcd(case)
+            with pytest.raises(bot_helper['xkcd'].XKCDError):
+                bot_helper['xkcd']._xkcd(case)
 
 
-class TestXKCDLinkInfoIntegration(BotTestCase):
-    CONFIG = """\
+@pytest.mark.bot(config="""\
     [@bot]
     plugins = linkinfo xkcd
-    """
-
-    PLUGINS = ['linkinfo', 'xkcd']
-
+    """)
+class TestXKCDLinkInfoIntegration:
     @pytest.fixture
-    def populate_responses(self, responses):
+    def populate_responses(self, bot_helper, responses):
         """Populate all data into responses, don't assert that every request is fired."""
         responses.assert_all_requests_are_fired = False
         for num, url, content_type, fixture, expected in json_test_cases:
@@ -157,15 +151,15 @@ class TestXKCDLinkInfoIntegration(BotTestCase):
     @pytest.mark.usefixtures("populate_responses")
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
-    def test_integration(self, num, url, content_type, fixture, expected):
+    def test_integration(self, bot_helper, num, url, content_type, fixture, expected):
         _, title, alt = expected
         url = 'http://xkcd.com/{}'.format(num)
-        result = self.linkinfo.get_link_info(url)
+        result = bot_helper['linkinfo'].get_link_info(url)
         assert title in result.text
         assert alt in result.text
 
     @pytest.mark.usefixtures("populate_responses")
-    def test_integration_error(self):
+    def test_integration_error(self, bot_helper):
         # Error case
-        result = self.linkinfo.get_link_info("http://xkcd.com/flibble")
+        result = bot_helper['linkinfo'].get_link_info("http://xkcd.com/flibble")
         assert result.is_error
