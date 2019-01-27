@@ -1,14 +1,9 @@
 sudo: false
+dist: xenial
 language: python
 python:
-  - 3.5
   - 3.6
-
-matrix:
-  include:
-    - python: 3.7
-      dist: xenial
-      sudo: true
+  - 3.7
 
 install:
   - pip install -r requirements.txt
@@ -37,4 +32,4 @@ deploy:
   app: csyorkbot
   on:
     repo: HackSoc/csbot
-    python: '3.5'
+    python: '3.6'
