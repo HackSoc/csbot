@@ -150,6 +150,10 @@ class BotHelper(IRCClientHelper):
         """Get plugin by name."""
         return self.client.plugins[item]
 
+    @property
+    def bot(self):
+        return self.client
+
 
 @pytest.fixture
 def responses():
