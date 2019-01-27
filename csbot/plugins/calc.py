@@ -31,10 +31,12 @@ def guarded_lshift(a, b):
         raise CalcError("would take too long to calculate")
     return op.lshift(a, b)
 
+
 def guarded_rshift(a, b):
     if not (isinstance(a, int) and isinstance(b, int)):
         raise CalcError("non-integer shift values")
     return op.rshift(a, b)
+
 
 # Available operators
 operators = {
@@ -112,12 +114,13 @@ identifiers = {
     "rad": math.radians,
 }
 
+
 class CalcEval(ast.NodeVisitor):
     def visit_Module(self, node):
-        return self.visit(node.body[0]) # Special case, since we're only dealing with one-liners
+        return self.visit(node.body[0])     # Special case, since we're only dealing with one-liners
 
     def visit_Expr(self, node):
-        return self.visit(node.value) # Reimplementation needed or it goes via generic_visit
+        return self.visit(node.value)       # Reimplementation needed or it goes via generic_visit
 
     def visit_BinOp(self, node):
         left = self.visit(node.left)
@@ -138,7 +141,8 @@ class CalcEval(ast.NodeVisitor):
     def visit_Compare(self, node):
         comparisons = zip(node.ops, pairwise([node.left] + node.comparators))
         try:
-            return all(operators[op.__class__](self.visit(left), self.visit(right)) for op, (left, right) in comparisons)
+            return all(operators[op.__class__](self.visit(left), self.visit(right))
+                       for op, (left, right) in comparisons)
         except KeyError:
             raise CalcError("invalid operator")
 
@@ -167,8 +171,10 @@ class CalcEval(ast.NodeVisitor):
     def visit_Str(self, node):
         raise CalcError("invalid argument")
 
+
 class CalcError(Exception):
     pass
+
 
 class Calc(Plugin):
     """A plugin that calculates things.
@@ -191,7 +197,6 @@ class Calc(Plugin):
             return str(res)
         except (CalcError, SyntaxError) as ex:
             return "Error, {}".format(str(ex))
-
 
     @Plugin.command('calc', help='For calculating, not interpreting')
     def do_some_calc(self, e):

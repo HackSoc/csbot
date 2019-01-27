@@ -278,50 +278,50 @@ class TestCommandEvent(unittest.TestCase):
         return c
 
     def test_parse_command(self):
-        # Test variations on command and data text with no prefix involvement
-        ## Just a command
+        # --> Test variations on command and data text with no prefix involvement
+        # Just a command
         self._check_valid_command('testcommand', '',
                                   'testcommand', '')
-        ## Command and data
+        # Command and data
         self._check_valid_command('test command data', '',
                                   'test', 'command data')
-        ## Leading/trailing spaces are ignored
+        # Leading/trailing spaces are ignored
         self._check_valid_command('    test command', '', 'test', 'command')
         self._check_valid_command('test command    ', '', 'test', 'command')
         self._check_valid_command('  test   command  ', '', 'test', 'command')
-        ## Non-alphanumeric commands
+        # Non-alphanumeric commands
         self._check_valid_command('!#?$ you !', '', '!#?$', 'you !')
 
-        # Test what happens with a command prefix
-        ## Not a command
+        # --> Test what happens with a command prefix
+        # Not a command
         self._check_invalid_command('just somebody talking', '!')
-        ## A simple command
+        # A simple command
         self._check_valid_command('!hello', '!', 'hello', '')
-        ## ... with data
+        # ... with data
         self._check_valid_command('!hello there', '!', 'hello', 'there')
-        ## ... and repeated prefix
+        # ... and repeated prefix
         self._check_valid_command('!hello !there everybody', '!',
                                   'hello', '!there everybody')
-        ## Leading spaces
+        # Leading spaces
         self._check_valid_command('   !hello', '!', 'hello', '')
-        ## Spaces separating the prefix from the command shouldn't trigger it
+        # Spaces separating the prefix from the command shouldn't trigger it
         self._check_invalid_command('!  hello', '!')
-        ## The prefix can be part of the command if repeated
+        # The prefix can be part of the command if repeated
         self._check_valid_command('!!hello', '!', '!hello', '')
         self._check_valid_command('!!', '!', '!', '')
 
-        # Test a longer prefix
-        ## As long as it is a prefix of the first "part", should be fine
+        # --> Test a longer prefix
+        # As long as it is a prefix of the first "part", should be fine
         self._check_valid_command('dosomething now', 'do', 'something', 'now')
-        ## ... but if there's a space in between it's not a command any more
+        # ... but if there's a space in between it's not a command any more
         self._check_invalid_command('do something now', 'do')
 
-        # Test unicode
-        ## Unicode prefix
+        # --> Test unicode
+        # Unicode prefix
         self._check_valid_command('\u0CA0test', '\u0CA0', 'test', '')
-        ## Shouldn't match part of a UTF8 multibyte sequence: \u0CA0 = \xC2\xA3
+        # Shouldn't match part of a UTF8 multibyte sequence: \u0CA0 = \xC2\xA3
         self._check_invalid_command('\u0CA0test', '\xC2')
-        ## Unicode command
+        # Unicode command
         self._check_valid_command('!\u0CA0_\u0CA0', '!', '\u0CA0_\u0CA0', '')
 
         # Test "conversational", i.e. mentioned by nick

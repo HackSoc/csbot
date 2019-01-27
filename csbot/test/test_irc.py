@@ -2,7 +2,7 @@ from unittest import mock
 
 import pytest
 
-from csbot.irc import *
+from csbot.irc import IRCMessage, IRCParseError, IRCUser
 
 
 # Test IRC client line protocol
@@ -339,7 +339,7 @@ def test_PING():
     """Parse a simple message."""
     m = IRCMessage.parse('PING :i.am.a.server')
     assert m.raw == 'PING :i.am.a.server'
-    assert m.prefix == None
+    assert m.prefix is None
     assert m.command == 'PING'
     assert m.command_name == 'PING'
     assert m.params == ['i.am.a.server']

@@ -63,7 +63,6 @@ def test_without_plugin_section(bot_helper):
             assert plugin.config_get('multiple_env') == 'highest priority'
 
 
-
 @pytest.mark.bot(cls=MockBot, config=base_config + plugin_config)
 def test_with_plugin_section(bot_helper):
     bot = bot_helper.bot

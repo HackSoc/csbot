@@ -7,7 +7,8 @@ def failsafe(bot_helper):
     """forces the test to fail if not using a mock
     this prevents the tests from accidentally polluting a real database in the event of failure"""
     assert isinstance(bot_helper['whois'].whoisdb,
-                      mongomock.Collection), 'Not mocking MongoDB -- may be writing to actual database (!) (aborted test)'
+                      mongomock.Collection),\
+        'Not mocking MongoDB -- may be writing to actual database (!) (aborted test)'
 
 
 @pytest.fixture
@@ -109,10 +110,10 @@ class TestWhoisBehaviour:
     async def test_client_reply_whois_multiple_users_channels(self, bot_helper):
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.set test1')
         await bot_helper.recv_privmsg('Nick!~user@host', '#Second', '!whois.set test2')
-    
+
         await bot_helper.recv_privmsg('Other!~other@otherhost', '#First', '!whois Nick')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test1'))
-    
+
         await bot_helper.recv_privmsg('Other!~user@host', '#Second', '!whois Nick')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test2'))
 
@@ -123,14 +124,14 @@ class TestWhoisBehaviour:
 
     async def test_client_reply_whois_setdefault_then_set_channel(self, bot_helper):
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#Second', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test data'))
         await bot_helper.recv_privmsg('Other!~other@otherhost', '#Third', '!whois Nick')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Third', 'Nick: test data'))
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.set test first')
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test first'))
         await bot_helper.recv_privmsg('Other!~other@otherhost', '#Second', '!whois Nick')
@@ -140,25 +141,25 @@ class TestWhoisBehaviour:
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
         await bot_helper.recv_privmsg('Nick!~user@host', '#Second', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test data'))
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.set test first')
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test first'))
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.unset')
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'Nick: test data'))
 
     async def test_client_reply_whois_setdefault_then_unsetdefault(self, bot_helper):
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.setdefault test data')
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#Second', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'Nick: test data'))
         await bot_helper.recv_privmsg('Other!~other@otherhost', '#Third', '!whois Nick')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Third', 'Nick: test data'))
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.unsetdefault')
-    
+
         await bot_helper.recv_privmsg('Nick!~user@host', '#Second', '!whois')
         bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'No data for Nick'))
         await bot_helper.recv_privmsg('Other!~other@otherhost', '#Third', '!whois Nick')

@@ -15,7 +15,8 @@ json_test_cases = [
         "http://xkcd.com/info.0.json",
         "application/json; charset=utf-8",
         'xkcd_latest.json',
-        ('http://xkcd.com/99999', 'Chaos', 'Although the oral exam for the doctorate was just \'can you do that weird laugh?\'')
+        ('http://xkcd.com/99999', 'Chaos',
+         'Although the oral exam for the doctorate was just \'can you do that weird laugh?\'')
     ),
 
     # Normal
@@ -33,7 +34,8 @@ json_test_cases = [
         "http://xkcd.com/259/info.0.json",
         "application/json; charset=utf-8",
         'xkcd_259.json',
-        ('http://xkcd.com/259', 'Clichéd Exchanges', 'It\'s like they say, you gotta fight fire with clichés.')
+        ('http://xkcd.com/259', 'Clichéd Exchanges',
+         'It\'s like they say, you gotta fight fire with clichés.')
     ),
 
     # Unicode
@@ -42,7 +44,8 @@ json_test_cases = [
         "http://xkcd.com/403/info.0.json",
         "application/json; charset=utf-8",
         'xkcd_403.json',
-        ('http://xkcd.com/403', 'Convincing Pickup Line', 'Check it out; I\'ve had sex with someone who\'s had sex with someone who\'s written a paper with Paul Erdős!')
+        ('http://xkcd.com/403', 'Convincing Pickup Line',
+         'Check it out; I\'ve had sex with someone who\'s had sex with someone who\'s written a paper with Paul Erdős!')
     ),
 
     # Long alt text
@@ -51,7 +54,9 @@ json_test_cases = [
         "http://xkcd.com/1363/info.0.json",
         "application/json; charset=utf-8",
         'xkcd_1363.json',
-        ('http://xkcd.com/1363', 'xkcd Phone', 'Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, LifeStyles, and the US Chamber of Commerce. M...')
+        ('http://xkcd.com/1363', 'xkcd Phone',
+         'Presented in partnership with Qualcomm, Craigslist, Whirlpool, Hostess, '
+         'LifeStyles, and the US Chamber of Commerce. M...')
     ),
 
     # No alt text
@@ -69,7 +74,9 @@ json_test_cases = [
         "http://xkcd.com/2043/info.0.json",
         "application/json; charset=utf-8",
         'xkcd_2043.json',
-        ('http://xkcd.com/2043', 'Boathouses and Houseboats', 'The <x> that is held by <y> is also a <y><x>, so if you go to a food truck, the stuff you buy is truck food. A phone ...')
+        ('http://xkcd.com/2043', 'Boathouses and Houseboats',
+         'The <x> that is held by <y> is also a <y><x>, so if you go to a food truck, '
+         'the stuff you buy is truck food. A phone ...')
     )
 ]
 

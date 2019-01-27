@@ -8,7 +8,7 @@ class CSYork(Plugin):
     def respond(self, e):
         # hayashi
         # Completes an ASCII stick man started with `\o/`.
-        if e['message'].strip() == '\o/':
+        if e['message'].strip() == '\\o/':
             spaces = e['message'].find('\\')
             e.reply(' ' * spaces + ' |')
             e.reply(' ' * spaces + '/ \\')

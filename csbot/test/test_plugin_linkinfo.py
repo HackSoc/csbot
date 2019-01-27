@@ -186,7 +186,8 @@ def test_scan_privmsg_rate_limit(bot_helper):
     count = int(linkinfo.config_get('rate_limit_count'))
     for i in range(count):
         with mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
-            yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
+            yield from bot_helper.client.line_received(
+                ':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
             get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
     with mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
         yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')

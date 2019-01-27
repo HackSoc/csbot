@@ -245,7 +245,7 @@ class LinkInfo(Plugin):
                 try:
                     parser = lxml.html.HTMLParser(encoding=encoding)
                 except LookupError:
-                    pass # Oh well
+                    pass    # Oh well
 
             # In case Content-Length is absent on a massive file, get only a
             # reasonable chunk instead. We don't just get the first chunk

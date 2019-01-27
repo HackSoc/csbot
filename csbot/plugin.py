@@ -76,7 +76,7 @@ class PluginManager(collections.Mapping):
         # Attempt to load other plugins
         for p in plugins:
             if p in self.plugins:
-                self.log.warn('not loading duplicate plugin:  ' + p)
+                self.log.warning('not loading duplicate plugin:  ' + p)
             elif p not in available:
                 self.log.error('plugin not found: ' + p)
             else:
@@ -283,7 +283,7 @@ class Plugin(object, metaclass=PluginMeta):
 
     def provide(self, plugin_name, **kwarg):
         """Provide a value for a :meth:`Plugin.use` usage."""
-        raise NotImplementedError
+        raise PluginFeatureError('{} plugin does not support Plugin.use()'.format(self.plugin_name()))
 
     def setup(self):
         """Plugin setup.

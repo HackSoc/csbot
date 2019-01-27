@@ -77,6 +77,7 @@ def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colou
     if use_rollbar:
         rollbar.init(os.environ['ROLLBAR_ACCESS_TOKEN'],
                      os.environ.get('ROLLBAR_ENV', 'development'))
+
         def handler(loop, context):
             exception = context.get('exception')
             if exception is not None:

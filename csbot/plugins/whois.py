@@ -48,7 +48,6 @@ class Whois(Plugin):
         else:
             e.reply('{}: {}'.format(nick_, str(res)))
 
-
     @Plugin.command('whois.setdefault', help=('whois.setdefault [default_whois]: sets the default'
                                               ' whois text for the user, used when no channel-specific'
                                               ' one is set'))
@@ -59,7 +58,6 @@ class Whois(Plugin):
     def set(self, e):
         """Allow a user to associate data with themselves for this channel."""
         self.whois_set(nick(e['user']), e['data'], channel=e['channel'])
-
 
     @Plugin.command('whois.unset')
     def unset(self, e):

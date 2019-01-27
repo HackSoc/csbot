@@ -4,7 +4,6 @@ from distutils.version import StrictVersion
 import pytest
 import urllib.parse as urlparse
 import apiclient
-from apiclient.http import HttpMock
 
 from csbot.test import fixture_file
 from csbot.plugins.youtube import Youtube, YoutubeError
@@ -87,8 +86,9 @@ if StrictVersion(apiclient.__version__) > StrictVersion("1.4.1"):
 @pytest.fixture
 def pre_irc_client():
     # Use fixture JSON for API client setup
-    http = HttpMock(fixture_file('google-discovery-youtube-v3.json'),
-                    {'status': '200'})
+    http = apiclient.http.HttpMock(
+        fixture_file('google-discovery-youtube-v3.json'),
+        {'status': '200'})
     with patch.object(Youtube, 'http', wraps=http):
         yield
 
@@ -100,7 +100,7 @@ def pre_irc_client():
 class TestYoutubePlugin:
     @pytest.mark.parametrize("vid_id, status, fixture, expected", json_test_cases)
     def test_ids(self, bot_helper, vid_id, status, fixture, expected):
-        http = HttpMock(fixture_file(fixture), {'status': status})
+        http = apiclient.http.HttpMock(fixture_file(fixture), {'status': status})
         with patch.object(bot_helper['youtube'], 'http', wraps=http):
             if expected is YoutubeError:
                 with pytest.raises(YoutubeError):
@@ -134,7 +134,7 @@ class TestYoutubeLinkInfoIntegration:
         "http://youtu.be/{}",
     ])
     def test_integration(self, bot_helper, vid_id, status, fixture, response, url):
-        http = HttpMock(fixture_file(fixture), {'status': status})
+        http = apiclient.http.HttpMock(fixture_file(fixture), {'status': status})
         with patch.object(bot_helper['youtube'], 'http', wraps=http):
             url = url.format(vid_id)
             result = bot_helper['linkinfo'].get_link_info(url)

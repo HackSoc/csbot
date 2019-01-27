@@ -1,6 +1,6 @@
 import unittest
 
-from csbot.plugins.auth import Auth, PermissionDB
+from csbot.plugins.auth import PermissionDB
 
 
 class TestPermissionDB(unittest.TestCase):

@@ -5,6 +5,7 @@ import re
 from collections import namedtuple
 import codecs
 import base64
+import types
 
 from ._rfc import NUMERIC_REPLIES
 
@@ -728,7 +729,7 @@ def main():  # pragma: no cover
     loop = asyncio.get_event_loop()
 
     bot = IRCClient(nick='csbot_py3')
-    import types
+
     def on_welcome(self):
         self.join('#cs-york-dev')
         self.act('#cs-york-dev', 'arrives')

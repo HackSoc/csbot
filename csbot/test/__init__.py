@@ -1,13 +1,6 @@
 import asyncio
 import os
-from io import StringIO
-from textwrap import dedent
-import functools
 from unittest import mock
-
-import pytest
-
-from csbot.core import Bot
 
 
 class MockStreamReader(asyncio.StreamReader):
