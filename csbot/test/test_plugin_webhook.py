@@ -4,7 +4,6 @@ import pytest
 
 from csbot import core
 from csbot.plugin import Plugin
-from csbot.test import BotTestCase
 from csbot.test.test_plugin_webserver import WebServer
 
 
@@ -23,8 +22,8 @@ class Bot(core.Bot):
         webhookexample=WebhookTest,
     )
 
-# @pytest.mark.skip
-class TestWebhookPlugin(BotTestCase):
+
+class TestWebhookPlugin:
     SECRET = 'foobar'
     BOT_CLASS = Bot
     CONFIG = f"""\
@@ -34,7 +33,7 @@ class TestWebhookPlugin(BotTestCase):
     [webhook]
     secret = {SECRET}
     """
-    PLUGINS = ['webserver', 'webhook', 'webhookexample']
+    pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 
     @pytest.fixture
     def loop(self, event_loop):
@@ -42,21 +41,22 @@ class TestWebhookPlugin(BotTestCase):
         """
         return event_loop
 
-    async def test_unauthorised(self, aiohttp_client):
-        client = await aiohttp_client(self.webserver.app)
+    @pytest.fixture
+    async def client(self, bot_helper, aiohttp_client):
+        return await aiohttp_client(bot_helper['webserver'].app)
+
+    async def test_unauthorised(self, bot_helper, client):
         resp = await client.post('/webhook/example/wrong-token', data=b'')
         assert resp.status == 401
-        self.webhookexample.handler_mock.assert_not_called()
+        bot_helper['webhookexample'].handler_mock.assert_not_called()
 
-    async def test_not_found(self, aiohttp_client):
-        client = await aiohttp_client(self.webserver.app)
+    async def test_not_found(self, bot_helper, client):
         resp = await client.post('/webhook/this/path/doesnt/exist', data=b'')
         assert resp.status == 404
-        self.webhookexample.handler_mock.assert_not_called()
+        bot_helper['webhookexample'].handler_mock.assert_not_called()
 
-    async def test_webhook_fired(self, aiohttp_client):
-        client = await aiohttp_client(self.webserver.app)
+    async def test_webhook_fired(self, bot_helper, client):
         resp = await client.post(f'/webhook/example/{self.SECRET}', data=b'')
         assert resp.status == 200
         assert await resp.text() == 'OK'
-        self.webhookexample.handler_mock.assert_called_once()
+        bot_helper['webhookexample'].handler_mock.assert_called_once()

@@ -1,9 +1,9 @@
+import pytest
 from aiohttp import web
 
 from csbot import core
 from csbot.plugin import Plugin
 from csbot.plugins import webserver
-from csbot.test import BotTestCase
 
 
 class WebServer(webserver.WebServer):
@@ -32,16 +32,15 @@ class Bot(core.Bot):
     )
 
 
-class TestWebServerPlugin(BotTestCase):
-    BOT_CLASS = Bot
-    CONFIG = f"""\
+pytestmark = pytest.mark.bot(cls=Bot, config="""\
     [@bot]
     plugins = webserver webserverexample
-    """
-    PLUGINS = ['webserver', 'webserverexample']
+    """)
 
-    async def test_example(self, aiohttp_client):
-        client = await aiohttp_client(self.webserver.app)
+
+class TestWebServerPlugin:
+    async def test_example(self, bot_helper, aiohttp_client):
+        client = await aiohttp_client(bot_helper['webserver'].app)
         resp = await client.get('/prefix/')
         assert resp.status == 200
         assert await resp.text() == 'Hello, world'

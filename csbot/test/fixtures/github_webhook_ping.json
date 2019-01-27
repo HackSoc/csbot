@@ -1,0 +1,9 @@
+{
+  "hook": {
+    "type": "App",
+    "id": 11,
+    "active": true,
+    "events": ["pull_request"],
+    "app_id": 37
+  }
+}
