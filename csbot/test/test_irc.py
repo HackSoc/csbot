@@ -23,7 +23,7 @@ async def test_buffer(run_client):
             mock.call('PING :server.name'),
         ])
         await run_client.receive_bytes(b':nick!user@host JOIN #foo\r\n'
-                                 b':nick!user@host JOIN #bar\r\n')
+                                       b':nick!user@host JOIN #bar\r\n')
         m.assert_has_calls([
             mock.call(':nick!user@host PRIVMSG #channel :hello'),
             mock.call('PING :server.name'),

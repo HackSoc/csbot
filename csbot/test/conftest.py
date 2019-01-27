@@ -104,31 +104,27 @@ def irc_client_helper(irc_client):
 
 
 @pytest.fixture
-def run_client(event_loop, irc_client_helper):
+async def run_client(event_loop, irc_client_helper):
     """Fixture for tests that require actually running the client.
 
     A test decorated with this function should be a coroutine, i.e. at some
-    point it should ``yield`` in some way to allow the client to progress.
+    point it should yield control to allow the client to progress.
 
-    >>> class TestFoo(IRCClientTestCase):
-    ...     @pytest.mark.parametrize("run_client")
-    ...     @pytest.mark.asyncio
-    ...     def test_something(self):
-    ...         self.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
-    ...         yield
-    ...         self.assert_sent('PRIVMSG #channel :what do you mean, hello?')
+    >>> @pytest.mark.usefixtures("run_client")
+    ... @pytest.mark.asyncio
+    ... async def test_something(irc_client_helper):
+    ...     await irc_client_helper.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
+    ...     irc_client_helper.assert_sent('PRIVMSG #channel :what do you mean, hello?')
     """
-    # Deliberately written in "synchronous" style with run_until_complete()
-    # instead of await because async generators don't work in Python 3.5.
     with test.mock_open_connection(event_loop):
         # Start the client
         run_fut = event_loop.create_task(irc_client_helper.client.run())
-        event_loop.run_until_complete(irc_client_helper.client.connected.wait())
+        await irc_client_helper.client.connected.wait()
         # Allow the test to run
         yield irc_client_helper
         # Cleanly end the read loop and wait for client to exit
         irc_client_helper.client.disconnect()
-        event_loop.run_until_complete(run_fut)
+        await run_fut
 
 
 @pytest.fixture
