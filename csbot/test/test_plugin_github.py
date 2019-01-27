@@ -39,11 +39,6 @@ def bot_helper_class(bot_helper_class):
     return Helper
 
 
-TEST_CASES = [
-    ('ping', 'github_webhook_ping.json', []),
-]
-
-
 class TestGitHubPlugin:
     SECRET = 'foobar'
     BOT_CLASS = Bot
@@ -56,6 +51,8 @@ class TestGitHubPlugin:
 
     [github]
     
+    [github/Codertocat/Hello-World]
+    notify = #mychannel
     """
     URL = f'/webhook/github/{SECRET}'
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
@@ -88,6 +85,18 @@ class TestGitHubPlugin:
             resp = await client.post(self.URL, data=data, headers=headers)
             assert resp.status == 200
             m.assert_called_once_with(payload)
+
+    TEST_CASES = [
+        # Ping: https://developer.github.com/webhooks/#ping-event
+        ('ping', 'github_webhook_ping.json', []),
+
+        # Issues: https://developer.github.com/v3/activity/events/types/#issuesevent
+        # - created
+        ('issues', 'github_webhook_issue_created.json', [
+            ('NOTICE #mychannel :[Codertocat/Hello-World] Codertocat created issue #2: '
+             'Spelling error in the README file (https://github.com/Codertocat/Hello-World/issues/2)'),
+        ]),
+    ]
 
     @pytest.mark.parametrize("event_name, fixture_file, expected", TEST_CASES)
     async def test_handlers(self, bot_helper, client, event_name, fixture_file, expected):
