@@ -18,43 +18,32 @@ class Bot(core.Bot):
 @pytest.fixture
 def bot_helper_class(bot_helper_class):
     class Helper(bot_helper_class):
-        def payload_and_headers_from_fixture(self, event, filename):
-            payload = read_fixture_file(filename)
-            headers = {
-                'X-GitHub-Event': event,
-                'X-GitHub-Delivery': '00000000-0000-0000-0000-000000000000',
-                'X-GitHub-Signature': self['github']._hmac_digest(payload),
-            }
-            return payload, headers
-
-        def payload_and_headers_from_object(self, event, obj):
-            payload = json.dumps(obj).encode('utf-8')
-            headers = {
-                'X-GitHub-Event': event,
-                'X-GitHub-Delivery': '00000000-0000-0000-0000-000000000000',
-                'X-GitHub-Signature': self['github']._hmac_digest(payload),
-            }
+        @staticmethod
+        def payload_and_headers_from_fixture(fixture):
+            payload = read_fixture_file(f'{fixture}.payload.json')
+            headers = json.loads(read_fixture_file(f'{fixture}.headers.json'))
             return payload, headers
 
     return Helper
 
 
 class TestGitHubPlugin:
-    SECRET = 'foobar'
     BOT_CLASS = Bot
-    CONFIG = f"""\
+    CONFIG = """\
     [@bot]
     plugins = webserver webhook github
 
     [webhook]
-    secret = {SECRET}
+    secret = foobar
 
     [github]
+    fmt/issues/* = [{repository[name]}] {sender[login]} {action} issue #{issue[number]}: {issue[title]} ({issue[html_url]})
+    fmt/issues/assigned = [{repository[name]}] {sender[login]} {action} issue #{issue[number]} to {assignee[login]}: {issue[title]} ({issue[html_url]})
     
-    [github/Codertocat/Hello-World]
+    [github/alanbriolat/csbot-webhook-test]
     notify = #mychannel
     """
-    URL = f'/webhook/github/{SECRET}'
+    URL = f'/webhook/github/foobar'
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 
     @pytest.fixture
@@ -68,50 +57,64 @@ class TestGitHubPlugin:
         return await aiohttp_client(bot_helper['webserver'].app)
 
     async def test_signature_check(self, bot_helper, client):
-        with asynctest.patch.object(bot_helper['github'], 'handle_foo',
+        # Test with a non-existent event name/handler
+        event_name = '_test'
+        with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
                                     new=asynctest.CoroutineMock(), create=True) as m:
-            payload = {}
-            data = json.dumps(payload).encode('utf-8')
-            headers = {
-                'X-GitHub-Event': 'foo',
-                'X-GitHub-Delivery': '00000000-0000-0000-0000-000000000000',
-                'X-GitHub-Signature': '0000000000000000000000000000000000000000',
-            }
-            resp = await client.post(self.URL, data=data, headers=headers)
+            payload, headers = bot_helper.payload_and_headers_from_fixture('github-ping-20190128-101509')
+            headers['X-GitHub-Event'] = event_name
+            # Signature is still intact, so handler should be called
+            resp = await client.post(self.URL, data=payload, headers=headers)
+            assert resp.status == 200
+            m.assert_called_once()
+            m.reset_mock()
+            # Signature made to be incorrect, handler should *not* be called
+            headers['X-Hub-Signature'] = 'sha1=0000000000000000000000000000000000000000'
+            resp = await client.post(self.URL, data=payload, headers=headers)
             assert resp.status == 200
             m.assert_not_called()
 
-            headers['X-GitHub-Signature'] = bot_helper['github']._hmac_digest(data)
-            resp = await client.post(self.URL, data=data, headers=headers)
-            assert resp.status == 200
-            m.assert_called_once_with(payload)
-
     TEST_CASES = [
         # Ping: https://developer.github.com/webhooks/#ping-event
-        ('ping', 'github_webhook_ping.json', []),
+        ('github-ping-20190128-101509', []),
 
         # Issues: https://developer.github.com/v3/activity/events/types/#issuesevent
-        # - created
-        ('issues', 'github_webhook_issue_created.json', [
-            ('NOTICE #mychannel :[Codertocat/Hello-World] Codertocat created issue #2: '
-             'Spelling error in the README file (https://github.com/Codertocat/Hello-World/issues/2)'),
+        ('github-issues-opened-20190128-101904', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat opened issue #2: '
+             'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
+        ]),
+        ('github-issues-closed-20190128-101908', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat closed issue #2: '
+             'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
+        ]),
+        ('github-issues-reopened-20190128-101912', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat reopened issue #2: '
+             'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
+        ]),
+        ('github-issues-assigned-20190128-101919', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat assigned issue #2 to alanbriolat: '
+             'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
+        ]),
+        ('github-issues-unassigned-20190128-101924', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat unassigned issue #2: '
+             'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
         ]),
     ]
 
-    @pytest.mark.parametrize("event_name, fixture_file, expected", TEST_CASES)
-    async def test_handlers(self, bot_helper, client, event_name, fixture_file, expected):
-        method_name = f'handle_{event_name}'
-        payload, headers = bot_helper.payload_and_headers_from_fixture(event_name, fixture_file)
-        with asynctest.patch.object(bot_helper['github'], method_name) as m:
-            resp = await client.post(self.URL, data=payload, headers=headers)
-            assert resp.status == 200
-            m.assert_called_once_with(json.loads(payload))
+    # @pytest.mark.parametrize("event_name, fixture_file, expected", TEST_CASES)
+    # async def test_handlers(self, bot_helper, client, event_name, fixture_file, expected):
+    #     method_name = f'handle_{event_name}'
+    #     payload, headers = bot_helper.payload_and_headers_from_fixture(event_name, fixture_file)
+    #     with asynctest.patch.object(bot_helper['github'], method_name) as m:
+    #         resp = await client.post(self.URL, data=payload, headers=headers)
+    #         assert resp.status == 200
+    #         m.assert_called_once_with(json.loads(payload))
 
-    @pytest.mark.parametrize("event_name, fixture_file, expected", TEST_CASES)
+    @pytest.mark.parametrize("fixture_file, expected", TEST_CASES)
     @pytest.mark.usefixtures("run_client")
     @pytest.mark.asyncio
-    async def test_behaviour(self, bot_helper, client, event_name, fixture_file, expected):
-        payload, headers = bot_helper.payload_and_headers_from_fixture(event_name, fixture_file)
+    async def test_behaviour(self, bot_helper, client, fixture_file, expected):
+        payload, headers = bot_helper.payload_and_headers_from_fixture(fixture_file)
         resp = await client.post(self.URL, data=payload, headers=headers)
         assert resp.status == 200
         bot_helper.assert_sent(expected)
