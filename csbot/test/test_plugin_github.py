@@ -37,8 +37,13 @@ class TestGitHubPlugin:
     secret = foobar
 
     [github]
-    fmt/issues/* = [{repository[name]}] {sender[login]} {action} issue #{issue[number]}: {issue[title]} ({issue[html_url]})
-    fmt/issues/assigned = [{repository[name]}] {sender[login]} {action} issue #{issue[number]} to {assignee[login]}: {issue[title]} ({issue[html_url]})
+    # Re-usable format strings
+    fmt.source = [{repository[name]}] {sender[login]}
+    fmt.issue_text = {issue[title]} ({issue[html_url]})
+    
+    # Format strings for specific events
+    fmt/issues/* = {fmt.source} {action} issue #{issue[number]}: {fmt.issue_text}
+    fmt/issues/assigned = {fmt.source} {action} issue #{issue[number]} to {assignee[login]}: {fmt.issue_text}
     
     [github/alanbriolat/csbot-webhook-test]
     notify = #mychannel

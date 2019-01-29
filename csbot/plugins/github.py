@@ -1,6 +1,8 @@
 import hmac
 import datetime
 import json
+import string
+from functools import partial
 
 from ..plugin import Plugin
 
@@ -77,7 +79,8 @@ class GitHub(Plugin):
         fmt = self.find_by_matchers(['fmt/' + m for m in matchers], self.config)
         if not fmt:
             return
-        msg = fmt.format(**data)
+        formatter = MessageFormatter(partial(self.config_get, repo=repo))
+        msg = formatter.format(fmt, **data)
         try:
             notify = self.config_get('notify', repo)
         except KeyError:
@@ -102,3 +105,17 @@ class GitHub(Plugin):
     def _hmac_compare(self, msg, digest):
         algorithm, _, signature = digest.partition('=')
         return hmac.compare_digest(self._hmac_digest(msg, algorithm), signature)
+
+
+class MessageFormatter(string.Formatter):
+    def __init__(self, config_get):
+        self.config_get = config_get
+
+    def get_field(self, field_name, args, kwargs):
+        if field_name.startswith('fmt.'):
+            fmt = self.config_get(field_name)
+            if not fmt:
+                raise KeyError('format not configured: ' + field_name)
+            return self.vformat(fmt, args, kwargs), field_name
+
+        return super().get_field(field_name, args, kwargs)
