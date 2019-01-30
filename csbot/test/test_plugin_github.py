@@ -42,6 +42,8 @@ class TestGitHubPlugin:
     fmt.issue_text = {issue[title]} ({issue[html_url]})
     
     # Format strings for specific events
+    fmt/create = {fmt.source} created {ref_type} {ref} ({repository[html_url]}/tree/{ref})
+    fmt/delete = {fmt.source} deleted {ref_type} {ref}
     fmt/issues/* = {fmt.source} {action} issue #{issue[number]}: {fmt.issue_text}
     fmt/issues/assigned = {fmt.source} {action} issue #{issue[number]} to {assignee[login]}: {fmt.issue_text}
     
@@ -66,7 +68,7 @@ class TestGitHubPlugin:
         event_name = '_test'
         with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
                                     new=asynctest.CoroutineMock(), create=True) as m:
-            payload, headers = bot_helper.payload_and_headers_from_fixture('github-ping-20190128-101509')
+            payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
             headers['X-GitHub-Event'] = event_name
             # Signature is still intact, so handler should be called
             resp = await client.post(self.URL, data=payload, headers=headers)
@@ -80,30 +82,87 @@ class TestGitHubPlugin:
             m.assert_not_called()
 
     TEST_CASES = [
-        # Ping: https://developer.github.com/webhooks/#ping-event
-        ('github-ping-20190128-101509', []),
+        # ping: https://developer.github.com/webhooks/#ping-event
+        ('github/github-ping-20190128-101509', []),
 
-        # Issues: https://developer.github.com/v3/activity/events/types/#issuesevent
-        ('github-issues-opened-20190128-101904', [
+        # create: https://developer.github.com/v3/activity/events/types/#createevent
+        # -- branch
+        ('github/github-create-20190129-215300', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat created branch alanbriolat-patch-2 '
+             '(https://github.com/alanbriolat/csbot-webhook-test/tree/alanbriolat-patch-2)'),
+        ]),
+        # -- tag
+        ('github/github-create-20190130-101054', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat created tag v0.0.2 '
+             '(https://github.com/alanbriolat/csbot-webhook-test/tree/v0.0.2)'),
+        ]),
+
+        # delete: https://developer.github.com/v3/activity/events/types/#deleteevent
+        # -- branch
+        ('github/github-delete-20190129-215230', [
+            'NOTICE #mychannel :[csbot-webhook-test] alanbriolat deleted branch alanbriolat-patch-1',
+        ]),
+
+        # issues: https://developer.github.com/v3/activity/events/types/#issuesevent
+        # -- opened
+        ('github/github-issues-opened-20190128-101904', [
             ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat opened issue #2: '
              'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
         ]),
-        ('github-issues-closed-20190128-101908', [
+        # -- closed
+        ('github/github-issues-closed-20190128-101908', [
             ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat closed issue #2: '
              'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
         ]),
-        ('github-issues-reopened-20190128-101912', [
+        # -- reopened
+        ('github/github-issues-reopened-20190128-101912', [
             ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat reopened issue #2: '
              'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
         ]),
-        ('github-issues-assigned-20190128-101919', [
+        # -- assigned
+        ('github/github-issues-assigned-20190128-101919', [
             ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat assigned issue #2 to alanbriolat: '
              'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
         ]),
-        ('github-issues-unassigned-20190128-101924', [
+        # -- unassigned
+        ('github/github-issues-unassigned-20190128-101924', [
             ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat unassigned issue #2: '
              'Another test (https://github.com/alanbriolat/csbot-webhook-test/issues/2)'),
         ]),
+
+        # pull_request: https://developer.github.com/v3/activity/events/types/#pullrequestevent
+        # -- opened
+        ('github/github-pull_request-opened-20190129-215304', []),
+        # -- closed (merged)
+        ('github/github-pull_request-closed-20190129-215221', []),
+        # (and corresponding push to master)
+        # github-push-20190129-215221
+        # -- closed (not merged)
+        ('github/github-pull_request-closed-20190129-215329', []),
+        # -- reopened
+        ('github/github-pull_request-reopened-20190129-215410', []),
+        # -- review_requested
+        ('github/github-pull_request-review_requested-20190130-194425', []),
+        # -- assigned
+        ('github/github-pull_request-assigned-20190129-215308', []),
+        # -- unassigned
+        ('github/github-pull_request-unassigned-20190129-215311', []),
+
+        # pull_request_review: https://developer.github.com/v3/activity/events/types/#pullrequestreviewevent
+        # -- submitted
+        ('github/github-pull_request_review-submitted-20190129-220000', []),
+
+        # push: https://developer.github.com/v3/activity/events/types/#pushevent
+        # -- new branch
+        ('github/github-push-20190129-215300', []),
+        # -- existing branch
+        ('github/github-push-20190129-215221', []),
+        # -- forced
+        ('github/github-push-20190130-195825', []),
+
+        # release: https://developer.github.com/v3/activity/events/types/#releaseevent
+        # -- published
+        ('github/github-release-published-20190130-101053', []),
     ]
 
     # @pytest.mark.parametrize("event_name, fixture_file, expected", TEST_CASES)

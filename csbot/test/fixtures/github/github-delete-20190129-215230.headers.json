@@ -1,0 +1,10 @@
+{
+  "Host": "home.hexi.co:8888",
+  "Accept": "*/*",
+  "User-Agent": "GitHub-Hookshot/640910a",
+  "X-GitHub-Event": "delete",
+  "X-GitHub-Delivery": "41ff5540-2410-11e9-96b3-6aa0279e32da",
+  "Content-Type": "application/json",
+  "X-Hub-Signature": "sha1=18a283bb6b87e98aab7cb65846550b0b0085363c",
+  "Content-Length": "6305"
+}

@@ -17,6 +17,8 @@ class GitHub(Plugin):
         # TODO: include events, exclude events
     }
 
+    __sentinel = object()
+
     def config_get(self, key, repo=None):
         """A special implementation of :meth:`Plugin.config_get` which looks at
         a repo-based configuration subsection before the plugin's
@@ -76,7 +78,7 @@ class GitHub(Plugin):
 
         self.log.info(f'{event_name} event on {repo}')
 
-        fmt = self.find_by_matchers(['fmt/' + m for m in matchers], self.config)
+        fmt = self.find_by_matchers(['fmt/' + m for m in matchers], self.config, None)
         if not fmt:
             return
         formatter = MessageFormatter(partial(self.config_get, repo=repo))
@@ -88,11 +90,13 @@ class GitHub(Plugin):
         for target in notify.split():
             self.bot.reply(target, msg)
 
-    @staticmethod
-    def find_by_matchers(matchers, d):
+    @classmethod
+    def find_by_matchers(cls, matchers, d, default=__sentinel):
         for m in matchers:
             if m in d:
                 return d[m]
+        if default is not cls.__sentinel:
+            return default
         raise KeyError(f'none of {matchers} found')
 
     async def handle_ping(self, data):
