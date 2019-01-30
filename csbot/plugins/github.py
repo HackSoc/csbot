@@ -37,11 +37,11 @@ class GitHub(Plugin):
         request = e['request']
         github_event = request.headers['X-GitHub-Event'].lower()
         payload = await request.read()
-        json_payload = await request.json()
+        data = await request.json()
 
         if self.config_getboolean('debug_payloads'):
             try:
-                extra = f'-{json_payload["action"]}'
+                extra = f'-{data["action"]}'
             except KeyError:
                 extra = ''
             now = datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')
@@ -55,22 +55,20 @@ class GitHub(Plugin):
         if not self._hmac_compare(payload, digest):
             self.log.warning('X-Hub-Signature verification failed')
             return
-        method = getattr(self, f'handle_{github_event}', None)
-        if method is None:
-            await self.generic_handler(github_event, json_payload)
-        else:
-            await method(json_payload)
+        method = getattr(self, f'handle_{github_event}', self.generic_handler)
+        await method(data, github_event)
 
-    async def generic_handler(self, github_event, data):
+    async def generic_handler(self, data, event_type, event_subtype=None, event_subtype_key='action', context=None):
         repo = data.get("repository", {}).get("full_name", None)
-        action = data.get('action', None)
+        if event_subtype is None:
+            event_subtype = data.get(event_subtype_key, None)
         # Build event matchers from least to most specific
         matchers = ['*']
-        if action is None:
-            matchers.append(github_event)
+        if event_subtype is None:
+            matchers.append(event_type)
         else:
-            matchers.append(f'{github_event}/*')
-            matchers.append(f'{github_event}/{action}')
+            matchers.append(f'{event_type}/*')
+            matchers.append(f'{event_type}/{event_subtype}')
         # Re-order from most to least specific
         matchers.reverse()
         # Most specific event name
@@ -82,13 +80,44 @@ class GitHub(Plugin):
         if not fmt:
             return
         formatter = MessageFormatter(partial(self.config_get, repo=repo))
-        msg = formatter.format(fmt, **data)
+        format_context = {
+            'event_type': event_type,
+            'event_subtype': event_subtype,
+            'event_name': event_name,
+        }
+        format_context.update(context or {})
+        format_context.update(data)
+        msg = formatter.format(fmt, **format_context)
         try:
             notify = self.config_get('notify', repo)
         except KeyError:
             return
         for target in notify.split():
             self.bot.reply(target, msg)
+
+    async def handle_pull_request(self, data, event_type):
+        if data['action'] == 'closed' and data['pull_request']['merged']:
+            event_subtype = 'merged'
+        else:
+            event_subtype = None
+        return await self.generic_handler(data, event_type, event_subtype)
+
+    async def handle_push(self, data, event_type):
+        context = {
+            'count': len(data['commits']),
+            'short_ref': data['ref'].rsplit('/')[-1],
+        }
+        if data['forced']:
+            event_subtype = 'forced'
+        else:
+            event_subtype = 'pushed'
+        return await self.generic_handler(data, event_type, event_subtype, context=context)
+
+    async def handle_pull_request_review(self, data, event_type):
+        context = {
+            'review_state': data['review']['state'].replace('_', ' '),
+        }
+        return await self.generic_handler(data, event_type, context=context)
 
     @classmethod
     def find_by_matchers(cls, matchers, d, default=__sentinel):

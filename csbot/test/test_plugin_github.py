@@ -39,13 +39,23 @@ class TestGitHubPlugin:
     [github]
     # Re-usable format strings
     fmt.source = [{repository[name]}] {sender[login]}
+    fmt.issue_num = issue #{issue[number]}
     fmt.issue_text = {issue[title]} ({issue[html_url]})
+    fmt.pr_num = PR #{pull_request[number]}
+    fmt.pr_text = {pull_request[title]} ({pull_request[html_url]})
     
     # Format strings for specific events
     fmt/create = {fmt.source} created {ref_type} {ref} ({repository[html_url]}/tree/{ref})
     fmt/delete = {fmt.source} deleted {ref_type} {ref}
-    fmt/issues/* = {fmt.source} {action} issue #{issue[number]}: {fmt.issue_text}
-    fmt/issues/assigned = {fmt.source} {action} issue #{issue[number]} to {assignee[login]}: {fmt.issue_text}
+    fmt/issues/* = {fmt.source} {event_subtype} {fmt.issue_num}: {fmt.issue_text}
+    fmt/issues/assigned = {fmt.source} {event_subtype} {fmt.issue_num} to {assignee[login]}: {fmt.issue_text}
+    fmt/pull_request/* = {fmt.source} {event_subtype} {fmt.pr_num}: {fmt.pr_text}
+    fmt/pull_request/assigned = {fmt.source} {event_subtype} {fmt.pr_num} to {assignee[login]}: {fmt.pr_text}
+    fmt/pull_request/review_requested = {fmt.source} requested review from {requested_reviewer[login]} on {fmt.pr_num}: {fmt.pr_text}
+    fmt/pull_request_review/submitted = {fmt.source} reviewed {fmt.pr_num} ({review_state}): {review[html_url]}
+    fmt/push/pushed = {fmt.source} pushed {count} new commit(s) to {short_ref}: {compare}
+    fmt/push/forced = {fmt.source} updated {short_ref}: {compare}
+    fmt/release/* = {fmt.source} {event_subtype} release {release[name]}: {release[html_url]}
     
     [github/alanbriolat/csbot-webhook-test]
     notify = #mychannel
@@ -132,37 +142,71 @@ class TestGitHubPlugin:
 
         # pull_request: https://developer.github.com/v3/activity/events/types/#pullrequestevent
         # -- opened
-        ('github/github-pull_request-opened-20190129-215304', []),
+        ('github/github-pull_request-opened-20190129-215304', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat opened PR #4: '
+             'Useless edit (https://github.com/alanbriolat/csbot-webhook-test/pull/4)'),
+        ]),
         # -- closed (merged)
-        ('github/github-pull_request-closed-20190129-215221', []),
-        # (and corresponding push to master)
-        # github-push-20190129-215221
+        ('github/github-pull_request-closed-20190129-215221', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat merged PR #3: '
+             'Update README.md (https://github.com/alanbriolat/csbot-webhook-test/pull/3)'),
+        ]),
         # -- closed (not merged)
-        ('github/github-pull_request-closed-20190129-215329', []),
+        ('github/github-pull_request-closed-20190129-215329', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat closed PR #4: '
+             'Useless edit (https://github.com/alanbriolat/csbot-webhook-test/pull/4)'),
+        ]),
         # -- reopened
-        ('github/github-pull_request-reopened-20190129-215410', []),
+        ('github/github-pull_request-reopened-20190129-215410', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat reopened PR #4: '
+             'Useless edit (https://github.com/alanbriolat/csbot-webhook-test/pull/4)'),
+        ]),
         # -- review_requested
-        ('github/github-pull_request-review_requested-20190130-194425', []),
+        ('github/github-pull_request-review_requested-20190130-194425', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat requested review from LordAro on PR #4: '
+             'Useless edit (https://github.com/alanbriolat/csbot-webhook-test/pull/4)'),
+        ]),
         # -- assigned
-        ('github/github-pull_request-assigned-20190129-215308', []),
+        ('github/github-pull_request-assigned-20190129-215308', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat assigned PR #4 to alanbriolat: '
+             'Useless edit (https://github.com/alanbriolat/csbot-webhook-test/pull/4)'),
+        ]),
         # -- unassigned
-        ('github/github-pull_request-unassigned-20190129-215311', []),
+        ('github/github-pull_request-unassigned-20190129-215311', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat unassigned PR #4: '
+             'Useless edit (https://github.com/alanbriolat/csbot-webhook-test/pull/4)'),
+        ]),
 
         # pull_request_review: https://developer.github.com/v3/activity/events/types/#pullrequestreviewevent
-        # -- submitted
-        ('github/github-pull_request_review-submitted-20190129-220000', []),
+        # -- submitted (changes_requested)
+        ('github/github-pull_request_review-submitted-20190129-220000', [
+            ('NOTICE #mychannel :[csbot-webhook-test] LordAro reviewed PR #4 (changes requested): '
+             'https://github.com/alanbriolat/csbot-webhook-test/pull/4#pullrequestreview-197806954'),
+        ]),
 
         # push: https://developer.github.com/v3/activity/events/types/#pushevent
         # -- new branch
-        ('github/github-push-20190129-215300', []),
+        ('github/github-push-20190129-215300', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat pushed 1 new commit(s) to alanbriolat-patch-2: '
+             'https://github.com/alanbriolat/csbot-webhook-test/commit/f8a8684482c1'),
+        ]),
         # -- existing branch
-        ('github/github-push-20190129-215221', []),
+        ('github/github-push-20190129-215221', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat pushed 2 new commit(s) to master: '
+             'https://github.com/alanbriolat/csbot-webhook-test/compare/4c3fa62dc01f...95ac046a2043'),
+        ]),
         # -- forced
-        ('github/github-push-20190130-195825', []),
+        ('github/github-push-20190130-195825', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat updated master: '
+             'https://github.com/alanbriolat/csbot-webhook-test/compare/dc3562879d9b...95ac046a2043'),
+        ]),
 
         # release: https://developer.github.com/v3/activity/events/types/#releaseevent
         # -- published
-        ('github/github-release-published-20190130-101053', []),
+        ('github/github-release-published-20190130-101053', [
+            ('NOTICE #mychannel :[csbot-webhook-test] alanbriolat published release v0.0.2: '
+             'https://github.com/alanbriolat/csbot-webhook-test/releases/tag/v0.0.2'),
+        ]),
     ]
 
     # @pytest.mark.parametrize("event_name, fixture_file, expected", TEST_CASES)
