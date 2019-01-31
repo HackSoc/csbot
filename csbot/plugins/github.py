@@ -14,7 +14,6 @@ class GitHub(Plugin):
         'notify': '',
         'debug_payloads': False,
         'fmt/*': None,
-        # TODO: include events, exclude events
     }
 
     __sentinel = object()
