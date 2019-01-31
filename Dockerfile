@@ -1,4 +1,4 @@
-FROM ubuntu:14.04
+FROM ubuntu:18.04
 
 # From python:3.5 docker image, set locale
 ENV LANG C.UTF-8
