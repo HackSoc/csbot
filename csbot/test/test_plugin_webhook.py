@@ -31,7 +31,7 @@ class TestWebhookPlugin:
     plugins = webserver webhook webhookexample
 
     [webhook]
-    secret = {SECRET}
+    url_secret = {SECRET}
     """
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 

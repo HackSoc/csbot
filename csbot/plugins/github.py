@@ -11,6 +11,7 @@ class GitHub(Plugin):
     PLUGIN_DEPENDS = ['webhook']
 
     CONFIG_DEFAULTS = {
+        'secret': '',
         'notify': '',
         'debug_payloads': False,
         'fmt/*': None,
@@ -37,6 +38,7 @@ class GitHub(Plugin):
         github_event = request.headers['X-GitHub-Event'].lower()
         payload = await request.read()
         data = await request.json()
+        repo = data.get("repository", {}).get("full_name", None)
 
         if self.config_getboolean('debug_payloads'):
             try:
@@ -49,11 +51,14 @@ class GitHub(Plugin):
             with open(f'github-{github_event}{extra}-{now}.payload.json', 'wb') as f:
                 f.write(payload)
 
-        digest = request.headers['X-Hub-Signature']
-
-        if not self._hmac_compare(payload, digest):
-            self.log.warning('X-Hub-Signature verification failed')
-            return
+        secret = self.config_get('secret', repo)
+        if not secret:
+            self.log.warning('No secret set, not verifying X-Hub-Signature')
+        else:
+            digest = request.headers['X-Hub-Signature']
+            if not self._hmac_compare(secret, payload, digest):
+                self.log.warning('X-Hub-Signature verification failed')
+                return
         method = getattr(self, f'handle_{github_event}', self.generic_handler)
         await method(data, github_event)
 
@@ -130,13 +135,12 @@ class GitHub(Plugin):
     async def handle_ping(self, data):
         self.log.info("Received ping: {}", data)
 
-    def _hmac_digest(self, msg, algorithm):
-        secret = self.bot.plugins['webhook'].config_get('secret').encode('utf-8')
-        return hmac.new(secret, msg, algorithm).hexdigest()
+    def _hmac_digest(self, secret, msg, algorithm):
+        return hmac.new(secret.encode('utf-8'), msg, algorithm).hexdigest()
 
-    def _hmac_compare(self, msg, digest):
+    def _hmac_compare(self, secret, msg, digest):
         algorithm, _, signature = digest.partition('=')
-        return hmac.compare_digest(self._hmac_digest(msg, algorithm), signature)
+        return hmac.compare_digest(self._hmac_digest(secret, msg, algorithm), signature)
 
 
 class MessageFormatter(string.Formatter):

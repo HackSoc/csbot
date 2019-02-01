@@ -27,14 +27,25 @@ def bot_helper_class(bot_helper_class):
     return Helper
 
 
+@pytest.fixture
+def loop(event_loop):
+    """Override pytest-aiohttp's loop fixture with pytest-asyncio's.
+    """
+    return event_loop
+
+
+@pytest.fixture
+async def client(bot_helper, aiohttp_client):
+    return await aiohttp_client(bot_helper['webserver'].app)
+
+
 class TestGitHubPlugin:
-    BOT_CLASS = Bot
     CONFIG = """\
     [@bot]
     plugins = webserver webhook github
 
     [webhook]
-    secret = foobar
+    url_secret = foobar
 
     [github]
     # Re-usable format strings
@@ -62,34 +73,6 @@ class TestGitHubPlugin:
     """
     URL = f'/webhook/github/foobar'
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
-
-    @pytest.fixture
-    def loop(self, event_loop):
-        """Override pytest-aiohttp's loop fixture with pytest-asyncio's.
-        """
-        return event_loop
-
-    @pytest.fixture
-    async def client(self, bot_helper, aiohttp_client):
-        return await aiohttp_client(bot_helper['webserver'].app)
-
-    async def test_signature_check(self, bot_helper, client):
-        # Test with a non-existent event name/handler
-        event_name = '_test'
-        with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
-                                    new=asynctest.CoroutineMock(), create=True) as m:
-            payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
-            headers['X-GitHub-Event'] = event_name
-            # Signature is still intact, so handler should be called
-            resp = await client.post(self.URL, data=payload, headers=headers)
-            assert resp.status == 200
-            m.assert_called_once()
-            m.reset_mock()
-            # Signature made to be incorrect, handler should *not* be called
-            headers['X-Hub-Signature'] = 'sha1=0000000000000000000000000000000000000000'
-            resp = await client.post(self.URL, data=payload, headers=headers)
-            assert resp.status == 200
-            m.assert_not_called()
 
     TEST_CASES = [
         # ping: https://developer.github.com/webhooks/#ping-event
@@ -226,3 +209,114 @@ class TestGitHubPlugin:
         resp = await client.post(self.URL, data=payload, headers=headers)
         assert resp.status == 200
         bot_helper.assert_sent(expected)
+
+
+@pytest.mark.bot(cls=Bot, config="""\
+[@bot]
+plugins = webserver webhook github
+[webhook]
+url_secret = test_url
+[github]
+secret = 
+""")
+async def test_signature_ignored(bot_helper, client):
+    """X-Hub-Signature invalid, but secret is blank, so not verified and handler called"""
+    # Test with a non-existent event name/handler
+    event_name = '_test'
+    with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
+                                new=asynctest.CoroutineMock(), create=True) as m:
+        payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
+        headers['X-GitHub-Event'] = event_name
+        # Definitely an invalid signature
+        headers['X-Hub-Signature'] = 'sha1=0000000000000000000000000000000000000000'
+        resp = await client.post('/webhook/github/test_url', data=payload, headers=headers)
+        assert resp.status == 200
+        m.assert_called_once()
+
+
+@pytest.mark.bot(cls=Bot, config="""\
+[@bot]
+plugins = webserver webhook github
+[webhook]
+url_secret = test_url
+[github]
+secret = wrong_secret
+""")
+async def test_signature_secret_invalid(bot_helper, client):
+    """X-Hub-Signature used different secret, fails verification, handler not called"""
+    # Test with a non-existent event name/handler
+    event_name = '_test'
+    with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
+                                new=asynctest.CoroutineMock(), create=True) as m:
+        payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
+        headers['X-GitHub-Event'] = event_name
+        resp = await client.post('/webhook/github/test_url', data=payload, headers=headers)
+        assert resp.status == 200
+        m.assert_not_called()
+
+
+@pytest.mark.bot(cls=Bot, config="""\
+[@bot]
+plugins = webserver webhook github
+[webhook]
+url_secret = test_url
+[github]
+secret = foobar
+""")
+async def test_signature_secret_valid(bot_helper, client):
+    """X-Hub-Signature used same secret, passes verification, handler called"""
+    # Test with a non-existent event name/handler
+    event_name = '_test'
+    with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
+                                new=asynctest.CoroutineMock(), create=True) as m:
+        payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
+        headers['X-GitHub-Event'] = event_name
+        resp = await client.post('/webhook/github/test_url', data=payload, headers=headers)
+        assert resp.status == 200
+        m.assert_called_once()
+
+
+@pytest.mark.bot(cls=Bot, config="""\
+[@bot]
+plugins = webserver webhook github
+[webhook]
+url_secret = test_url
+[github]
+secret = foobar
+[github/alanbriolat/csbot-webhook-test]
+secret = wrong_secret
+""")
+async def test_signature_per_repo_secret_invalid(bot_helper, client):
+    """Per-repo config has wrong secret, fails verification, handler not called"""
+    # Test with a non-existent event name/handler
+    event_name = '_test'
+    with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
+                                new=asynctest.CoroutineMock(), create=True) as m:
+        payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
+        headers['X-GitHub-Event'] = event_name
+        resp = await client.post('/webhook/github/test_url', data=payload, headers=headers)
+        assert resp.status == 200
+        m.assert_not_called()
+
+
+@pytest.mark.bot(cls=Bot, config="""\
+[@bot]
+plugins = webserver webhook github
+[webhook]
+url_secret = test_url
+[github]
+secret = wrong_secret
+[github/alanbriolat/csbot-webhook-test]
+secret = foobar
+""")
+async def test_signature_per_repo_secret_valid(bot_helper, client):
+    """Per-repo config has correct secret, passes verification, handler called"""
+    # Test with a non-existent event name/handler
+    event_name = '_test'
+    with asynctest.patch.object(bot_helper['github'], f'handle_{event_name}',
+                                new=asynctest.CoroutineMock(), create=True) as m:
+        payload, headers = bot_helper.payload_and_headers_from_fixture('github/github-ping-20190128-101509')
+        headers['X-GitHub-Event'] = event_name
+        resp = await client.post('/webhook/github/test_url', data=payload, headers=headers)
+        assert resp.status == 200
+        m.assert_called_once()
