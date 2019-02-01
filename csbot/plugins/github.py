@@ -17,6 +17,10 @@ class GitHub(Plugin):
         'fmt/*': None,
     }
 
+    CONFIG_ENVVARS = {
+        'secret': ['GITHUB_WEBHOOK_SECRET'],
+    }
+
     __sentinel = object()
 
     def config_get(self, key, repo=None):
