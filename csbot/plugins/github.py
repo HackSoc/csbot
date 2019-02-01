@@ -136,9 +136,6 @@ class GitHub(Plugin):
             return default
         raise KeyError(f'none of {matchers} found')
 
-    async def handle_ping(self, data):
-        self.log.info("Received ping: {}", data)
-
     def _hmac_digest(self, secret, msg, algorithm):
         return hmac.new(secret.encode('utf-8'), msg, algorithm).hexdigest()
 
