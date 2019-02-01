@@ -1,4 +1,3 @@
-from functools import partial
 import collections
 import logging
 import os
@@ -19,6 +18,15 @@ def build_plugin_dict(plugins):
         else:
             mapping[name] = P
     return mapping
+
+
+class LazyMethod:
+    def __init__(self, obj, name):
+        self.obj = obj
+        self.name = name
+
+    def __call__(self, *args, **kwargs):
+        return getattr(self.obj, self.name)(*args, **kwargs)
 
 
 class PluginDuplicate(Exception):
@@ -68,7 +76,7 @@ class PluginManager(collections.Mapping):
         # Attempt to load other plugins
         for p in plugins:
             if p in self.plugins:
-                self.log.warn('not loading duplicate plugin:  ' + p)
+                self.log.warning('not loading duplicate plugin:  ' + p)
             elif p not in available:
                 self.log.error('plugin not found: ' + p)
             else:
@@ -129,11 +137,11 @@ class PluginMeta(type):
         # Scan for decorated methods
         for name, attr in dict.items():
             for h in getattr(attr, 'plugin_hooks', ()):
-                cls.plugin_hooks[h].append(attr)
+                cls.plugin_hooks[h].append(name)
             for cmd, metadata in getattr(attr, 'plugin_cmds', ()):
-                cls.plugin_cmds.append((cmd, metadata, attr))
+                cls.plugin_cmds.append((cmd, metadata, name))
             if len(getattr(attr, 'plugin_integrate_with', [])) > 0:
-                cls.plugin_integrations.append((attr.plugin_integrate_with, attr))
+                cls.plugin_integrations.append((attr.plugin_integrate_with, name))
             if isinstance(attr, ProvidedByPlugin):
                 cls.PLUGIN_DEPENDS.add(attr.plugin)
                 cls.plugin_provide.append((name, attr))
@@ -266,15 +274,16 @@ class Plugin(object, metaclass=PluginMeta):
         a list of all the invoked coroutines.
         """
         coros = []
-        for f in self.plugin_hooks.get(event.event_type, ()):
+        for name in self.plugin_hooks.get(event.event_type, ()):
+            f = getattr(self, name)
             if not asyncio.iscoroutinefunction(f):
                 f = asyncio.coroutine(f)
-            coros.append(f(self, event))
+            coros.append(f(event))
         return coros
 
     def provide(self, plugin_name, **kwarg):
         """Provide a value for a :meth:`Plugin.use` usage."""
-        raise NotImplementedError
+        raise PluginFeatureError('{} plugin does not support Plugin.use()'.format(self.plugin_name()))
 
     def setup(self):
         """Plugin setup.
@@ -288,15 +297,20 @@ class Plugin(object, metaclass=PluginMeta):
             new_value = other.provide(self.plugin_name(), **provided_by.kwargs)
             setattr(self, name, new_value)
 
-        for plugin_names, f in self.plugin_integrations:
+        for plugin_names, name in self.plugin_integrations:
             plugins = [self.bot.plugins[p] for p in plugin_names
                        if p in self.bot.plugins]
             # Only fire integration method if all named plugins were loaded
             if len(plugins) == len(plugin_names):
-                f(self, *plugins)
+                f = getattr(self, name)
+                f(*plugins)
 
-        for cmd, meta, f in self.plugin_cmds:
-            self.bot.register_command(cmd, meta, partial(f, self), tag=self)
+        for cmd, meta, name in self.plugin_cmds:
+            self.bot.register_command(
+                cmd,
+                meta,
+                LazyMethod(self, name),
+                tag=self)
 
     def teardown(self):
         """Plugin teardown.

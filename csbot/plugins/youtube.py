@@ -1,8 +1,7 @@
 import datetime
 import urllib.parse as urlparse
 
-from apiclient.discovery import build as google_api
-from apiclient.errors import HttpError
+import apiclient
 import isodate
 
 from ..plugin import Plugin
@@ -33,7 +32,7 @@ class YoutubeError(Exception):
     This is only used for actual errors, e.g. invalid API key, not failure to
     find any data matching a query.
 
-    Pass the :exc:`HttpError` from the API call as an argument.
+    Pass the :exc:`~apiclient.errors.HttpError` from the API call as an argument.
     """
     def __init__(self, http_error):
         super(YoutubeError, self).__init__(http_error)
@@ -64,13 +63,19 @@ class Youtube(Plugin):
 
     #: Hook for mocking HTTP responses to Google API client
     http = None
+    client = None
 
     def setup(self):
         super().setup()
-        self.client = google_api('youtube',  'v3', developerKey=self.config_get('api_key'), http=self.http)
+        self.client = apiclient.discovery.build(
+            'youtube',  'v3',
+            developerKey=self.config_get('api_key'),
+            http=self.http)
 
     def get_video_json(self, id):
-        response = self.client.videos().list(id=id, hl='en', part='snippet,contentDetails,statistics').execute(http=self.http)
+        response = self.client.videos()\
+            .list(id=id, hl='en', part='snippet,contentDetails,statistics')\
+            .execute(http=self.http)
         if len(response['items']) == 0:
             return None
         else:
@@ -88,7 +93,7 @@ class Youtube(Plugin):
                 return None
         except (KeyError, ValueError):
             return None
-        except HttpError as e:
+        except apiclient.errors.HttpError as e:
             # Chain our own exception that gets a more sanitised error message
             raise YoutubeError(e) from e
 
@@ -128,7 +133,7 @@ class Youtube(Plugin):
                 vid_info["duration"] = str(duration)
                 if vid_info["duration"].startswith('0:'):
                     vid_info["duration"] = vid_info["duration"][2:]
-        except KeyError as ex:
+        except KeyError:
             vid_info["duration"] = "N/A"
 
         try:
@@ -163,7 +168,6 @@ class Youtube(Plugin):
 
         linkinfo.register_handler(lambda url: url.netloc in {"m.youtube.com", "www.youtube.com", "youtu.be"},
                                   page_handler)
-
 
     @Plugin.command('youtube')
     @Plugin.command('yt')

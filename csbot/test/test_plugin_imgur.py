@@ -1,8 +1,6 @@
-from unittest import mock
-
 import pytest
 
-from csbot.test import BotTestCase, read_fixture_file
+from csbot.test import read_fixture_file
 
 
 test_cases = [
@@ -156,52 +154,53 @@ nsfw_test_cases = [
 ]
 
 
-class TestImgurLinkInfoIntegration(BotTestCase):
-    CONFIG = """\
+pytestmark = pytest.mark.bot(config="""\
     [@bot]
     plugins = linkinfo imgur
 
     [imgur]
     client_id = abc
     client_secret = def
-    """
+    """)
 
-    PLUGINS = ['linkinfo', 'imgur']
 
-    @pytest.fixture
-    def pre_irc_client(self, responses):
-        # imgurpython calls this on init to get initial rate limits
-        responses.add(responses.GET, 'https://api.imgur.com/3/credits',
-                      status=200, body=read_fixture_file('imgur_credits.json'),
-                      content_type='application/json')
+@pytest.fixture
+def pre_irc_client(responses):
+    # imgurpython calls this on init to get initial rate limits
+    responses.add(responses.GET, 'https://api.imgur.com/3/credits',
+                  status=200, body=read_fixture_file('imgur_credits.json'),
+                  content_type='application/json')
 
-    @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", test_cases)
-    def test_integration(self, responses, url, api_url, status, content_type, fixture, title):
-        responses.add(responses.GET, api_url, status=status,
-                      body=read_fixture_file(fixture),
-                      content_type=content_type)
-        result = self.linkinfo.get_link_info(url)
-        if title is None:
-            assert result.is_error
-        else:
-            assert not result.is_error
-            assert title == result.text
 
-    @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", nsfw_test_cases)
-    def test_integration_nsfw(self, responses, url, api_url, status, content_type, fixture, title):
-        responses.add(responses.GET, api_url, status=status,
-                      body=read_fixture_file(fixture),
-                      content_type=content_type)
-        result = self.linkinfo.get_link_info(url)
-        if title is None:
-            assert result.is_error
-        else:
-            assert not result.is_error
-            assert title == result.text
-
-    def test_invalid_URL(self, responses):
-        """Test that an unrecognised URL never even results in a request."""
-        responses.reset()   # Drop requests used/made during plugin setup
-        result = self.linkinfo.get_link_info('http://imgur.com/invalid/url')
+@pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", test_cases)
+def test_integration(bot_helper, responses, url, api_url, status, content_type, fixture, title):
+    responses.add(responses.GET, api_url, status=status,
+                  body=read_fixture_file(fixture),
+                  content_type=content_type)
+    result = bot_helper['linkinfo'].get_link_info(url)
+    if title is None:
         assert result.is_error
-        assert len(responses.calls) == 0
+    else:
+        assert not result.is_error
+        assert title == result.text
+
+
+@pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", nsfw_test_cases)
+def test_integration_nsfw(bot_helper, responses, url, api_url, status, content_type, fixture, title):
+    responses.add(responses.GET, api_url, status=status,
+                  body=read_fixture_file(fixture),
+                  content_type=content_type)
+    result = bot_helper['linkinfo'].get_link_info(url)
+    if title is None:
+        assert result.is_error
+    else:
+        assert not result.is_error
+        assert title == result.text
+
+
+def test_invalid_URL(bot_helper, responses):
+    """Test that an unrecognised URL never even results in a request."""
+    responses.reset()   # Drop requests used/made during plugin setup
+    result = bot_helper['linkinfo'].get_link_info('http://imgur.com/invalid/url')
+    assert result.is_error
+    assert len(responses.calls) == 0

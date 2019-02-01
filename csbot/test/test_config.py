@@ -1,10 +1,6 @@
-import unittest
-from io import StringIO
-
 import pytest
 
-from csbot.test import TempEnvVars, BotTestCase
-import csbot.core
+from csbot.test import TempEnvVars
 import csbot.plugin
 
 
@@ -38,49 +34,43 @@ env_only = config3
 """
 
 
-class TestPluginConfigWithotPluginSection(BotTestCase):
-    BOT_CLASS = MockBot
-    CONFIG = base_config
-
-    def test_without_plugin_section(self):
-        bot = self.bot_
-        # Check the test plugin was loaded
-        assert 'mockplugin' in bot.plugins
-        plugin = bot.plugins['mockplugin']
-        # Check than absent config options are properly absent
-        with pytest.raises(KeyError):
-            plugin.config_get('absent')
-        # Check that default values work
-        assert plugin.config_get('default') == 'a default value'
-        # Check that environment variables work, if present
-        with pytest.raises(KeyError):
-            plugin.config_get('env_only')
-        with TempEnvVars({'CSBOTTEST_ENV_ONLY': 'env value'}):
-            assert plugin.config_get('env_only') == 'env value'
-        # Check that environment variables override defaults
-        assert plugin.config_get('env_and_default') == 'default, not env'
-        with TempEnvVars({'CSBOTTEST_ENV_AND_DEFAULT': 'env, not default'}):
-            assert plugin.config_get('env_and_default') == 'env, not default'
-        # Check that environment variable order is obeyed
-        with pytest.raises(KeyError):
-            plugin.config_get('multiple_env')
-        with TempEnvVars({'CSBOTTEST_ENV_MULTI_2': 'lowest priority'}):
-            assert plugin.config_get('multiple_env') == 'lowest priority'
-            with TempEnvVars({'CSBOTTEST_ENV_MULTI_1': 'highest priority'}):
-                assert plugin.config_get('multiple_env') == 'highest priority'
+@pytest.mark.bot(cls=MockBot, config=base_config)
+def test_without_plugin_section(bot_helper):
+    bot = bot_helper.bot
+    # Check the test plugin was loaded
+    assert 'mockplugin' in bot.plugins
+    plugin = bot.plugins['mockplugin']
+    # Check than absent config options are properly absent
+    with pytest.raises(KeyError):
+        plugin.config_get('absent')
+    # Check that default values work
+    assert plugin.config_get('default') == 'a default value'
+    # Check that environment variables work, if present
+    with pytest.raises(KeyError):
+        plugin.config_get('env_only')
+    with TempEnvVars({'CSBOTTEST_ENV_ONLY': 'env value'}):
+        assert plugin.config_get('env_only') == 'env value'
+    # Check that environment variables override defaults
+    assert plugin.config_get('env_and_default') == 'default, not env'
+    with TempEnvVars({'CSBOTTEST_ENV_AND_DEFAULT': 'env, not default'}):
+        assert plugin.config_get('env_and_default') == 'env, not default'
+    # Check that environment variable order is obeyed
+    with pytest.raises(KeyError):
+        plugin.config_get('multiple_env')
+    with TempEnvVars({'CSBOTTEST_ENV_MULTI_2': 'lowest priority'}):
+        assert plugin.config_get('multiple_env') == 'lowest priority'
+        with TempEnvVars({'CSBOTTEST_ENV_MULTI_1': 'highest priority'}):
+            assert plugin.config_get('multiple_env') == 'highest priority'
 
 
-class TestPluginConfigWitPluginSection(BotTestCase):
-    BOT_CLASS = MockBot
-    CONFIG = base_config + plugin_config
-
-    def test_with_plugin_section(self):
-        bot = self.bot_
-        assert 'mockplugin' in bot.plugins
-        plugin = bot.plugins['mockplugin']
-        # Check that values override defaults
-        assert plugin.config_get('default') == 'config1'
-        # Check that values override environment variables
+@pytest.mark.bot(cls=MockBot, config=base_config + plugin_config)
+def test_with_plugin_section(bot_helper):
+    bot = bot_helper.bot
+    assert 'mockplugin' in bot.plugins
+    plugin = bot.plugins['mockplugin']
+    # Check that values override defaults
+    assert plugin.config_get('default') == 'config1'
+    # Check that values override environment variables
+    assert plugin.config_get('env_only') == 'config3'
+    with TempEnvVars({'CSBOTTEST_ENV_ONLY': 'env value'}):
         assert plugin.config_get('env_only') == 'config3'
-        with TempEnvVars({'CSBOTTEST_ENV_ONLY': 'env value'}):
-            assert plugin.config_get('env_only') == 'config3'

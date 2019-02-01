@@ -22,7 +22,7 @@ class MongoDB(Plugin):
 
         if self.config_get('mode') == 'uri':
             self.client = pymongo.MongoClient(self.config_get('uri'))
-            self.db = self.client.get_default_database()
+            self.db = self.client.get_database()
         elif self.config_get('mode') == 'mock':
             self.log.info('using mock instead')
             self.client = mongomock.MongoClient()
