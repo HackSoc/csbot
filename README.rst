@@ -31,7 +31,7 @@ Docker containers (a MongoDB instance and the bot)::
 
 Backup MongoDB once services are running::
 
-    $ docker-compose exec -T mongodb mongodump --archive --gzip > foo.mongodump.gz
+    $ docker-compose exec -T mongodb mongodump --archive --gzip --quiet > foo.mongodump.gz
 
 Restore MongoDB::
 
