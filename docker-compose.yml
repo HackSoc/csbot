@@ -13,6 +13,6 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/csbot
 
   mongodb:
-    image: mongo:4.1
+    image: mongo:4.0
     volumes:
       - ./mongodb-data:/data/db
