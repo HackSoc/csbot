@@ -5,8 +5,8 @@ in the #cs-york channel (and a few others) on Freenode.
 
 Development
 -----------
-csbot is written for Python 3.5 and based on the asyncio_ library which became
-part of the standard library in 3.4.  Python 3.6 & 3.7 are also supported.
+csbot is written for Python 3.6+ and based on the asyncio_ library which became
+part of the standard library in 3.4.
 
 It's recommend to develop within a virtual environment.  This should get you up
 and running [1]_::
