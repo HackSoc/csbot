@@ -98,6 +98,20 @@ async def test_auto_reconnect_eof(run_client):
 
 
 @pytest.mark.asyncio
+async def test_auto_reconnect_exception(run_client):
+    with mock_open_connection_paused() as m:
+        assert not m.called
+        # Inject an exception, test that it causes a disconnected
+        run_client.client.reader.set_exception(ConnectionResetError())
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.0)
+        # Allow open_connection() to proceed
+        m.resume()
+        # Test that connection was re-established
+        await asyncio.wait_for(run_client.client.connected.wait(), 0.0)
+        m.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_disconnect(run_client):
     with mock_open_connection() as m:
         assert not m.called

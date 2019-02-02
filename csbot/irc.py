@@ -303,8 +303,11 @@ class IRCClient:
     async def read_loop(self):
         """Read and dispatch lines until the connection closes."""
         while True:
-            line = await self.reader.readline()
-            if not line.endswith(b'\r\n'):
+            try:
+                line = await self.reader.readline()
+                if not line.endswith(b'\r\n'):
+                    break
+            except ConnectionError:
                 break
             self.line_received(self.codec.decode(line[:-2]))
 
