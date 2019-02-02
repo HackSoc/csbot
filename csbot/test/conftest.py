@@ -32,7 +32,7 @@ async def irc_client(request, event_loop, irc_client_class, pre_irc_client):
     else:
         client = irc_client_class(loop=event_loop)
     # Connect fake stream reader/writer (for tests that don't need the read loop)
-    with test.mock_open_connection(event_loop):
+    with test.mock_open_connection():
         await client.connect()
 
     # Mock all the things!
@@ -116,7 +116,7 @@ async def run_client(event_loop, irc_client_helper):
     ...     await irc_client_helper.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
     ...     irc_client_helper.assert_sent('PRIVMSG #channel :what do you mean, hello?')
     """
-    with test.mock_open_connection(event_loop):
+    with test.mock_open_connection():
         # Start the client
         run_fut = event_loop.create_task(irc_client_helper.client.run())
         await irc_client_helper.client.connected.wait()
