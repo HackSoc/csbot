@@ -2,7 +2,6 @@ from unittest import mock
 import asyncio
 
 import pytest
-import aiofastforward
 
 from csbot.test import mock_open_connection, mock_open_connection_paused
 from csbot.irc import IRCMessage, IRCParseError, IRCUser
@@ -132,11 +131,6 @@ class TestClientPing:
             'client_ping_enabled': True,
             'client_ping_interval': 3,
         }
-
-    @pytest.fixture
-    def fast_forward(self, event_loop):
-        with aiofastforward.FastForward(event_loop) as forward:
-            yield forward
 
     @pytest.mark.asyncio(foo='bar')
     async def test_client_PING(self, fast_forward, run_client):

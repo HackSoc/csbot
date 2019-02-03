@@ -4,6 +4,7 @@ from textwrap import dedent
 from unittest import mock
 
 import pytest
+import aiofastforward
 import responses as responses_
 
 from csbot import test
@@ -19,6 +20,12 @@ def event_loop(request, event_loop):
             pytest.fail(ctx['message'])
         event_loop.set_exception_handler(handle_exception)
     return event_loop
+
+
+@pytest.fixture
+def fast_forward(event_loop):
+    with aiofastforward.FastForward(event_loop) as forward:
+        yield forward
 
 
 @pytest.fixture
