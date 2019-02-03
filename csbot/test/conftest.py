@@ -12,6 +12,16 @@ from csbot.core import Bot
 
 
 @pytest.fixture
+def event_loop(request, event_loop):
+    marker = request.node.get_closest_marker('asyncio')
+    if marker is not None and not marker.kwargs.get('allow_unhandled_exception', False):
+        def handle_exception(loop, ctx):
+            pytest.fail(ctx['message'])
+        event_loop.set_exception_handler(handle_exception)
+    return event_loop
+
+
+@pytest.fixture
 def irc_client_class():
     return IRCClient
 
