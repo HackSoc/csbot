@@ -33,14 +33,19 @@ def pre_irc_client():
 
 
 @pytest.fixture
-async def irc_client(request, event_loop, irc_client_class, pre_irc_client):
+def irc_client_config():
+    return {}
+
+
+@pytest.fixture
+async def irc_client(request, event_loop, irc_client_class, pre_irc_client, irc_client_config):
     # Create client and make it use our event loop
     bot_marker = request.node.get_closest_marker('bot')
     if bot_marker is not None:
         cls = bot_marker.kwargs.get('cls', Bot)
         client = cls(config=StringIO(dedent(bot_marker.kwargs['config'])), loop=event_loop)
     else:
-        client = irc_client_class(loop=event_loop)
+        client = irc_client_class(loop=event_loop, **irc_client_config)
     # Connect fake stream reader/writer (for tests that don't need the read loop)
     with test.mock_open_connection():
         await client.connect()

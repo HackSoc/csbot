@@ -2,6 +2,7 @@ from unittest import mock
 import asyncio
 
 import pytest
+import aiofastforward
 
 from csbot.test import mock_open_connection, mock_open_connection_paused
 from csbot.irc import IRCMessage, IRCParseError, IRCUser
@@ -122,6 +123,49 @@ async def test_disconnect(run_client):
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(run_client.client.connected.wait(), 0.0)
         assert not m.called
+
+
+class TestClientPing:
+    @pytest.fixture
+    def irc_client_config(self):
+        return {
+            'client_ping_enabled': True,
+            'client_ping_interval': 3,
+        }
+
+    @pytest.fixture
+    def fast_forward(self, event_loop):
+        with aiofastforward.FastForward(event_loop) as forward:
+            yield forward
+
+    @pytest.mark.asyncio(foo='bar')
+    async def test_client_PING(self, fast_forward, run_client):
+        run_client.reset_mock()
+        run_client.client.send_line.assert_not_called()
+        # Advance time, test that a ping was sent
+        await fast_forward(4)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+        ]
+        # Advance time again, test that the right number of pings was sent
+        await fast_forward(12)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
+            mock.call('PING 3'),
+            mock.call('PING 4'),
+            mock.call('PING 5'),
+        ]
+        # Disconnect, advance time, test that no more pings were sent
+        run_client.client.disconnect()
+        await fast_forward(12)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
+            mock.call('PING 3'),
+            mock.call('PING 4'),
+            mock.call('PING 5'),
+        ]
 
 
 def test_PING_PONG(irc_client_helper):
