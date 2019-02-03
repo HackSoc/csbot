@@ -90,11 +90,11 @@ async def test_auto_reconnect_eof(run_client):
         assert not m.called
         # Test that EOF causes a disconnect
         run_client.client.reader.feed_eof()
-        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.0)
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
         # Allow open_connection() to proceed
         m.resume()
         # Test that connection was re-established
-        await asyncio.wait_for(run_client.client.connected.wait(), 0.0)
+        await asyncio.wait_for(run_client.client.connected.wait(), 0.1)
         m.assert_called_once()
 
 
@@ -104,11 +104,11 @@ async def test_auto_reconnect_exception(run_client):
         assert not m.called
         # Inject an exception, test that it causes a disconnected
         run_client.client.reader.set_exception(ConnectionResetError())
-        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.0)
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
         # Allow open_connection() to proceed
         m.resume()
         # Test that connection was re-established
-        await asyncio.wait_for(run_client.client.connected.wait(), 0.0)
+        await asyncio.wait_for(run_client.client.connected.wait(), 0.1)
         m.assert_called_once()
 
 
@@ -118,10 +118,10 @@ async def test_disconnect(run_client):
         assert not m.called
         # Test that disconnect() causes a disconnect
         run_client.client.disconnect()
-        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.0)
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
         # Test that no reconnection happens
         with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(run_client.client.connected.wait(), 0.0)
+            await asyncio.wait_for(run_client.client.connected.wait(), 0.1)
         assert not m.called
 
 
