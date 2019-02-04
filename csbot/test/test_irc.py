@@ -1,7 +1,9 @@
 from unittest import mock
+import asyncio
 
 import pytest
 
+from csbot.test import mock_open_connection, mock_open_connection_paused
 from csbot.irc import IRCMessage, IRCParseError, IRCUser
 
 
@@ -82,20 +84,82 @@ def test_encode(irc_client_helper):
 # Test IRC client behaviour
 
 @pytest.mark.asyncio
-async def test_auto_reconnect(run_client):
-    with run_client.patch('connect') as m:
+async def test_auto_reconnect_eof(run_client):
+    with mock_open_connection_paused() as m:
         assert not m.called
+        # Test that EOF causes a disconnect
         run_client.client.reader.feed_eof()
-        await run_client.client.disconnected.wait()
-        m.assert_called_once_with()
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
+        # Allow open_connection() to proceed
+        m.resume()
+        # Test that connection was re-established
+        await asyncio.wait_for(run_client.client.connected.wait(), 0.1)
+        m.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_auto_reconnect_exception(run_client):
+    with mock_open_connection_paused() as m:
+        assert not m.called
+        # Inject an exception, test that it causes a disconnected
+        run_client.client.reader.set_exception(ConnectionResetError())
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
+        # Allow open_connection() to proceed
+        m.resume()
+        # Test that connection was re-established
+        await asyncio.wait_for(run_client.client.connected.wait(), 0.1)
+        m.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_disconnect(run_client):
-    with run_client.patch('connect') as m:
-        run_client.client.disconnect()
-        await run_client.client.disconnected.wait()
+    with mock_open_connection() as m:
         assert not m.called
+        # Test that disconnect() causes a disconnect
+        run_client.client.disconnect()
+        await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
+        # Test that no reconnection happens
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(run_client.client.connected.wait(), 0.1)
+        assert not m.called
+
+
+class TestClientPing:
+    @pytest.fixture
+    def irc_client_config(self):
+        return {
+            'client_ping_enabled': True,
+            'client_ping_interval': 3,
+        }
+
+    @pytest.mark.asyncio(foo='bar')
+    async def test_client_PING(self, fast_forward, run_client):
+        run_client.reset_mock()
+        run_client.client.send_line.assert_not_called()
+        # Advance time, test that a ping was sent
+        await fast_forward(4)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+        ]
+        # Advance time again, test that the right number of pings was sent
+        await fast_forward(12)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
+            mock.call('PING 3'),
+            mock.call('PING 4'),
+            mock.call('PING 5'),
+        ]
+        # Disconnect, advance time, test that no more pings were sent
+        run_client.client.disconnect()
+        await fast_forward(12)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
+            mock.call('PING 3'),
+            mock.call('PING 4'),
+            mock.call('PING 5'),
+        ]
 
 
 def test_PING_PONG(irc_client_helper):

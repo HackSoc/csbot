@@ -1,4 +1,5 @@
 import collections
+from collections import abc
 import logging
 import os
 import asyncio
@@ -41,7 +42,7 @@ class PluginFeatureError(Exception):
     pass
 
 
-class PluginManager(collections.Mapping):
+class PluginManager(abc.Mapping):
     """A simple plugin manager and proxy.
 
     The plugin manager is responsible for loading plugins and proxying method
@@ -55,7 +56,7 @@ class PluginManager(collections.Mapping):
     state.  A plugin class' dependencies are checked before loading and a
     :exc:`PluginDependencyUnmet` is raised if any are missing.
 
-    The :class:`~collections.Mapping` interface is implemented to provide easy
+    The :class:`~collections.abc.Mapping` interface is implemented to provide easy
     querying and access to the loaded plugins.  All attributes that do not
     start with a ``_`` are treated as methods that will be proxied through to
     every plugin in the order they were loaded (*loaded* before *plugins*) with

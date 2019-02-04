@@ -12,22 +12,52 @@ class MockStreamWriter(asyncio.StreamWriter):
         self._reader.feed_eof()
 
 
-def mock_open_connection(loop):
+def paused(f, *, loop=None):
+    """Wrap a coroutine function so it waits until explicitly enabled.
+    """
+    event = asyncio.Event(loop=loop)
+    resume = event.set
+
+    async def _f(*args, **kwargs):
+        await event.wait()
+        result = await f(*args, **kwargs)
+        event.clear()
+        return result
+
+    return _f, resume
+
+
+async def open_mock_connection(*args, loop=None, **kwargs):
+    """Create a mock reader and writer pair.
+    """
+    reader = MockStreamReader(loop=loop)
+    writer = MockStreamWriter(None, None, reader, loop)
+    writer.write = mock.Mock()
+    return reader, writer
+
+
+def mock_open_connection():
     """Give a mock reader and writer when a stream connection is opened.
 
-    >>> with mock_open_connection(loop):
+    >>> with mock_open_connection():
     ...     await self.client.connect()
     ...     irc_client.quit('blah')
     ...     irc_client_helper.assert_bytes_sent(client, b'QUIT :blah\r\n')
     """
-    def create_connection(*args, **kwargs):
-        reader = MockStreamReader(loop=loop)
-        writer = MockStreamWriter(None, None, reader, loop)
-        writer.write = mock.Mock()
-        fut = asyncio.Future(loop=loop)
-        fut.set_result((reader, writer))
-        return fut
-    return mock.patch('asyncio.open_connection', side_effect=create_connection)
+    return mock.patch('asyncio.open_connection', side_effect=open_mock_connection)
+
+
+def mock_open_connection_paused():
+    """When connection is opened, wait until resumed, then give a mock reader and writer.
+
+    >>> with mock_open_connection_paused() as m:
+    ... irc_client.disconnect()
+    ... await irc_client.disconnected.wait()
+    ... m.resume()
+    ... await irc_client.connected.wait()
+    """
+    f, resume = paused(open_mock_connection)
+    return mock.patch('asyncio.open_connection', side_effect=f, resume=resume)
 
 
 class TempEnvVars(object):

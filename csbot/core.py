@@ -35,6 +35,7 @@ class Bot(SpecialPlugin, IRCClient):
         'bind_addr': None,
         'command_prefix': '!',
         'use_notice': True,
+        'client_ping': 0,
         'channels': ' '.join([
             '#cs-york-dev',
         ]),
@@ -77,6 +78,8 @@ class Bot(SpecialPlugin, IRCClient):
             password=self.config_get('password'),
             auth_method=self.config_get('auth_method'),
             bind_addr=self.config_get('bind_addr'),
+            client_ping_enabled=(int(self.config_get('client_ping')) > 0),
+            client_ping_interval=int(self.config_get('client_ping')),
         )
 
         # Plumb in reply(...) method
