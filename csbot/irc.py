@@ -235,6 +235,8 @@ class IRCClient:
         password=None,
         auth_method='pass',
         bind_addr=None,
+        client_ping_enabled=False,
+        client_ping_interval=60,
     ))
 
     #: Available client capabilities
@@ -254,6 +256,8 @@ class IRCClient:
         self.connected.clear()
         self.disconnected = asyncio.Event(loop=self.loop)
         self.disconnected.set()
+        self._client_ping = None
+        self._client_ping_counter = 0
 
         self.nick = self.__config['nick']
         self.available_capabilities = set()
@@ -303,8 +307,11 @@ class IRCClient:
     async def read_loop(self):
         """Read and dispatch lines until the connection closes."""
         while True:
-            line = await self.reader.readline()
-            if not line.endswith(b'\r\n'):
+            try:
+                line = await self.reader.readline()
+                if not line.endswith(b'\r\n'):
+                    break
+            except ConnectionError:
                 break
             self.line_received(self.codec.decode(line[:-2]))
 
@@ -350,6 +357,8 @@ class IRCClient:
         # enabled in callbacks triggered by the CAP LS response
         self.send_line('CAP LS')
 
+        self._start_client_pings()
+
     def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
 
@@ -357,7 +366,8 @@ class IRCClient:
         :meth:`close` was called).
         """
         LOG.debug('connection lost: %r', exc)
-        self.reader, self.write = None, None
+        self.reader, self.writer = None, None
+        self._stop_client_pings()
 
     def line_received(self, line):
         """Callback for received raw IRC message."""
@@ -381,6 +391,27 @@ class IRCClient:
     def send(self, msg):
         """Send an :class:`IRCMessage`."""
         self.send_line(msg.raw)
+
+    def _start_client_pings(self):
+        self._stop_client_pings()
+
+        if not self.__config['client_ping_enabled']:
+            return
+
+        interval = self.__config['client_ping_interval']
+        self._client_ping = asyncio.ensure_future(self._send_client_pings(interval), loop=self.loop)
+
+    def _stop_client_pings(self):
+        if self._client_ping is not None:
+            self._client_ping.cancel()
+            self._client_ping = None
+
+    async def _send_client_pings(self, interval):
+        self._client_ping_counter = 0
+        while True:
+            await asyncio.sleep(interval)
+            self._client_ping_counter += 1
+            self.send_line(f'PING {self._client_ping_counter}')
 
     # Specific commands for sending messages
 

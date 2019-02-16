@@ -152,7 +152,7 @@ class TestAsyncEventRunner:
         assert async_runner.handle_event.call_count == 3
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2), mock.call(f3)])
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(allow_unhandled_exception=True)
     def test_exception_recovery(self, async_runner):
         """Check that exceptions are handled but don't block other tasks or
         leave the runner in a broken state.
