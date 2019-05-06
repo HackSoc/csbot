@@ -385,6 +385,12 @@ class IRCClient:
         Encodes, terminates and sends *data* to the server.
         """
         LOG.debug('<<< %s', data)
+        # Protect csbot from getting two'd
+        try:
+            if data.split(':')[1].strip() == '2':
+                data = ''.join(c if c!='2' else u'ᒿ' for c in data)
+        except IndexError:
+            pass
         data = self.codec.encode(data) + b'\r\n'
         self.writer.write(data)
 
