@@ -382,8 +382,14 @@ class IRCClient:
         """Callback for received parsed IRC message."""
         done = set()
         for w in self._waiters:
-            if not w.future.cancelled() and w.predicate(msg):
-                w.future.set_result(msg)
+            if not w.future.done():
+                try:
+                    matched = w.predicate(msg)
+                except Exception as e:
+                    w.future.set_exception(e)
+                    matched = False
+                if matched:
+                    w.future.set_result(msg)
             if w.future.done():
                 done.add(w)
         self._waiters.difference_update(done)
