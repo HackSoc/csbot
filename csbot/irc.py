@@ -6,6 +6,7 @@ from collections import namedtuple
 import codecs
 import base64
 import types
+from typing import Callable
 
 from ._rfc import NUMERIC_REPLIES
 
@@ -259,6 +260,8 @@ class IRCClient:
         self._client_ping = None
         self._client_ping_counter = 0
 
+        self._waiters = set()
+
         self.nick = self.__config['nick']
         self.available_capabilities = set()
         self.enabled_capabilities = set()
@@ -377,6 +380,13 @@ class IRCClient:
 
     def message_received(self, msg):
         """Callback for received parsed IRC message."""
+        done = set()
+        for w in self._waiters:
+            if not w.future.cancelled() and w.predicate(msg):
+                w.future.set_result(msg)
+            if w.future.done():
+                done.add(w)
+        self._waiters.difference_update(done)
         self._dispatch_method('irc_' + msg.command_name, msg)
 
     def send_line(self, data):
@@ -412,6 +422,23 @@ class IRCClient:
             await asyncio.sleep(interval)
             self._client_ping_counter += 1
             self.send_line(f'PING {self._client_ping_counter}')
+
+    class Waiter:
+        predicate = None
+        future = None
+
+        def __init__(self, predicate, future):
+            self.predicate = predicate
+            self.future = future
+
+    def wait_for(self, predicate: Callable[[IRCMessage], bool]) -> asyncio.Future:
+        """Wait for a message that matches *predicate*.
+
+        Returns a future that is resolved with the first message that matches *predicate*.
+        """
+        waiter = self.Waiter(predicate, self.loop.create_future())
+        self._waiters.add(waiter)
+        return waiter.future
 
     # Specific commands for sending messages
 
