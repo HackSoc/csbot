@@ -273,9 +273,9 @@ class IRCClient:
             await self.connect()
             self.connected.set()
             self.disconnected.clear()
-            self.connection_made()
+            await self.connection_made()
             await self.read_loop()
-            self.connection_lost(self.reader.exception())
+            await self.connection_lost(self.reader.exception())
             self.connected.clear()
             self.disconnected.set()
             if self._exiting:
@@ -318,7 +318,7 @@ class IRCClient:
                 break
             self.line_received(self.codec.decode(line[:-2]))
 
-    def connection_made(self):
+    async def connection_made(self):
         """Callback for successful connection.
 
         Register with the IRC server.
@@ -362,7 +362,7 @@ class IRCClient:
 
         self._start_client_pings()
 
-    def connection_lost(self, exc):
+    async def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
 
         Won't reconnect if the broken connection was deliberate (i.e.

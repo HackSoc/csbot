@@ -133,8 +133,8 @@ pytestmark = pytest.mark.bot(config="""\
 
 
 @pytest.fixture
-def irc_client(irc_client):
-    irc_client.connection_made()
+async def irc_client(irc_client):
+    await irc_client.connection_made()
     return irc_client
 
 

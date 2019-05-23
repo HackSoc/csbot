@@ -205,12 +205,12 @@ class Bot(SpecialPlugin, IRCClient):
         """
         self.bot.post_event(event)
 
-    def connection_made(self):
-        super().connection_made()
+    async def connection_made(self):
+        await super().connection_made()
         self.emit_new('core.raw.connected')
 
-    def connection_lost(self, exc):
-        super().connection_lost(exc)
+    async def connection_lost(self, exc):
+        await super().connection_lost(exc)
         self.emit_new('core.raw.disconnected', {'reason': repr(exc)})
 
     def send_line(self, line):
