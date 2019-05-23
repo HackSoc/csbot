@@ -6,7 +6,7 @@ from collections import namedtuple
 import codecs
 import base64
 import types
-from typing import Callable
+from typing import Callable, Tuple, Any, Iterable, Awaitable
 
 from ._rfc import NUMERIC_REPLIES
 
@@ -260,7 +260,7 @@ class IRCClient:
         self._client_ping = None
         self._client_ping_counter = 0
 
-        self._waiters = set()
+        self._message_waiters = set()
 
         self.nick = self.__config['nick']
         self.available_capabilities = set()
@@ -380,19 +380,7 @@ class IRCClient:
 
     def message_received(self, msg):
         """Callback for received parsed IRC message."""
-        done = set()
-        for w in self._waiters:
-            if not w.future.done():
-                try:
-                    matched = w.predicate(msg)
-                except Exception as e:
-                    w.future.set_exception(e)
-                    matched = False
-                if matched:
-                    w.future.set_result(msg)
-            if w.future.done():
-                done.add(w)
-        self._waiters.difference_update(done)
+        self.process_wait_for_message(msg)
         self._dispatch_method('irc_' + msg.command_name, msg)
 
     def send_line(self, data):
@@ -437,14 +425,32 @@ class IRCClient:
             self.predicate = predicate
             self.future = future
 
-    def wait_for(self, predicate: Callable[[IRCMessage], bool]) -> asyncio.Future:
+    def wait_for_message(self, predicate: Callable[[IRCMessage], Tuple[bool, Any]]) -> asyncio.Future:
         """Wait for a message that matches *predicate*.
 
-        Returns a future that is resolved with the first message that matches *predicate*.
+        *predicate* should return a `(did_match, result)` tuple, where *did_match* is a boolean
+        indicating if the message is a match, and *result* is the value to return.
+
+        Returns a future that is resolved with *result* on the first matching message.
         """
         waiter = self.Waiter(predicate, self.loop.create_future())
-        self._waiters.add(waiter)
+        self._message_waiters.add(waiter)
         return waiter.future
+
+    def process_wait_for_message(self, msg):
+        done = set()
+        for w in self._message_waiters:
+            if not w.future.done():
+                matched, result = False, None
+                try:
+                    matched, result = w.predicate(msg)
+                except Exception as e:
+                    w.future.set_exception(e)
+                if matched:
+                    w.future.set_result(result)
+            if w.future.done():
+                done.add(w)
+        self._message_waiters.difference_update(done)
 
     # Specific commands for sending messages
 
