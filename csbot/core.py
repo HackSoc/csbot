@@ -23,6 +23,7 @@ class Bot(SpecialPlugin, IRCClient):
 
     #: Default configuration values
     CONFIG_DEFAULTS = {
+        'ircv3': False,
         'nickname': 'csyorkbot',
         'password': None,
         'auth_method': 'pass',
@@ -71,6 +72,7 @@ class Bot(SpecialPlugin, IRCClient):
         IRCClient.__init__(
             self,
             loop=loop,
+            ircv3=self.config_getboolean('ircv3'),
             nick=self.config_get('nickname'),
             username=self.config_get('username'),
             host=self.config_get('irc_host'),
@@ -207,6 +209,8 @@ class Bot(SpecialPlugin, IRCClient):
 
     async def connection_made(self):
         await super().connection_made()
+        if self.config_getboolean('ircv3'):
+            await self.request_capabilities(enable={'account-notify', 'extended-join'})
         self.emit_new('core.raw.connected')
 
     async def connection_lost(self, exc):
@@ -327,14 +331,6 @@ class Bot(SpecialPlugin, IRCClient):
             'names': names,
             'raw_names': raw_names,
         })
-
-    # "IRC Client Capabilities"
-
-    def on_capabilities_available(self, capabilities):
-        super().on_capabilities_available(capabilities)
-        for cap in ['account-notify', 'extended-join']:
-            if cap in capabilities and cap not in self.enabled_capabilities:
-                self.enable_capability(cap)
 
     # Implement active account discovery via "formatted WHO"
 
