@@ -362,6 +362,9 @@ class IRCClient:
                 # use in the IRCMessage (which later encodes it as utf-8...)
                 sasl_plain_b64 = base64.b64encode(sasl_plain.encode('utf-8')).decode('ascii')
                 self.send(IRCMessage.create('AUTHENTICATE', [sasl_plain_b64]))
+                sasl_success = await self.wait_for_message(lambda m: (m.command in ('903', '904'), m.command == '903'))
+                if not sasl_success:
+                    LOG.error('SASL authentication failed')
             else:
                 LOG.error('could not enable "sasl" capability, skipping authentication')
         else:
