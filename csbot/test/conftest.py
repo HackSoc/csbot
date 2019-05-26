@@ -105,8 +105,7 @@ class IRCClientHelper:
         """Shortcut to push a series of lines to the client."""
         if isinstance(lines, str):
             lines = [lines]
-        for l in lines:
-            self.client.line_received(l)
+        return [self.client.line_received(l) for l in lines]
 
     def assert_sent(self, lines):
         """Check that a list of (unicode) strings have been sent.
