@@ -510,26 +510,6 @@ class IRCClient:
             return False, None
         return self.wait_for_message(predicate)
 
-    def enable_capability(self, name):
-        """Enable client capability *name*.
-
-        Should wait for :meth:`on_capability_enabled` before assuming it is
-        enabled.
-        """
-        if name not in self.available_capabilities:
-            LOG.warning('Enabling client capability "{}" not in response to CAP LS'.format(name))
-        self.send_line('CAP REQ :{}'.format(name))
-
-    def disable_capability(self, name):
-        """Disable client capability *name*.
-
-        Should wait for :meth:`on_capability_disabled` befor assuming it is
-        disabled.
-        """
-        if name not in self.available_capabilities:
-            LOG.warning('Disabling client capability "{}" not in response to CAP LS'.format(name))
-        self.send_line('CAP REQ :-{}'.format(name))
-
     def set_nick(self, nick):
         """Ask the server to set our nick."""
         self.send_line('NICK {}'.format(nick))
