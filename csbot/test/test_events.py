@@ -200,15 +200,15 @@ class TestHybridEventRunner:
                 self.handlers[e].append(f)
 
         def __call__(self, e):
-            return [f(e) for f in self.handlers[e]]
+            return self.handlers[e]
 
     @pytest.fixture
     def event_runner(self, event_loop):
         handler = self.EventHandler()
         obj = mock.Mock()
         obj.add_handler = handler.add
-        obj.handle_event = mock.Mock(wraps=handler)
-        obj.runner = csbot.events.HybridEventRunner(obj.handle_event, event_loop)
+        obj.get_handlers = mock.Mock(wraps=handler)
+        obj.runner = csbot.events.HybridEventRunner(obj.get_handlers, event_loop)
         obj.exception_handler = mock.Mock(wraps=event_loop.get_exception_handler())
         event_loop.set_exception_handler(obj.exception_handler)
         return obj
@@ -217,12 +217,12 @@ class TestHybridEventRunner:
         """Check that basic values are passed through the event queue unmolested."""
         # Test that things actually get through
         await event_runner.runner.post_event('foo')
-        assert event_runner.handle_event.call_args_list == [mock.call('foo')]
+        assert event_runner.get_handlers.call_args_list == [mock.call('foo')]
         # The event runner doesn't care what it's passing through
         for x in ['bar', 1.3, None, object]:
             await event_runner.runner.post_event(x)
-            print(event_runner.handle_event.call_args)
-            assert event_runner.handle_event.call_args == mock.call(x)
+            print(event_runner.get_handlers.call_args)
+            assert event_runner.get_handlers.call_args == mock.call(x)
 
     async def test_event_chain_synchronous(self, event_runner):
         """Check that an entire event chain runs (synchronously).
@@ -267,7 +267,7 @@ class TestHybridEventRunner:
             complete.append('e')
 
         await event_runner.runner.post_event('a')
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             # Initial event
             mock.call('a'),
             # Event resulting from handler for 'a'
@@ -335,7 +335,7 @@ class TestHybridEventRunner:
         future = event_runner.runner.post_event('a')
         await asyncio.wait({future}, loop=event_loop, timeout=0.1)
         assert not future.done()
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
         ]
         assert complete == ['a1']
@@ -351,7 +351,7 @@ class TestHybridEventRunner:
         events[0].set()
         await asyncio.wait({future}, loop=event_loop, timeout=0.1)
         assert not future.done()
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
             mock.call('b'),
             mock.call('c'),
@@ -368,7 +368,7 @@ class TestHybridEventRunner:
         events[1].set()
         await asyncio.wait({future}, loop=event_loop, timeout=0.1)
         assert future.done()
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
             mock.call('b'),
             mock.call('c'),
@@ -431,7 +431,7 @@ class TestHybridEventRunner:
         future = event_runner.runner.post_event('a')
         await asyncio.wait({future}, loop=event_loop, timeout=0.1)
         assert not future.done()
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
         ]
         assert complete == ['a1']
@@ -446,7 +446,7 @@ class TestHybridEventRunner:
         events[0].set()
         await asyncio.wait({future}, loop=event_loop, timeout=0.1)
         assert not future.done()
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
             mock.call('b'),
             mock.call('d'),
@@ -462,7 +462,7 @@ class TestHybridEventRunner:
         events[1].set()
         await asyncio.wait({future}, loop=event_loop, timeout=0.1)
         assert future.done()
-        assert event_runner.handle_event.mock_calls == [
+        assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
             mock.call('b'),
             mock.call('d'),
@@ -536,6 +536,50 @@ class TestHybridEventRunner:
         await asyncio.wait({f2}, loop=event_loop, timeout=0.1)
         assert f2.done()
         assert complete == ['a', 'b']
+
+    @pytest.mark.asyncio(allow_unhandled_exception=True)
+    async def test_exception_recovery(self, event_loop, event_runner):
+        complete = []
+
+        @event_runner.add_handler('a')
+        def a1(_):
+            raise Exception('a1')
+            complete.append('a1')
+
+        @event_runner.add_handler('a')
+        def a2(_):
+            complete.append('a2')
+
+        @event_runner.add_handler('a')
+        async def a3(_):
+            raise Exception('a3')
+            complete.append('a3')
+
+        @event_runner.add_handler('a')
+        async def a4(_):
+            event_runner.runner.post_event('b')
+            complete.append('a4')
+
+        @event_runner.add_handler('b')
+        def b1(_):
+            raise Exception('b1')
+            complete.append('b1')
+
+        @event_runner.add_handler('b')
+        async def b2(_):
+            complete.append('b2')
+
+        assert event_runner.exception_handler.call_count == 0
+        future = event_runner.runner.post_event('a')
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert future.done()
+        assert future.exception() is None
+        assert event_runner.runner.get_handlers.mock_calls == [
+            mock.call('a'),
+            mock.call('b'),
+        ]
+        assert complete == ['a2', 'a4', 'b2']
+        assert event_runner.exception_handler.call_count == 3
 
 
 class TestEvent(unittest.TestCase):

@@ -160,8 +160,8 @@ class AsyncEventRunner(object):
 
 
 class HybridEventRunner:
-    def __init__(self, handle_event, loop=None):
-        self.handle_event = handle_event
+    def __init__(self, get_handlers, loop=None):
+        self.get_handlers = get_handlers
         self.loop = loop
 
         self.events = deque()
@@ -191,17 +191,22 @@ class HybridEventRunner:
             # Get next event
             event = self.events.popleft()
             # Handle the event
-            results = self.handle_event(event)
-            # Schedule the awaitables
-            for r in results:
-                if r is None:
+            for handler in self.get_handlers(event):
+                # Attempt to run the handler, but don't break everything if the handler fails
+                try:
+                    result = handler(event)
+                except Exception as e:
+                    self._handle_exception(exception=e)
+                    continue
+                # If the handler returned an awaitable (e.g. coroutine object), try to schedule it
+                if result is None:
                     continue
                 try:
-                    f = asyncio.ensure_future(r, loop=self.loop)
+                    future = asyncio.ensure_future(result, loop=self.loop)
                 except TypeError:
-                    LOG.exception('non-awaitable result %r handling event %r', r, event)
+                    LOG.exception('non-awaitable result %r handling event %r', result, event)
                     continue
-                new_futures.add(f)
+                new_futures.add(future)
         self.new_events.clear()
         if len(new_futures) > 0:
             LOG.debug('got %s new futures', len(new_futures))
@@ -230,11 +235,23 @@ class HybridEventRunner:
                 done_futures = done - {new_events}
                 LOG.debug('%s of %s futures done', len(done_futures), len(self.futures))
                 self.futures -= done_futures
+                for f in done_futures:
+                    if f.exception() is not None:
+                        self._handle_exception(future=f)
                 if new_events.done():
                     LOG.debug('new events to process')
                 else:
                     # If no new events, cancel the waiter, because we'll create a new one next iteration
                     new_events.cancel()
+
+    def _handle_exception(self, *, message='Unhandled exception in event handler', exception=None, future=None):
+        if exception is None and future is not None:
+            exception = future.exception()
+        self.loop.call_exception_handler({
+            'message': message,
+            'exception': exception,
+            'future': future,
+        })
 
 
 class Event(dict):
