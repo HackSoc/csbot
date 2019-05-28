@@ -125,6 +125,7 @@ class TestYoutubeLinkInfoIntegration:
             })
         return bot_helper
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("vid_id, status, fixture, response", json_test_cases)
     @pytest.mark.parametrize("url", [
         "https://www.youtube.com/watch?v={}",
@@ -133,11 +134,11 @@ class TestYoutubeLinkInfoIntegration:
         "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
         "http://youtu.be/{}",
     ])
-    def test_integration(self, bot_helper, vid_id, status, fixture, response, url):
+    async def test_integration(self, bot_helper, vid_id, status, fixture, response, url):
         http = apiclient.http.HttpMock(fixture_file(fixture), {'status': status})
         with patch.object(bot_helper['youtube'], 'http', wraps=http):
             url = url.format(vid_id)
-            result = bot_helper['linkinfo'].get_link_info(url)
+            result = await bot_helper['linkinfo'].get_link_info(url)
             if response is None or response is YoutubeError:
                 assert result.is_error
             else:

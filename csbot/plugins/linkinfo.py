@@ -103,7 +103,7 @@ class LinkInfo(Plugin):
         self.excludes.append(filter)
 
     @Plugin.command('link')
-    def link_command(self, e):
+    async def link_command(self, e):
         """Handle the "link" command.
 
         Fetch information about a specified URL, e.g.
@@ -123,7 +123,7 @@ class LinkInfo(Plugin):
             url = 'http://' + url
 
         # Get info for the URL
-        result = self.get_link_info(url)
+        result = await self.get_link_info(url)
         self._log_if_error(result)
         # See if it was marked as NSFW in the command text
         result.nsfw |= 'nsfw' in rest.lower()
@@ -131,7 +131,7 @@ class LinkInfo(Plugin):
         e.reply(result.get_message())
 
     @Plugin.hook('core.message.privmsg')
-    def scan_privmsg(self, e):
+    async def scan_privmsg(self, e):
         """Scan the data of PRIVMSG events for URLs and respond with
         information about them.
         """
@@ -152,7 +152,7 @@ class LinkInfo(Plugin):
                 break
 
             # Get info for the URL
-            result = self.get_link_info(part)
+            result = await self.get_link_info(part)
             self._log_if_error(result)
 
             if result.is_error:
@@ -168,7 +168,7 @@ class LinkInfo(Plugin):
                 # ... and since we got a useful result, stop processing the message
                 break
 
-    def get_link_info(self, original_url):
+    async def get_link_info(self, original_url):
         """Get information about a URL.
 
         Using the *original_url* string, run the chain of URL handlers and
@@ -205,11 +205,11 @@ class LinkInfo(Plugin):
             # Invoke the default handler if not excluded
             else:
                 try:
-                    return self.scrape_html_title(url)
+                    return await self.scrape_html_title(url)
                 except requests.exceptions.ConnectionError:
                     return make_error('Connection error')
 
-    def scrape_html_title(self, url):
+    async def scrape_html_title(self, url):
         """Scrape the ``<title>`` tag contents from the HTML page at *url*.
 
         Returns a :class:`LinkInfoResult`.

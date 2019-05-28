@@ -3,6 +3,7 @@ from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
 
 import pytest
+import asynctest.mock
 import requests
 
 from csbot.util import simple_http_get
@@ -138,38 +139,41 @@ async def irc_client(irc_client):
     return irc_client
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body, expected_title", encoding_test_cases,
                          ids=[_[0] for _ in encoding_test_cases])
-def test_encoding_handling(bot_helper, responses, url, content_type, body, expected_title):
+async def test_encoding_handling(bot_helper, responses, url, content_type, body, expected_title):
     responses.add(responses.GET, url, body=body, content_type=content_type, stream=True)
-    result = bot_helper['linkinfo'].get_link_info(url)
+    result = await bot_helper['linkinfo'].get_link_info(url)
     assert result.text == expected_title
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body", error_test_cases,
                          ids=[_[0] for _ in error_test_cases])
-def test_html_title_errors(bot_helper, responses, url, content_type, body):
+async def test_html_title_errors(bot_helper, responses, url, content_type, body):
     responses.add(responses.GET, url, body=body,
                   content_type=content_type, stream=True)
-    result = bot_helper['linkinfo'].get_link_info(url)
+    result = await bot_helper['linkinfo'].get_link_info(url)
     assert result.is_error
 
 
-def test_connection_error(bot_helper, responses):
+@pytest.mark.asyncio
+async def test_connection_error(bot_helper, responses):
     # Check our assumptions: should be connection error because "responses" library is mocking the internet
     with pytest.raises(requests.ConnectionError):
         simple_http_get('http://example.com/foo/bar')
     # Should result in an error message from linkinfo (and implicitly no exception raised)
-    result = bot_helper['linkinfo'].get_link_info('http://example.com/foo/bar')
+    result = await bot_helper['linkinfo'].get_link_info('http://example.com/foo/bar')
     assert result.is_error
 
 
 @pytest.mark.usefixtures("run_client")
 @pytest.mark.asyncio
 @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
-def test_scan_privmsg(bot_helper, msg, urls):
-    with mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info:
-        yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
+async def test_scan_privmsg(event_loop, bot_helper, msg, urls):
+    with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info:
+        await bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
         get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
 
@@ -185,10 +189,10 @@ def test_scan_privmsg_rate_limit(bot_helper):
     linkinfo = bot_helper['linkinfo']
     count = int(linkinfo.config_get('rate_limit_count'))
     for i in range(count):
-        with mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
+        with asynctest.mock.patch.object(linkinfo, 'get_link_info', ) as get_link_info:
             yield from bot_helper.client.line_received(
                 ':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
             get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
-    with mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
+    with asynctest.mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
         yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
         assert not get_link_info.called

@@ -172,12 +172,13 @@ def pre_irc_client(responses):
                   content_type='application/json')
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", test_cases)
-def test_integration(bot_helper, responses, url, api_url, status, content_type, fixture, title):
+async def test_integration(bot_helper, responses, url, api_url, status, content_type, fixture, title):
     responses.add(responses.GET, api_url, status=status,
                   body=read_fixture_file(fixture),
                   content_type=content_type)
-    result = bot_helper['linkinfo'].get_link_info(url)
+    result = await bot_helper['linkinfo'].get_link_info(url)
     if title is None:
         assert result.is_error
     else:
@@ -185,12 +186,13 @@ def test_integration(bot_helper, responses, url, api_url, status, content_type, 
         assert title == result.text
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", nsfw_test_cases)
-def test_integration_nsfw(bot_helper, responses, url, api_url, status, content_type, fixture, title):
+async def test_integration_nsfw(bot_helper, responses, url, api_url, status, content_type, fixture, title):
     responses.add(responses.GET, api_url, status=status,
                   body=read_fixture_file(fixture),
                   content_type=content_type)
-    result = bot_helper['linkinfo'].get_link_info(url)
+    result = await bot_helper['linkinfo'].get_link_info(url)
     if title is None:
         assert result.is_error
     else:
@@ -198,9 +200,10 @@ def test_integration_nsfw(bot_helper, responses, url, api_url, status, content_t
         assert title == result.text
 
 
-def test_invalid_URL(bot_helper, responses):
+@pytest.mark.asyncio
+async def test_invalid_URL(bot_helper, responses):
     """Test that an unrecognised URL never even results in a request."""
     responses.reset()   # Drop requests used/made during plugin setup
-    result = bot_helper['linkinfo'].get_link_info('http://imgur.com/invalid/url')
+    result = await bot_helper['linkinfo'].get_link_info('http://imgur.com/invalid/url')
     assert result.is_error
     assert len(responses.calls) == 0

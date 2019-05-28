@@ -156,17 +156,19 @@ class TestXKCDLinkInfoIntegration:
                           content_type=content_type)
 
     @pytest.mark.usefixtures("populate_responses")
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
-    def test_integration(self, bot_helper, num, url, content_type, fixture, expected):
+    async def test_integration(self, bot_helper, num, url, content_type, fixture, expected):
         _, title, alt = expected
         url = 'http://xkcd.com/{}'.format(num)
-        result = bot_helper['linkinfo'].get_link_info(url)
+        result = await bot_helper['linkinfo'].get_link_info(url)
         assert title in result.text
         assert alt in result.text
 
     @pytest.mark.usefixtures("populate_responses")
-    def test_integration_error(self, bot_helper):
+    @pytest.mark.asyncio
+    async def test_integration_error(self, bot_helper):
         # Error case
-        result = bot_helper['linkinfo'].get_link_info("http://xkcd.com/flibble")
+        result = await bot_helper['linkinfo'].get_link_info("http://xkcd.com/flibble")
         assert result.is_error
