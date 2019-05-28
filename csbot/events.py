@@ -159,6 +159,84 @@ class AsyncEventRunner(object):
                     not_done.add(new_pending)
 
 
+class HybridEventRunner:
+    def __init__(self, handle_event, loop=None):
+        self.handle_event = handle_event
+        self.loop = loop
+
+        self.events = deque()
+        self.new_events = asyncio.Event(loop=self.loop)
+        self.futures = set()
+        self.future = None
+
+    def __enter__(self):
+        LOG.debug('entering event runner')
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        LOG.debug('exiting event runner')
+        self.future = None
+
+    def post_event(self, event):
+        self.events.append(event)
+        LOG.debug('added event %s, pending=%s', event, len(self.events))
+        self.new_events.set()
+        if not self.future:
+            self.future = self.loop.create_task(self._run())
+        return self.future
+
+    def _run_events(self):
+        new_futures = set()
+        while len(self.events) > 0:
+            LOG.debug('processing events (%s remaining)', len(self.events))
+            # Get next event
+            event = self.events.popleft()
+            # Handle the event
+            results = self.handle_event(event)
+            # Schedule the awaitables
+            for r in results:
+                if r is None:
+                    continue
+                try:
+                    f = asyncio.ensure_future(r, loop=self.loop)
+                except TypeError:
+                    LOG.exception('non-awaitable result %r handling event %r', r, event)
+                    continue
+                new_futures.add(f)
+        self.new_events.clear()
+        if len(new_futures) > 0:
+            LOG.debug('got %s new futures', len(new_futures))
+        return new_futures
+
+    async def _run(self):
+        # Use self as context manager so an escaping exception doesn't break
+        # the event runner instance permanently (i.e. we clean up the future)
+        with self:
+            # Run until no more events or lingering futures
+            while len(self.events) + len(self.futures) > 0:
+                # Synchronously run event handler and collect new futures
+                new_futures = self._run_events()
+                self.futures |= new_futures
+                # Don't bother waiting if no futures to wait on
+                if len(self.futures) == 0:
+                    continue
+
+                # Run until one or more futures complete (or new events are added)
+                new_events = self.loop.create_task(self.new_events.wait())
+                LOG.debug('waiting on %s futures', len(self.futures))
+                done, pending = await asyncio.wait(self.futures | {new_events},
+                                                   loop=self.loop,
+                                                   return_when=asyncio.FIRST_COMPLETED)
+                # Remove done futures from the set of futures being waited on
+                done_futures = done - {new_events}
+                LOG.debug('%s of %s futures done', len(done_futures), len(self.futures))
+                self.futures -= done_futures
+                if new_events.done():
+                    LOG.debug('new events to process')
+                else:
+                    # If no new events, cancel the waiter, because we'll create a new one next iteration
+                    new_events.cancel()
+
+
 class Event(dict):
     """IRC event information.
 

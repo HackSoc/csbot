@@ -2,6 +2,8 @@ import unittest
 from unittest import mock
 import datetime
 import collections.abc
+from collections import defaultdict
+from functools import partial
 import asyncio
 
 import pytest
@@ -183,6 +185,357 @@ class TestAsyncEventRunner:
         assert async_runner.exception_handler.call_count == 1
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2), mock.call(f3), mock.call(f4)])
         #self.assertEqual(set(self.handled_events), {f1, f2, f3, f4})
+
+
+@pytest.mark.asyncio
+class TestHybridEventRunner:
+    class EventHandler:
+        def __init__(self):
+            self.handlers = defaultdict(list)
+
+        def add(self, e, f=None):
+            if f is None:
+                return partial(self.add, e)
+            else:
+                self.handlers[e].append(f)
+
+        def __call__(self, e):
+            return [f(e) for f in self.handlers[e]]
+
+    @pytest.fixture
+    def event_runner(self, event_loop):
+        handler = self.EventHandler()
+        obj = mock.Mock()
+        obj.add_handler = handler.add
+        obj.handle_event = mock.Mock(wraps=handler)
+        obj.runner = csbot.events.HybridEventRunner(obj.handle_event, event_loop)
+        obj.exception_handler = mock.Mock(wraps=event_loop.get_exception_handler())
+        event_loop.set_exception_handler(obj.exception_handler)
+        return obj
+
+    async def test_values(self, event_runner):
+        """Check that basic values are passed through the event queue unmolested."""
+        # Test that things actually get through
+        await event_runner.runner.post_event('foo')
+        assert event_runner.handle_event.call_args_list == [mock.call('foo')]
+        # The event runner doesn't care what it's passing through
+        for x in ['bar', 1.3, None, object]:
+            await event_runner.runner.post_event(x)
+            print(event_runner.handle_event.call_args)
+            assert event_runner.handle_event.call_args == mock.call(x)
+
+    async def test_event_chain_synchronous(self, event_runner):
+        """Check that an entire event chain runs (synchronously).
+
+        All handlers for an event should be run before the next event, and any events that occur
+        during an event handler should also be processed before the initial `post_event()` future
+        has a result.
+        """
+        complete = []
+
+        @event_runner.add_handler('a')
+        def a(_):
+            event_runner.runner.post_event('b')
+            complete.append('a')
+
+        @event_runner.add_handler('b')
+        def b1(_):
+            event_runner.runner.post_event('c')
+            complete.append('b1')
+
+        @event_runner.add_handler('b')
+        def b2(_):
+            event_runner.runner.post_event('d')
+            complete.append('b2')
+
+        @event_runner.add_handler('b')
+        def b3(_):
+            event_runner.runner.post_event('e')
+            complete.append('b3')
+
+        @event_runner.add_handler('c')
+        def c(_):
+            event_runner.runner.post_event('f')
+            complete.append('c')
+
+        @event_runner.add_handler('d')
+        def d(_):
+            complete.append('d')
+
+        @event_runner.add_handler('e')
+        def e(_):
+            complete.append('e')
+
+        await event_runner.runner.post_event('a')
+        assert event_runner.handle_event.mock_calls == [
+            # Initial event
+            mock.call('a'),
+            # Event resulting from handler for 'a'
+            mock.call('b'),
+            # Ensure all handlers for 'b' finished ...
+            mock.call('c'),
+            mock.call('d'),
+            mock.call('e'),
+            # ... before first handler for 'c'
+            mock.call('f'),
+        ]
+        assert complete == ['a', 'b1', 'b2', 'b3', 'c', 'd', 'e']
+
+    async def test_event_chain_asynchronous(self, event_loop, event_runner):
+        """Check that an entire event chain runs (asynchronously).
+
+        Any events that occur during an event handler should be processed before the initial
+        `post_event()` future has a result.
+        """
+        events = [asyncio.Event(loop=event_loop) for _ in range(2)]
+        complete = []
+
+        @event_runner.add_handler('a')
+        async def a1(_):
+            complete.append('a1')
+
+        @event_runner.add_handler('a')
+        async def a2(_):
+            await events[0].wait()
+            event_runner.runner.post_event('b')
+            complete.append('a2')
+
+        @event_runner.add_handler('b')
+        async def b1(_):
+            event_runner.runner.post_event('c')
+            complete.append('b1')
+
+        @event_runner.add_handler('b')
+        async def b2(_):
+            event_runner.runner.post_event('d')
+            complete.append('b2')
+
+        @event_runner.add_handler('b')
+        async def b3(_):
+            await events[1].wait()
+            event_runner.runner.post_event('e')
+            complete.append('b3')
+
+        @event_runner.add_handler('c')
+        async def c(_):
+            event_runner.runner.post_event('f')
+            complete.append('c')
+
+        @event_runner.add_handler('d')
+        async def d(_):
+            complete.append('d')
+
+        @event_runner.add_handler('e')
+        async def e(_):
+            complete.append('e')
+
+        # Post the first event and allow some tasks to run:
+        # - should have a post_event('a') call
+        # - a1 should complete, a2 is blocked on events[0]
+        future = event_runner.runner.post_event('a')
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert not future.done()
+        assert event_runner.handle_event.mock_calls == [
+            mock.call('a'),
+        ]
+        assert complete == ['a1']
+        
+        # Unblock a2 and allow some tasks to run:
+        # - a2 should complete
+        # - post_event('b') should be called (by a2)
+        # - b1 and b2 should complete, b3 is blocked on events[1]
+        # - post_event('c') and post_event('d') should be called (by b1 and b2)
+        # - c should complete
+        # - post_event('f') should be called (by c)
+        # - d should complete
+        events[0].set()
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert not future.done()
+        assert event_runner.handle_event.mock_calls == [
+            mock.call('a'),
+            mock.call('b'),
+            mock.call('c'),
+            mock.call('d'),
+            mock.call('f'),
+        ]
+        assert complete == ['a1', 'a2', 'b1', 'b2', 'c', 'd']
+        
+        # Unblock b3 and allow some tasks to run:
+        # - b3 should complete
+        # - post_event('e') should be called (by b3)
+        # - e should complete
+        # - future should complete, because no events or tasks remain pending
+        events[1].set()
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert future.done()
+        assert event_runner.handle_event.mock_calls == [
+            mock.call('a'),
+            mock.call('b'),
+            mock.call('c'),
+            mock.call('d'),
+            mock.call('f'),
+            mock.call('e'),
+        ]
+        assert complete == ['a1', 'a2', 'b1', 'b2', 'c', 'd', 'b3', 'e']
+
+    async def test_event_chain_hybrid(self, event_loop, event_runner):
+        """Check that an entire event chain runs (mix of sync and async handlers).
+
+        Synchronous handlers complete before asynchronous handlers. Synchronous handlers for an
+        event all run before synchronous handlers for the next event, but asynchronous handers can
+        run out-of-order.
+        """
+        events = [asyncio.Event(loop=event_loop) for _ in range(2)]
+        complete = []
+
+        @event_runner.add_handler('a')
+        def a1(_):
+            complete.append('a1')
+
+        @event_runner.add_handler('a')
+        async def a2(_):
+            await events[0].wait()
+            event_runner.runner.post_event('b')
+            complete.append('a2')
+
+        @event_runner.add_handler('b')
+        async def b1(_):
+            await events[1].wait()
+            event_runner.runner.post_event('c')
+            complete.append('b1')
+
+        @event_runner.add_handler('b')
+        def b2(_):
+            event_runner.runner.post_event('d')
+            complete.append('b2')
+
+        @event_runner.add_handler('c')
+        def c1(_):
+            complete.append('c1')
+
+        @event_runner.add_handler('c')
+        async def c2(_):
+            complete.append('c2')
+
+        @event_runner.add_handler('d')
+        async def d1(_):
+            complete.append('d1')
+
+        @event_runner.add_handler('d')
+        def d2(_):
+            complete.append('d2')
+
+        # Post the first event and allow some tasks to run:
+        # - post_event('a') should be called (initial)
+        # - a1 should complete, a2 is blocked on events[0]
+        future = event_runner.runner.post_event('a')
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert not future.done()
+        assert event_runner.handle_event.mock_calls == [
+            mock.call('a'),
+        ]
+        assert complete == ['a1']
+
+        # Unblock a2 and allow some tasks to run:
+        # - a2 should complete
+        # - post_event('b') should be called (by a2)
+        # - b2 should complete, b1 is blocked on events[1]
+        # - post_event('d') should be called
+        # - d2 should complete (synchronous phase)
+        # - d1 should complete (asynchronous phase)
+        events[0].set()
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert not future.done()
+        assert event_runner.handle_event.mock_calls == [
+            mock.call('a'),
+            mock.call('b'),
+            mock.call('d'),
+        ]
+        assert complete == ['a1', 'a2', 'b2', 'd2', 'd1']
+
+        # Unblock b1 and allow some tasks to run:
+        # - b1 should complete
+        # - post_event('c') should be called (by b1)
+        # - c1 should complete (synchronous phase)
+        # - c2 should complete (asynchronous phase)
+        # - future should complete, because no events or tasks remain pending
+        events[1].set()
+        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        assert future.done()
+        assert event_runner.handle_event.mock_calls == [
+            mock.call('a'),
+            mock.call('b'),
+            mock.call('d'),
+            mock.call('c'),
+        ]
+        assert complete == ['a1', 'a2', 'b2', 'd2', 'd1', 'b1', 'c1', 'c2']
+
+    async def test_overlapping_root_events(self, event_loop, event_runner):
+        """Check that overlapping events get the same future."""
+        events = [asyncio.Event(loop=event_loop) for _ in range(1)]
+        complete = []
+
+        @event_runner.add_handler('a')
+        async def a(_):
+            await events[0].wait()
+            complete.append('a')
+
+        @event_runner.add_handler('b')
+        async def b(_):
+            complete.append('b')
+
+        # Post the first event and allow tasks to run:
+        # - a is blocked on events[0]
+        f1 = event_runner.runner.post_event('a')
+        await asyncio.wait({f1}, loop=event_loop, timeout=0.1)
+        assert not f1.done()
+        assert complete == []
+
+        # Post the second event and allow tasks to run:
+        # - b completes
+        # - a is still blocked on events[0]
+        # - f1 and f2 are not done, because they're for the same run loop, and a is still blocked
+        f2 = event_runner.runner.post_event('b')
+        await asyncio.wait({f2}, loop=event_loop, timeout=0.1)
+        assert not f2.done()
+        assert not f1.done()
+        assert complete == ['b']
+
+        # Unblock a and allow tasks to run:
+        # - a completes
+        # - f1 and f2 are both done, because the run loop has finished
+        events[0].set()
+        await asyncio.wait([f1, f2], loop=event_loop, timeout=0.1)
+        assert f1.done()
+        assert f2.done()
+        assert complete == ['b', 'a']
+
+        # (Maybe remove this - not essential that they're the same future, only that they complete together)
+        assert f2 is f1
+
+    async def test_non_overlapping_root_events(self, event_loop, event_runner):
+        """Check that non-overlapping events get new futures."""
+        complete = []
+
+        @event_runner.add_handler('a')
+        async def a(_):
+            complete.append('a')
+
+        @event_runner.add_handler('b')
+        async def b(_):
+            complete.append('b')
+
+        f1 = event_runner.runner.post_event('a')
+        await asyncio.wait({f1}, loop=event_loop, timeout=0.1)
+        assert f1.done()
+        assert complete == ['a']
+
+        f2 = event_runner.runner.post_event('b')
+        assert not f2.done()
+        assert f2 is not f1
+        await asyncio.wait({f2}, loop=event_loop, timeout=0.1)
+        assert f2.done()
+        assert complete == ['a', 'b']
 
 
 class TestEvent(unittest.TestCase):
