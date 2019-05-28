@@ -3,6 +3,7 @@ from collections import abc
 import logging
 import os
 import asyncio
+from typing import List, Callable
 
 
 def build_plugin_dict(plugins):
@@ -268,19 +269,10 @@ class Plugin(object, metaclass=PluginMeta):
         """
         return ProvidedByPlugin(other, kwargs)
 
-    def fire_hooks(self, event):
-        """Execute all of this plugin's handlers for *event*.
-
-        All handlers are treated as coroutine functions, and the return value is
-        a list of all the invoked coroutines.
+    def get_hooks(self, hook: str) -> List[Callable]:
+        """Get a list of this plugin's handlers for *hook*.
         """
-        coros = []
-        for name in self.plugin_hooks.get(event.event_type, ()):
-            f = getattr(self, name)
-            if not asyncio.iscoroutinefunction(f):
-                f = asyncio.coroutine(f)
-            coros.append(f(event))
-        return coros
+        return [getattr(self, name) for name in self.plugin_hooks.get(hook, ())]
 
     def provide(self, plugin_name, **kwarg):
         """Provide a value for a :meth:`Plugin.use` usage."""

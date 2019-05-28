@@ -1,6 +1,5 @@
 import collections
 import itertools
-
 import asyncio
 
 import configparser
@@ -97,7 +96,7 @@ class Bot(SpecialPlugin, IRCClient):
         self.commands = {}
 
         # Event runner
-        self.events = events.AsyncEventRunner(self._fire_hooks, self.loop)
+        self.events = events.HybridEventRunner(self._get_hooks, self.loop)
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -113,9 +112,8 @@ class Bot(SpecialPlugin, IRCClient):
         """
         self.plugins.teardown()
 
-    def _fire_hooks(self, event):
-        results = self.plugins.fire_hooks(event)
-        return list(itertools.chain(*results))
+    def _get_hooks(self, event):
+        return itertools.chain(*self.plugins.get_hooks(event.event_type))
 
     def post_event(self, event):
         return self.events.post_event(event)
