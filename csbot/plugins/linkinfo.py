@@ -5,8 +5,8 @@ import collections
 from collections import namedtuple
 import datetime
 from functools import partial
+import asyncio
 
-import requests
 import aiohttp
 import lxml.etree
 import lxml.html
@@ -186,7 +186,10 @@ class LinkInfo(Plugin):
         for h in self.handlers:
             match = h.filter(url)
             if match:
-                result = h.handler(url, match)
+                if asyncio.iscoroutinefunction(h.handler):
+                    result = await h.handler(url, match)
+                else:
+                    result = h.handler(url, match)
                 if result is not None:
                     # Useful result, return it
                     return result

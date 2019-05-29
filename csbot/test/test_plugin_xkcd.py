@@ -148,19 +148,17 @@ class TestXKCDPlugin:
                 await bot_helper['xkcd']._xkcd(case)
 
 
-@pytest.mark.skip
 @pytest.mark.bot(config="""\
     [@bot]
     plugins = linkinfo xkcd
     """)
 class TestXKCDLinkInfoIntegration:
     @pytest.fixture
-    def populate_responses(self, bot_helper, responses):
-        """Populate all data into responses, don't assert that every request is fired."""
-        responses.assert_all_requests_are_fired = False
+    def populate_responses(self, bot_helper, aioresponses):
+        """Populate all data into responses."""
         for num, url, content_type, fixture, expected in json_test_cases:
-            responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type)
+            aioresponses.get(url, body=read_fixture_file(fixture),
+                             content_type=content_type)
 
     @pytest.mark.usefixtures("populate_responses")
     @pytest.mark.asyncio

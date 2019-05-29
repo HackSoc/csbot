@@ -94,7 +94,7 @@ class xkcd(Plugin):
         return (requested["url"], requested["title"],
                 cap_string(requested["alt"], 120))
 
-    # @Plugin.integrate_with('linkinfo')
+    @Plugin.integrate_with('linkinfo')
     def linkinfo_integrate(self, linkinfo):
         """Handle recognised xkcd urls."""
 
