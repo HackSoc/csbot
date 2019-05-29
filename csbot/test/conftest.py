@@ -6,6 +6,7 @@ from unittest import mock
 import pytest
 import aiofastforward
 import responses as responses_
+from aioresponses import aioresponses as aioresponses_
 
 from csbot import test
 from csbot.irc import IRCClient
@@ -176,3 +177,9 @@ class BotHelper(IRCClientHelper):
 def responses():
     with responses_.RequestsMock() as rsps:
         yield rsps
+
+
+@pytest.fixture
+def aioresponses():
+    with aioresponses_() as m:
+        yield m

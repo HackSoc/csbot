@@ -206,7 +206,7 @@ class LinkInfo(Plugin):
             else:
                 try:
                     return await self.scrape_html_title(url)
-                except requests.exceptions.ConnectionError:
+                except aiohttp.ClientConnectionError:
                     return make_error('Connection error')
 
     async def scrape_html_title(self, url):

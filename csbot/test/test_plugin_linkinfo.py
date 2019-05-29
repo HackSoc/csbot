@@ -1,7 +1,6 @@
 # coding=utf-8
 from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
-import urllib.parse as urlparse
 import asyncio
 
 import pytest
@@ -145,10 +144,8 @@ async def irc_client(irc_client):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body, expected_title", encoding_test_cases,
                          ids=[_[0] for _ in encoding_test_cases])
-async def test_encoding_handling(bot_helper, aresponses, url, content_type, body, expected_title):
-    parsed_url = urlparse.urlparse(url)
-    aresponses.add(parsed_url.hostname, parsed_url.path, 'get',
-                   aresponses.Response(body=body, headers={'Content-Type': content_type}))
+async def test_encoding_handling(bot_helper, aioresponses, url, content_type, body, expected_title):
+    aioresponses.get(url, status=200, body=body, headers={'Content-Type': content_type})
     result = await bot_helper['linkinfo'].get_link_info(url)
     assert result.text == expected_title
 
@@ -156,30 +153,28 @@ async def test_encoding_handling(bot_helper, aresponses, url, content_type, body
 @pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body", error_test_cases,
                          ids=[_[0] for _ in error_test_cases])
-async def test_html_title_errors(bot_helper, aresponses, url, content_type, body):
-    parsed_url = urlparse.urlparse(url)
-    aresponses.add(parsed_url.hostname, parsed_url.path, 'get',
-                   aresponses.Response(body=body, headers={'Content-Type': content_type}))
+async def test_html_title_errors(bot_helper, aioresponses, url, content_type, body):
+    aioresponses.get(url, status=200, body=body, headers={'Content-Type': content_type})
     result = await bot_helper['linkinfo'].get_link_info(url)
     assert result.is_error
 
 
 @pytest.mark.asyncio
-async def test_not_found(bot_helper, aresponses):
-    # Test our assumptions: direct request should return a 404
-    aresponses.add(aresponses.ANY, aresponses.ANY, aresponses.ANY, lambda r: aresponses.Response(status=404))
-    async with aiohttp.ClientSession() as session, session.get('http://example.com/') as resp:
-        assert resp.status == 404
+async def test_not_found(bot_helper, aioresponses):
+    # Test our assumptions: direct request should raise connection error, because aioresponses
+    # is mocking the internet
+    with pytest.raises(aiohttp.ClientConnectionError):
+        async with aiohttp.ClientSession() as session, session.get('http://example.com/') as resp:
+            pass
 
     # Should result in an error message from linkinfo (and implicitly no exception raised)
-    aresponses.add(aresponses.ANY, aresponses.ANY, aresponses.ANY, lambda r: aresponses.Response(status=404))
     result = await bot_helper['linkinfo'].get_link_info('http://example.com/')
     assert result.is_error
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
-async def test_scan_privmsg(event_loop, bot_helper, aresponses, msg, urls):
+async def test_scan_privmsg(event_loop, bot_helper, aioresponses, msg, urls):
     with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info:
         await bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
         get_link_info.assert_has_calls([mock.call(url) for url in urls])
@@ -187,7 +182,7 @@ async def test_scan_privmsg(event_loop, bot_helper, aresponses, msg, urls):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
-async def test_command(event_loop, bot_helper, aresponses, msg, urls):
+async def test_command(event_loop, bot_helper, aioresponses, msg, urls):
     with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info, \
         asynctest.mock.patch.object(bot_helper['linkinfo'], 'link_command',
                                     wraps=bot_helper['linkinfo'].link_command) as link_command:
@@ -197,7 +192,7 @@ async def test_command(event_loop, bot_helper, aresponses, msg, urls):
 
 
 @pytest.mark.asyncio
-def test_scan_privmsg_rate_limit(bot_helper, aresponses):
+def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
     """Test that we won't respond too frequently to URLs in messages.
 
     Unfortunately we can't currently test the passage of time, so the only
@@ -244,6 +239,7 @@ class TestNonBlocking:
 
     @pytest.mark.asyncio
     async def test_non_blocking_privmsg(self, event_loop, bot_helper, aresponses):
+        # TODO: use aioresponses instead, once it supports async callbacks
         bot_helper.reset_mock()
 
         event = asyncio.Event(loop=event_loop)
@@ -277,6 +273,7 @@ class TestNonBlocking:
 
     @pytest.mark.asyncio
     async def test_non_blocking_command(self, event_loop, bot_helper, aresponses):
+        # TODO: use aioresponses instead, once it supports async callbacks
         bot_helper.reset_mock()
 
         event = asyncio.Event(loop=event_loop)
