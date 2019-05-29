@@ -5,14 +5,14 @@ import collections
 from collections import namedtuple
 import datetime
 from functools import partial
-from contextlib import closing
 
 import requests
+import aiohttp
 import lxml.etree
 import lxml.html
 
 from ..plugin import Plugin
-from ..util import simple_http_get, Struct
+from ..util import Struct
 
 
 LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
@@ -217,11 +217,11 @@ class LinkInfo(Plugin):
         make_error = partial(LinkInfoResult, url.geturl(), is_error=True)
 
         # Let's see what's on the other end...
-        with closing(simple_http_get(url.geturl(), stream=True)) as r:
+        async with aiohttp.ClientSession() as session, session.get(url.geturl()) as r:
             # Only bother with 200 OK
-            if r.status_code != requests.codes.ok:
-                return make_error('HTTP request failed: {}'
-                                  .format(r.status_code))
+            if r.status != 200:
+                return make_error('HTTP request failed: {} {}'
+                                  .format(r.status, r.reason))
             # Only process HTML-ish responses
             if 'Content-Type' not in r.headers:
                 return make_error('No Content-Type header')
@@ -240,8 +240,8 @@ class LinkInfo(Plugin):
             # If present, charset attribute in HTTP Content-Type header takes
             # precedence, but fallback to default if encoding isn't recognised
             parser = lxml.html.html_parser
-            if 'charset=' in r.headers['content-type']:
-                encoding = r.headers['content-type'].rsplit('=', 1)[1]
+            if r.charset is not None:
+                encoding = r.charset
                 try:
                     parser = lxml.html.HTMLParser(encoding=encoding)
                 except LookupError:
@@ -252,7 +252,7 @@ class LinkInfo(Plugin):
             # because chunk-encoded responses iterate over chunks rather than
             # the size we request...
             chunk = b''
-            for next_chunk in r.iter_content(self.config_get('max_response_size')):
+            async for next_chunk in r.content.iter_chunked(self.config_get('max_response_size')):
                 chunk += next_chunk
                 if len(chunk) >= self.config_get('max_response_size'):
                     break
