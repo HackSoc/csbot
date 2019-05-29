@@ -99,17 +99,15 @@ def simple_http_get(url, stream=False):
 
 
 @asynccontextmanager
-async def simple_http_get_async(url):
+async def simple_http_get_async(url, **kwargs):
     session_kwargs = {
         'headers': {
             'User-Agent': 'csbot/0.1',
         },
     }
-    get_kwargs = {
-        'ssl': False,
-    }
+    kwargs.setdefault('ssl', False)
     async with aiohttp.ClientSession(**session_kwargs) as session:
-        async with session.get(url, **get_kwargs) as resp:
+        async with session.get(url, **kwargs) as resp:
             yield resp
 
 

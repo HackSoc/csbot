@@ -164,20 +164,12 @@ pytestmark = pytest.mark.bot(config="""\
     """)
 
 
-@pytest.fixture
-def pre_irc_client(responses):
-    # imgurpython calls this on init to get initial rate limits
-    responses.add(responses.GET, 'https://api.imgur.com/3/credits',
-                  status=200, body=read_fixture_file('imgur_credits.json'),
-                  content_type='application/json')
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", test_cases)
-async def test_integration(bot_helper, responses, url, api_url, status, content_type, fixture, title):
-    responses.add(responses.GET, api_url, status=status,
-                  body=read_fixture_file(fixture),
-                  content_type=content_type)
+async def test_integration(bot_helper, aioresponses, url, api_url, status, content_type, fixture, title):
+    aioresponses.get(api_url, status=status,
+                     body=read_fixture_file(fixture),
+                     content_type=content_type)
     result = await bot_helper['linkinfo'].get_link_info(url)
     if title is None:
         assert result.is_error
@@ -188,10 +180,10 @@ async def test_integration(bot_helper, responses, url, api_url, status, content_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", nsfw_test_cases)
-async def test_integration_nsfw(bot_helper, responses, url, api_url, status, content_type, fixture, title):
-    responses.add(responses.GET, api_url, status=status,
-                  body=read_fixture_file(fixture),
-                  content_type=content_type)
+async def test_integration_nsfw(bot_helper, aioresponses, url, api_url, status, content_type, fixture, title):
+    aioresponses.get(api_url, status=status,
+                     body=read_fixture_file(fixture),
+                     content_type=content_type)
     result = await bot_helper['linkinfo'].get_link_info(url)
     if title is None:
         assert result.is_error
@@ -201,9 +193,7 @@ async def test_integration_nsfw(bot_helper, responses, url, api_url, status, con
 
 
 @pytest.mark.asyncio
-async def test_invalid_URL(bot_helper, responses):
+async def test_invalid_URL(bot_helper, aioresponses):
     """Test that an unrecognised URL never even results in a request."""
-    responses.reset()   # Drop requests used/made during plugin setup
     result = await bot_helper['linkinfo'].get_link_info('http://imgur.com/invalid/url')
     assert result.is_error
-    assert len(responses.calls) == 0
