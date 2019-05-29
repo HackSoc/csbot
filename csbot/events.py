@@ -8,7 +8,6 @@ from csbot.util import parse_arguments
 
 
 LOG = logging.getLogger('csbot.events')
-LOG.setLevel(logging.INFO)
 
 
 class ImmediateEventRunner(object):
@@ -190,9 +189,11 @@ class HybridEventRunner:
             LOG.debug('processing events (%s remaining)', len(self.events))
             # Get next event
             event = self.events.popleft()
+            LOG.debug('processing event: %s', event)
             # Handle the event
             for handler in self.get_handlers(event):
                 # Attempt to run the handler, but don't break everything if the handler fails
+                LOG.debug('running handler: %r', handler)
                 try:
                     result = handler(event)
                 except Exception as e:
