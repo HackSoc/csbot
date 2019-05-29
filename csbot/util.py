@@ -3,6 +3,8 @@ from itertools import tee
 from collections import OrderedDict
 
 import requests
+from async_generator import asynccontextmanager
+import aiohttp
 
 
 class User(object):
@@ -94,6 +96,21 @@ def simple_http_get(url, stream=False):
     """
     headers = {'User-Agent': 'csbot/0.1'}
     return requests.get(url, verify=False, headers=headers, stream=stream)
+
+
+@asynccontextmanager
+async def simple_http_get_async(url):
+    session_kwargs = {
+        'headers': {
+            'User-Agent': 'csbot/0.1',
+        },
+    }
+    get_kwargs = {
+        'ssl': False,
+    }
+    async with aiohttp.ClientSession(**session_kwargs) as session:
+        async with session.get(url, **get_kwargs) as resp:
+            yield resp
 
 
 def pairwise(iterable):

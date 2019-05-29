@@ -9,6 +9,7 @@ oauth2client>=3,<4      # google-api-python-client dropped dep in a minor releas
 imgurpython>=1.1.6,<2.0.0
 isodate>=0.5.1
 aiohttp>=3.5.1,<4.0
+async_generator>=1.10,<2.0
 rollbar
 
 # Requirements for unit testing

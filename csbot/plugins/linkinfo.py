@@ -12,7 +12,7 @@ import lxml.etree
 import lxml.html
 
 from ..plugin import Plugin
-from ..util import Struct
+from ..util import Struct, simple_http_get_async
 
 
 LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
@@ -217,7 +217,7 @@ class LinkInfo(Plugin):
         make_error = partial(LinkInfoResult, url.geturl(), is_error=True)
 
         # Let's see what's on the other end...
-        async with aiohttp.ClientSession() as session, session.get(url.geturl()) as r:
+        async with simple_http_get_async(url.geturl()) as r:
             # Only bother with 200 OK
             if r.status != 200:
                 return make_error('HTTP request failed: {} {}'
