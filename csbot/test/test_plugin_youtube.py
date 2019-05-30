@@ -1,12 +1,11 @@
-from unittest.mock import patch
 from distutils.version import StrictVersion
+import re
 
 import pytest
 import urllib.parse as urlparse
-import apiclient
 
-from csbot.test import fixture_file
-from csbot.plugins.youtube import Youtube, YoutubeError
+from csbot.test import read_fixture_file
+from csbot.plugins.youtube import YoutubeError
 
 
 #: Tests are (number, url, content-type, status, fixture, expected)
@@ -60,58 +59,62 @@ json_test_cases = [
         "youtube_flibble.json",
         None
     ),
+
+    # Invalid API key (400 Bad Request)
+    (
+        "dQw4w9WgXcQ",
+        400,
+        "youtube_invalid_key.json",
+        YoutubeError
+    ),
+
+    # Valid API key, but Youtube Data API not enabled (403 Forbidden)
+    (
+        "dQw4w9WgXcQ",
+        403,
+        "youtube_access_not_configured.json",
+        YoutubeError
+    ),
 ]
-
-# Non-success HttpMock results are broken in older versions of google-api-python-client
-if StrictVersion(apiclient.__version__) > StrictVersion("1.4.1"):
-    json_test_cases += [
-        # Invalid API key (400 Bad Request)
-        (
-            "dQw4w9WgXcQ",
-            400,
-            "youtube_invalid_key.json",
-            YoutubeError
-        ),
-
-        # Valid API key, but Youtube Data API not enabled (403 Forbidden)
-        (
-            "dQw4w9WgXcQ",
-            403,
-            "youtube_access_not_configured.json",
-            YoutubeError
-        ),
-    ]
 
 
 @pytest.fixture
-def pre_irc_client():
+def pre_irc_client(aioresponses):
     # Use fixture JSON for API client setup
-    http = apiclient.http.HttpMock(
-        fixture_file('google-discovery-youtube-v3.json'),
-        {'status': '200'})
-    with patch.object(Youtube, 'http', wraps=http):
-        yield
+    aioresponses.get('https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest',
+                     status=200, content_type='application/json',
+                     body=read_fixture_file('google-discovery-youtube-v3.json'),
+                     repeat=True)
 
 
 @pytest.mark.bot(config="""\
     [@bot]
     plugins = youtube
+    
+    [youtube]
+    api_key = abc
     """)
 class TestYoutubePlugin:
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("vid_id, status, fixture, expected", json_test_cases)
-    def test_ids(self, bot_helper, vid_id, status, fixture, expected):
-        http = apiclient.http.HttpMock(fixture_file(fixture), {'status': status})
-        with patch.object(bot_helper['youtube'], 'http', wraps=http):
-            if expected is YoutubeError:
-                with pytest.raises(YoutubeError):
-                    bot_helper['youtube']._yt(urlparse.urlparse(vid_id))
-            else:
-                assert bot_helper['youtube']._yt(urlparse.urlparse(vid_id)) == expected
+    async def test_ids(self, bot_helper, aioresponses, vid_id, status, fixture, expected):
+        pattern = re.compile(rf'https://www.googleapis.com/youtube/v3/videos\?.*\bid={vid_id}\b.*')
+        aioresponses.get(pattern, status=status, content_type='application/json',
+                         body=read_fixture_file(fixture))
+
+        if expected is YoutubeError:
+            with pytest.raises(YoutubeError):
+                await bot_helper['youtube']._yt(urlparse.urlparse(vid_id))
+        else:
+            assert await bot_helper['youtube']._yt(urlparse.urlparse(vid_id)) == expected
 
 
 @pytest.mark.bot(config="""\
     [@bot]
     plugins = linkinfo youtube
+    
+    [youtube]
+    api_key = abc
     """)
 class TestYoutubeLinkInfoIntegration:
     @pytest.fixture
@@ -134,15 +137,17 @@ class TestYoutubeLinkInfoIntegration:
         "http://www.youtube.com/watch?v={}&feature=youtube_gdata_player",
         "http://youtu.be/{}",
     ])
-    async def test_integration(self, bot_helper, vid_id, status, fixture, response, url):
-        http = apiclient.http.HttpMock(fixture_file(fixture), {'status': status})
-        with patch.object(bot_helper['youtube'], 'http', wraps=http):
-            url = url.format(vid_id)
-            result = await bot_helper['linkinfo'].get_link_info(url)
-            if response is None or response is YoutubeError:
-                assert result.is_error
-            else:
-                for key in response:
-                    if key == "link":
-                        continue
-                    assert response[key] in result.text
+    async def test_integration(self, bot_helper, aioresponses, vid_id, status, fixture, response, url):
+        pattern = re.compile(rf'https://www.googleapis.com/youtube/v3/videos\?.*\bid={vid_id}\b.*')
+        aioresponses.get(pattern, status=status, content_type='application/json',
+                         body=read_fixture_file(fixture))
+
+        url = url.format(vid_id)
+        result = await bot_helper['linkinfo'].get_link_info(url)
+        if response is None or response is YoutubeError:
+            assert result.is_error
+        else:
+            for key in response:
+                if key == "link":
+                    continue
+                assert response[key] in result.text
