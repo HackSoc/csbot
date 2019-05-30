@@ -6,6 +6,7 @@ import asyncio
 import pytest
 import asynctest.mock
 import aiohttp
+from aioresponses import CallbackResult
 
 from csbot.plugin import Plugin
 import csbot.core
@@ -238,18 +239,16 @@ class TestNonBlocking:
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 
     @pytest.mark.asyncio
-    async def test_non_blocking_privmsg(self, event_loop, bot_helper, aresponses):
-        # TODO: use aioresponses instead, once it supports async callbacks
+    async def test_non_blocking_privmsg(self, event_loop, bot_helper, aioresponses):
         bot_helper.reset_mock()
 
         event = asyncio.Event(loop=event_loop)
 
-        async def handler(request):
+        async def handler(url, **kwargs):
             await event.wait()
-            return aresponses.Response(status=200,
-                                       headers={'Content-Type': 'text/html'},
-                                       body=b'<html><head><title>foo</title></head><body></body></html>')
-        aresponses.add('example.com', '/', 'get', handler)
+            return CallbackResult(status=200, content_type='text/html',
+                                  body=b'<html><head><title>foo</title></head><body></body></html>')
+        aioresponses.get('http://example.com/', callback=handler)
 
         futures = bot_helper.receive([
             ':nick!user@host PRIVMSG #channel :a',
@@ -272,19 +271,18 @@ class TestNonBlocking:
         ])
 
     @pytest.mark.asyncio
-    async def test_non_blocking_command(self, event_loop, bot_helper, aresponses):
+    async def test_non_blocking_command(self, event_loop, bot_helper, aioresponses):
         # TODO: use aioresponses instead, once it supports async callbacks
         bot_helper.reset_mock()
 
         event = asyncio.Event(loop=event_loop)
 
-        async def handler(request):
+        async def handler(url, **kwargs):
             await event.wait()
-            return aresponses.Response(status=200,
-                                       headers={'Content-Type': 'application/octet-stream'},
-                                       body=b'<html><head><title>foo</title></head><body></body></html>')
+            return CallbackResult(status=200, content_type='application/octet-stream',
+                                  body=b'<html><head><title>foo</title></head><body></body></html>')
 
-        aresponses.add('example.com', '/', 'get', handler)
+        aioresponses.get('http://example.com/', callback=handler)
 
         futures = bot_helper.receive([
             ':nick!user@host PRIVMSG #channel :a',
