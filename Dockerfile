@@ -8,6 +8,8 @@ WORKDIR /app
 
 # Update base OS
 RUN apt-get -y update && apt-get -y upgrade
+# Install useful tools
+RUN apt-get -y install git curl
 # Install Python 3(.4)
 RUN apt-get -y install python3 python3-dev python-virtualenv
 # Install dependencies for Python libs
