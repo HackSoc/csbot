@@ -8,5 +8,4 @@ if [[ ! -z "$ROLLBAR_ACCESS_TOKEN" ]] ; then
         -F local_username=`whoami`
 fi
 
-env
 exec ./run_csbot.py $@
