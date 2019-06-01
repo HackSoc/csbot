@@ -272,7 +272,6 @@ class TestNonBlocking:
 
     @pytest.mark.asyncio
     async def test_non_blocking_command(self, event_loop, bot_helper, aioresponses):
-        # TODO: use aioresponses instead, once it supports async callbacks
         bot_helper.reset_mock()
 
         event = asyncio.Event(loop=event_loop)

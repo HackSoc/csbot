@@ -12,7 +12,7 @@ import lxml.etree
 import lxml.html
 
 from ..plugin import Plugin
-from ..util import Struct, simple_http_get_async
+from ..util import Struct, simple_http_get_async, maybe_future_result
 
 
 LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
@@ -186,10 +186,7 @@ class LinkInfo(Plugin):
         for h in self.handlers:
             match = h.filter(url)
             if match:
-                if asyncio.iscoroutinefunction(h.handler):
-                    result = await h.handler(url, match)
-                else:
-                    result = h.handler(url, match)
+                result = await maybe_future_result(h.handler(url, match), log=self.log)
                 if result is not None:
                     # Useful result, return it
                     return result

@@ -9,6 +9,7 @@ from csbot.plugin import Plugin, SpecialPlugin
 from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
+from csbot.util import maybe_future_result
 
 from .irc import IRCClient, IRCUser
 
@@ -169,11 +170,7 @@ class Bot(SpecialPlugin, IRCClient):
             return
 
         f, _, _ = self.commands[event['command']]
-        # Done like this instead of `if asyncio.iscoroutinefunction(...):` because `f` is a
-        # csbot.plugin.LazyMethod object
-        result = f(event)
-        if asyncio.iscoroutine(result):
-            await result
+        await maybe_future_result(f(event), log=self.log)
 
     @Plugin.command('help', help=('help [command]: show help for command, or '
                                   'show available commands'))

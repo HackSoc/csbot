@@ -1,10 +1,15 @@
 import shlex
 from itertools import tee
 from collections import OrderedDict
+import asyncio
+import logging
 
 import requests
 from async_generator import asynccontextmanager
 import aiohttp
+
+
+LOG = logging.getLogger(__name__)
 
 
 class User(object):
@@ -315,3 +320,35 @@ class Struct(object, metaclass=StructMeta):
         return '{}({})'.format(self.__class__.__name__,
                                ', '.join('{}={!r}'.format(k, getattr(self, k))
                                          for k in self._fields))
+
+
+def maybe_future(result, *, on_error=None, log=LOG, loop=None):
+    """Make *result* a future if possible, otherwise return None.
+
+    If *result* is not None but also not awaitable, it is passed to *on_error*
+    if supplied, otherwise logged as a warning on *log*.
+    """
+    if result is None:
+        return None
+    try:
+        future = asyncio.ensure_future(result, loop=loop)
+    except TypeError:
+        if on_error:
+            on_error(result)
+        else:
+            log.warning('maybe_future() ignoring non-awaitable result %r', result)
+        return None
+    return future
+
+
+async def maybe_future_result(result, **kwargs):
+    """Get actual result from *result*.
+
+    If *result* is awaitable, return the result of awaiting it, otherwise just
+    return *result*.
+    """
+    future = maybe_future(result, **kwargs)
+    if future:
+        return await result
+    else:
+        return future

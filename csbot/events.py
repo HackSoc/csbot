@@ -4,7 +4,7 @@ import re
 import asyncio
 import logging
 
-from csbot.util import parse_arguments
+from csbot.util import parse_arguments, maybe_future
 
 
 LOG = logging.getLogger('csbot.events')
@@ -200,14 +200,13 @@ class HybridEventRunner:
                     self._handle_exception(exception=e)
                     continue
                 # If the handler returned an awaitable (e.g. coroutine object), try to schedule it
-                if result is None:
-                    continue
-                try:
-                    future = asyncio.ensure_future(result, loop=self.loop)
-                except TypeError:
-                    LOG.exception('non-awaitable result %r handling event %r', result, event)
-                    continue
-                new_futures.add(future)
+                future = maybe_future(
+                    result,
+                    log=LOG,
+                    loop=self.loop,
+                )
+                if future:
+                    new_futures.add(future)
         self.new_events.clear()
         if len(new_futures) > 0:
             LOG.debug('got %s new futures', len(new_futures))
