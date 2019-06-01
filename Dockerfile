@@ -7,5 +7,8 @@ COPY csbot.*.cfg requirements.txt run_csbot.py docker-entrypoint.sh ./
 
 RUN pip install -r requirements.txt
 
+ARG SOURCE_COMMIT
+ENV SOURCE_COMMIT $SOURCE_COMMIT
+
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["./csbot.cfg"]
