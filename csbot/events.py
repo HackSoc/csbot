@@ -159,6 +159,23 @@ class AsyncEventRunner(object):
 
 
 class HybridEventRunner:
+    """
+    A hybrid synchronous/asynchronous event runner.
+
+    *get_handlers* is called for each event passed to :meth:`post_event`, and
+    should return an iterable of callables to handle that event, each of which
+    will be called with the event object.
+
+    Events are processed in the order they are received, with all handlers for
+    an event being called before the handlers for the next event. If a handler
+    returns an awaitable, it is added to a set of asynchronous tasks to wait on.
+
+    The future returned by :meth:`post_event` completes only when all events
+    have been processed and all asynchronous tasks have completed.
+
+    :param get_handlers: Get functions to call for an event
+    :param loop: asyncio event loop to use (default: use current loop)
+    """
     def __init__(self, get_handlers, loop=None):
         self.get_handlers = get_handlers
         self.loop = loop
@@ -176,6 +193,13 @@ class HybridEventRunner:
         self.future = None
 
     def post_event(self, event):
+        """Post *event* to be handled soon.
+
+        *event* is added to the queue of events.
+
+        Returns a future which resolves when the handlers of *event* (and all
+        events generated during those handlers) have completed.
+        """
         self.events.append(event)
         LOG.debug('added event %s, pending=%s', event, len(self.events))
         self.new_events.set()
@@ -184,6 +208,8 @@ class HybridEventRunner:
         return self.future
 
     def _run_events(self):
+        """Run event handlers, accumulating awaitables as futures.
+        """
         new_futures = set()
         while len(self.events) > 0:
             LOG.debug('processing events (%s remaining)', len(self.events))
@@ -213,6 +239,11 @@ class HybridEventRunner:
         return new_futures
 
     async def _run(self):
+        """Run the event runner loop.
+
+        Process events and await futures until all events and handlers have been
+        processed.
+        """
         # Use self as context manager so an escaping exception doesn't break
         # the event runner instance permanently (i.e. we clean up the future)
         with self:
