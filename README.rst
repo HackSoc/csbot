@@ -29,6 +29,22 @@ Docker containers (a MongoDB instance and the bot)::
 
     $ docker-compose up
 
+This will use the `published image`_. To build locally::
+
+    $ docker build -t alanbriolat/csbot:latest .
+
+Environment variables to expose to the bot, e.g. for sensitive configuration
+values, should be defined in ``deploy.env``.  Environment variables used in
+``docker-compose.yml`` should be defined in ``.env``:
+
+==========================  ==================  ===========
+Variable                    Default             Description
+==========================  ==================  ===========
+``CSBOT_CONFIG_LOCAL``      ``./csbot.cfg``     Path to config file in host filesystem to mount at ``/app/csbot.cfg``
+``CSBOT_CONFIG``            ``csbot.cfg``       Path to config file in container, relative to ``/app``
+``CSBOT_WATCHTOWER``        ``false``           Set to ``true`` to use Watchtower_ to auto-update when published container is updated
+==========================  ==================  ===========
+
 Backup MongoDB once services are running::
 
     $ docker-compose exec -T mongodb mongodump --archive --gzip --quiet > foo.mongodump.gz
@@ -73,3 +89,5 @@ We're also using Travis-CI for continuous integration and continuous deployment.
 .. _asyncio: https://docs.python.org/3/library/asyncio.html
 .. _lxml: http://lxml.de/
 .. _Docker Compose: https://docs.docker.com/compose/
+.. _published image: https://hub.docker.com/r/alanbriolat/csbot
+.. _Watchtower: https://containrrr.github.io/watchtower/

@@ -1,26 +1,15 @@
-FROM ubuntu:18.04
-
-# From python:3.5 docker image, set locale
-ENV LANG C.UTF-8
+FROM python:3.7
 
 VOLUME /app
 WORKDIR /app
+COPY csbot ./csbot
+COPY csbot.*.cfg requirements.txt run_csbot.py docker-entrypoint.sh ./
+RUN find . -name '*.pyc' -delete
 
-# Update base OS
-RUN apt-get -y update && apt-get -y upgrade
-# Install Python 3(.4)
-RUN apt-get -y install python3 python3-dev python-virtualenv
-# Install dependencies for Python libs
-RUN apt-get -y install libxml2-dev libxslt1-dev zlib1g-dev
+RUN pip install -r requirements.txt
 
-# Copy needed files to build docker image
-ADD requirements.txt docker-entrypoint.sh ./
-
-# Create virtualenv
-RUN virtualenv -p python3 /venv
-# Populate virtualenv
-RUN ./docker-entrypoint.sh pip install --upgrade pip
-RUN ./docker-entrypoint.sh pip install -r requirements.txt
+ARG SOURCE_COMMIT
+ENV SOURCE_COMMIT $SOURCE_COMMIT
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["./run_csbot.py", "csbot.cfg"]
+CMD ["./csbot.cfg"]
