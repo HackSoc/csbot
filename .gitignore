@@ -27,7 +27,7 @@ cabal-dev
 *.egg
 *.egg-info
 dist
-build
+build/
 eggs
 parts
 bin
@@ -58,3 +58,9 @@ htmlcov
 
 # Linters
 .ropeproject/
+
+# Project-specific files
+csbot.cfg
+.env
+deploy.env
+mongodb-data/
