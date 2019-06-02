@@ -24,12 +24,3 @@ notifications:
     - irc.freenode.org#cs-york-dev
     skip_join: true
     use_notice: true
-
-deploy:
-  provider: heroku
-  api_key:
-    secure: jHzS/L/cN/6gCNJrmVCVDb0V4+Zc1b/PnTYcVfoaAw7/USIb2ZQbU6uwPCpGZ8EL/dQlgOCwJY1UYzowm5d6xvXw+9+iHOIBAAgPe0VEmJ2GMPd1/n8cl5CiJ+LF3NXyBml/F4BL/2wm+kZUxINeZfJaim2OAd9g8PfgpHUey5A=
-  app: csyorkbot
-  on:
-    repo: HackSoc/csbot
-    python: '3.6'
