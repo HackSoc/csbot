@@ -4,9 +4,13 @@ import signal
 import os
 
 import click
+import aiohttp
 import rollbar
 
 from .core import Bot
+
+
+LOG = logging.getLogger(__name__)
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -22,10 +26,12 @@ from .core import Bot
               help='Turn on all debug logging.')
 @click.option('--colour/--no-colour', 'colour_logging', default=None,
               help='Use colour in logging. [default: automatic]')
-@click.option('--rollbar/--no-rollbar', 'use_rollbar', default=False,
-              help='Enable Rollbar error reporting.')
+@click.option('--rollbar-token', default=None,
+              help='Rollbar access token, enables Rollbar error reporting.')
+@click.option('--env-name', default='development',
+              help='Deployment environment name. [default: development]')
 @click.argument('config', type=click.File('r'))
-def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colour_logging, use_rollbar):
+def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colour_logging, rollbar_token, env_name):
     """Run an IRC bot from a configuration file.
     """
     # Apply "debug all" option
@@ -73,10 +79,9 @@ def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colou
     client = Bot(config)
     client.bot_setup()
 
-    # Configure Rollbar for exception reporting
-    if use_rollbar:
-        rollbar.init(os.environ['ROLLBAR_ACCESS_TOKEN'],
-                     os.environ.get('ROLLBAR_ENV', 'development'))
+    # Configure Rollbar for exception reporting, report deployment
+    if rollbar_token:
+        rollbar.init(rollbar_token, env_name)
 
         def handler(loop, context):
             exception = context.get('exception')
@@ -87,6 +92,28 @@ def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colou
             rollbar.report_exc_info(exc_info)
             loop.default_exception_handler(context)
         client.loop.set_exception_handler(handler)
+
+        async def rollbar_report_deploy(revision):
+            async with aiohttp.ClientSession() as session:
+                request = session.post(
+                    'https://api.rollbar.com/api/1/deploy/',
+                    data={
+                        'access_token': rollbar_token,
+                        'environment': env_name,
+                        'revision': revision,
+                    },
+                )
+                async with request as response:
+                    data = await response.json()
+                    if response.status == 200:
+                        LOG.info('Reported deploy to Rollbar: env=%s revision=%s deploy_id=%s',
+                                 env_name, revision, data['data']['deploy_id'])
+                    else:
+                        LOG.error('Error reporting deploy to Rollbar: %s', data['message'])
+
+        revision = os.environ.get('SOURCE_COMMIT', None)
+        if revision:
+            client.loop.run_until_complete(rollbar_report_deploy(revision))
 
     # Run the client
     def stop():
