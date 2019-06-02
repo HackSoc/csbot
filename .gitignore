@@ -58,3 +58,9 @@ htmlcov
 
 # Linters
 .ropeproject/
+
+# Project-specific files
+csbot.cfg
+.env
+deploy.env
+mongodb-data/
