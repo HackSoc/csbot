@@ -1,6 +1,5 @@
 import collections
 import itertools
-import asyncio
 
 import configparser
 import straight.plugin

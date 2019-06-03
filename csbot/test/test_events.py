@@ -339,7 +339,7 @@ class TestHybridEventRunner:
             mock.call('a'),
         ]
         assert complete == ['a1']
-        
+
         # Unblock a2 and allow some tasks to run:
         # - a2 should complete
         # - post_event('b') should be called (by a2)
@@ -359,7 +359,7 @@ class TestHybridEventRunner:
             mock.call('f'),
         ]
         assert complete == ['a1', 'a2', 'b1', 'b2', 'c', 'd']
-        
+
         # Unblock b3 and allow some tasks to run:
         # - b3 should complete
         # - post_event('e') should be called (by b3)

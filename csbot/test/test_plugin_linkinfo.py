@@ -165,7 +165,7 @@ async def test_not_found(bot_helper, aioresponses):
     # Test our assumptions: direct request should raise connection error, because aioresponses
     # is mocking the internet
     with pytest.raises(aiohttp.ClientConnectionError):
-        async with aiohttp.ClientSession() as session, session.get('http://example.com/') as resp:
+        async with aiohttp.ClientSession() as session, session.get('http://example.com/'):
             pass
 
     # Should result in an error message from linkinfo (and implicitly no exception raised)

@@ -5,7 +5,6 @@ import collections
 from collections import namedtuple
 import datetime
 from functools import partial
-import asyncio
 
 import aiohttp
 import lxml.etree

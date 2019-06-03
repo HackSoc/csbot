@@ -1,4 +1,3 @@
-from distutils.version import StrictVersion
 import re
 
 import pytest
@@ -90,7 +89,7 @@ def pre_irc_client(aioresponses):
 @pytest.mark.bot(config="""\
     [@bot]
     plugins = youtube
-    
+
     [youtube]
     api_key = abc
     """)
@@ -112,7 +111,7 @@ class TestYoutubePlugin:
 @pytest.mark.bot(config="""\
     [@bot]
     plugins = linkinfo youtube
-    
+
     [youtube]
     api_key = abc
     """)
