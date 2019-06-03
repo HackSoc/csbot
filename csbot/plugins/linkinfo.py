@@ -5,14 +5,13 @@ import collections
 from collections import namedtuple
 import datetime
 from functools import partial
-from contextlib import closing
 
-import requests
+import aiohttp
 import lxml.etree
 import lxml.html
 
 from ..plugin import Plugin
-from ..util import simple_http_get, Struct
+from ..util import Struct, simple_http_get_async, maybe_future_result
 
 
 LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
@@ -103,7 +102,7 @@ class LinkInfo(Plugin):
         self.excludes.append(filter)
 
     @Plugin.command('link')
-    def link_command(self, e):
+    async def link_command(self, e):
         """Handle the "link" command.
 
         Fetch information about a specified URL, e.g.
@@ -123,7 +122,7 @@ class LinkInfo(Plugin):
             url = 'http://' + url
 
         # Get info for the URL
-        result = self.get_link_info(url)
+        result = await self.get_link_info(url)
         self._log_if_error(result)
         # See if it was marked as NSFW in the command text
         result.nsfw |= 'nsfw' in rest.lower()
@@ -131,7 +130,7 @@ class LinkInfo(Plugin):
         e.reply(result.get_message())
 
     @Plugin.hook('core.message.privmsg')
-    def scan_privmsg(self, e):
+    async def scan_privmsg(self, e):
         """Scan the data of PRIVMSG events for URLs and respond with
         information about them.
         """
@@ -152,7 +151,7 @@ class LinkInfo(Plugin):
                 break
 
             # Get info for the URL
-            result = self.get_link_info(part)
+            result = await self.get_link_info(part)
             self._log_if_error(result)
 
             if result.is_error:
@@ -168,7 +167,7 @@ class LinkInfo(Plugin):
                 # ... and since we got a useful result, stop processing the message
                 break
 
-    def get_link_info(self, original_url):
+    async def get_link_info(self, original_url):
         """Get information about a URL.
 
         Using the *original_url* string, run the chain of URL handlers and
@@ -186,7 +185,7 @@ class LinkInfo(Plugin):
         for h in self.handlers:
             match = h.filter(url)
             if match:
-                result = h.handler(url, match)
+                result = await maybe_future_result(h.handler(url, match), log=self.log)
                 if result is not None:
                     # Useful result, return it
                     return result
@@ -205,11 +204,11 @@ class LinkInfo(Plugin):
             # Invoke the default handler if not excluded
             else:
                 try:
-                    return self.scrape_html_title(url)
-                except requests.exceptions.ConnectionError:
+                    return await self.scrape_html_title(url)
+                except aiohttp.ClientConnectionError:
                     return make_error('Connection error')
 
-    def scrape_html_title(self, url):
+    async def scrape_html_title(self, url):
         """Scrape the ``<title>`` tag contents from the HTML page at *url*.
 
         Returns a :class:`LinkInfoResult`.
@@ -217,11 +216,11 @@ class LinkInfo(Plugin):
         make_error = partial(LinkInfoResult, url.geturl(), is_error=True)
 
         # Let's see what's on the other end...
-        with closing(simple_http_get(url.geturl(), stream=True)) as r:
+        async with simple_http_get_async(url.geturl()) as r:
             # Only bother with 200 OK
-            if r.status_code != requests.codes.ok:
-                return make_error('HTTP request failed: {}'
-                                  .format(r.status_code))
+            if r.status != 200:
+                return make_error('HTTP request failed: {} {}'
+                                  .format(r.status, r.reason))
             # Only process HTML-ish responses
             if 'Content-Type' not in r.headers:
                 return make_error('No Content-Type header')
@@ -240,8 +239,8 @@ class LinkInfo(Plugin):
             # If present, charset attribute in HTTP Content-Type header takes
             # precedence, but fallback to default if encoding isn't recognised
             parser = lxml.html.html_parser
-            if 'charset=' in r.headers['content-type']:
-                encoding = r.headers['content-type'].rsplit('=', 1)[1]
+            if r.charset is not None:
+                encoding = r.charset
                 try:
                     parser = lxml.html.HTMLParser(encoding=encoding)
                 except LookupError:
@@ -252,7 +251,7 @@ class LinkInfo(Plugin):
             # because chunk-encoded responses iterate over chunks rather than
             # the size we request...
             chunk = b''
-            for next_chunk in r.iter_content(self.config_get('max_response_size')):
+            async for next_chunk in r.content.iter_chunked(self.config_get('max_response_size')):
                 chunk += next_chunk
                 if len(chunk) >= self.config_get('max_response_size'):
                     break

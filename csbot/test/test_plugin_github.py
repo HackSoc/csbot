@@ -54,7 +54,7 @@ class TestGitHubPlugin:
     fmt.issue_text = {issue[title]} ({issue[html_url]})
     fmt.pr_num = PR #{pull_request[number]}
     fmt.pr_text = {pull_request[title]} ({pull_request[html_url]})
-    
+
     # Format strings for specific events
     fmt/create = {fmt.source} created {ref_type} {ref} ({repository[html_url]}/tree/{ref})
     fmt/delete = {fmt.source} deleted {ref_type} {ref}
@@ -67,7 +67,7 @@ class TestGitHubPlugin:
     fmt/push/pushed = {fmt.source} pushed {count} new commit(s) to {short_ref}: {compare}
     fmt/push/forced = {fmt.source} updated {short_ref}: {compare}
     fmt/release/* = {fmt.source} {event_subtype} release {release[name]}: {release[html_url]}
-    
+
     [github/alanbriolat/csbot-webhook-test]
     notify = #mychannel
     """
@@ -217,7 +217,7 @@ plugins = webserver webhook github
 [webhook]
 url_secret = test_url
 [github]
-secret = 
+secret =
 """)
 async def test_signature_ignored(bot_helper, client):
     """X-Hub-Signature invalid, but secret is blank, so not verified and handler called"""

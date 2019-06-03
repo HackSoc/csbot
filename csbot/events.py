@@ -4,11 +4,10 @@ import re
 import asyncio
 import logging
 
-from csbot.util import parse_arguments
+from csbot.util import parse_arguments, maybe_future
 
 
 LOG = logging.getLogger('csbot.events')
-LOG.setLevel(logging.INFO)
 
 
 class ImmediateEventRunner(object):
@@ -157,6 +156,133 @@ class AsyncEventRunner(object):
                     # New pending_event.wait(), because the old one was used up.
                     new_pending = self.loop.create_task(self.pending_event.wait())
                     not_done.add(new_pending)
+
+
+class HybridEventRunner:
+    """
+    A hybrid synchronous/asynchronous event runner.
+
+    *get_handlers* is called for each event passed to :meth:`post_event`, and
+    should return an iterable of callables to handle that event, each of which
+    will be called with the event object.
+
+    Events are processed in the order they are received, with all handlers for
+    an event being called before the handlers for the next event. If a handler
+    returns an awaitable, it is added to a set of asynchronous tasks to wait on.
+
+    The future returned by :meth:`post_event` completes only when all events
+    have been processed and all asynchronous tasks have completed.
+
+    :param get_handlers: Get functions to call for an event
+    :param loop: asyncio event loop to use (default: use current loop)
+    """
+    def __init__(self, get_handlers, loop=None):
+        self.get_handlers = get_handlers
+        self.loop = loop
+
+        self.events = deque()
+        self.new_events = asyncio.Event(loop=self.loop)
+        self.futures = set()
+        self.future = None
+
+    def __enter__(self):
+        LOG.debug('entering event runner')
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        LOG.debug('exiting event runner')
+        self.future = None
+
+    def post_event(self, event):
+        """Post *event* to be handled soon.
+
+        *event* is added to the queue of events.
+
+        Returns a future which resolves when the handlers of *event* (and all
+        events generated during those handlers) have completed.
+        """
+        self.events.append(event)
+        LOG.debug('added event %s, pending=%s', event, len(self.events))
+        self.new_events.set()
+        if not self.future:
+            self.future = self.loop.create_task(self._run())
+        return self.future
+
+    def _run_events(self):
+        """Run event handlers, accumulating awaitables as futures.
+        """
+        new_futures = set()
+        while len(self.events) > 0:
+            LOG.debug('processing events (%s remaining)', len(self.events))
+            # Get next event
+            event = self.events.popleft()
+            LOG.debug('processing event: %s', event)
+            # Handle the event
+            for handler in self.get_handlers(event):
+                # Attempt to run the handler, but don't break everything if the handler fails
+                LOG.debug('running handler: %r', handler)
+                try:
+                    result = handler(event)
+                except Exception as e:
+                    self._handle_exception(exception=e)
+                    continue
+                # If the handler returned an awaitable (e.g. coroutine object), try to schedule it
+                future = maybe_future(
+                    result,
+                    log=LOG,
+                    loop=self.loop,
+                )
+                if future:
+                    new_futures.add(future)
+        self.new_events.clear()
+        if len(new_futures) > 0:
+            LOG.debug('got %s new futures', len(new_futures))
+        return new_futures
+
+    async def _run(self):
+        """Run the event runner loop.
+
+        Process events and await futures until all events and handlers have been
+        processed.
+        """
+        # Use self as context manager so an escaping exception doesn't break
+        # the event runner instance permanently (i.e. we clean up the future)
+        with self:
+            # Run until no more events or lingering futures
+            while len(self.events) + len(self.futures) > 0:
+                # Synchronously run event handler and collect new futures
+                new_futures = self._run_events()
+                self.futures |= new_futures
+                # Don't bother waiting if no futures to wait on
+                if len(self.futures) == 0:
+                    continue
+
+                # Run until one or more futures complete (or new events are added)
+                new_events = self.loop.create_task(self.new_events.wait())
+                LOG.debug('waiting on %s futures', len(self.futures))
+                done, pending = await asyncio.wait(self.futures | {new_events},
+                                                   loop=self.loop,
+                                                   return_when=asyncio.FIRST_COMPLETED)
+                # Remove done futures from the set of futures being waited on
+                done_futures = done - {new_events}
+                LOG.debug('%s of %s futures done', len(done_futures), len(self.futures))
+                self.futures -= done_futures
+                for f in done_futures:
+                    if f.exception() is not None:
+                        self._handle_exception(future=f)
+                if new_events.done():
+                    LOG.debug('new events to process')
+                else:
+                    # If no new events, cancel the waiter, because we'll create a new one next iteration
+                    new_events.cancel()
+
+    def _handle_exception(self, *, message='Unhandled exception in event handler', exception=None, future=None):
+        if exception is None and future is not None:
+            exception = future.exception()
+        self.loop.call_exception_handler({
+            'message': message,
+            'exception': exception,
+            'future': future,
+        })
 
 
 class Event(dict):

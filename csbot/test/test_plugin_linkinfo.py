@@ -1,11 +1,15 @@
 # coding=utf-8
 from lxml.etree import LIBXML_VERSION
 import unittest.mock as mock
+import asyncio
 
 import pytest
-import requests
+import asynctest.mock
+import aiohttp
+from aioresponses import CallbackResult
 
-from csbot.util import simple_http_get
+from csbot.plugin import Plugin
+import csbot.core
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
@@ -133,49 +137,63 @@ pytestmark = pytest.mark.bot(config="""\
 
 
 @pytest.fixture
-def irc_client(irc_client):
-    irc_client.connection_made()
+async def irc_client(irc_client):
+    await irc_client.connection_made()
     return irc_client
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body, expected_title", encoding_test_cases,
                          ids=[_[0] for _ in encoding_test_cases])
-def test_encoding_handling(bot_helper, responses, url, content_type, body, expected_title):
-    responses.add(responses.GET, url, body=body, content_type=content_type, stream=True)
-    result = bot_helper['linkinfo'].get_link_info(url)
+async def test_encoding_handling(bot_helper, aioresponses, url, content_type, body, expected_title):
+    aioresponses.get(url, status=200, body=body, headers={'Content-Type': content_type})
+    result = await bot_helper['linkinfo'].get_link_info(url)
     assert result.text == expected_title
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body", error_test_cases,
                          ids=[_[0] for _ in error_test_cases])
-def test_html_title_errors(bot_helper, responses, url, content_type, body):
-    responses.add(responses.GET, url, body=body,
-                  content_type=content_type, stream=True)
-    result = bot_helper['linkinfo'].get_link_info(url)
+async def test_html_title_errors(bot_helper, aioresponses, url, content_type, body):
+    aioresponses.get(url, status=200, body=body, headers={'Content-Type': content_type})
+    result = await bot_helper['linkinfo'].get_link_info(url)
     assert result.is_error
 
 
-def test_connection_error(bot_helper, responses):
-    # Check our assumptions: should be connection error because "responses" library is mocking the internet
-    with pytest.raises(requests.ConnectionError):
-        simple_http_get('http://example.com/foo/bar')
+@pytest.mark.asyncio
+async def test_not_found(bot_helper, aioresponses):
+    # Test our assumptions: direct request should raise connection error, because aioresponses
+    # is mocking the internet
+    with pytest.raises(aiohttp.ClientConnectionError):
+        async with aiohttp.ClientSession() as session, session.get('http://example.com/'):
+            pass
+
     # Should result in an error message from linkinfo (and implicitly no exception raised)
-    result = bot_helper['linkinfo'].get_link_info('http://example.com/foo/bar')
+    result = await bot_helper['linkinfo'].get_link_info('http://example.com/')
     assert result.is_error
 
 
-@pytest.mark.usefixtures("run_client")
 @pytest.mark.asyncio
 @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
-def test_scan_privmsg(bot_helper, msg, urls):
-    with mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info:
-        yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
+async def test_scan_privmsg(event_loop, bot_helper, aioresponses, msg, urls):
+    with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info:
+        await bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :' + msg)
         get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
 
-@pytest.mark.usefixtures("run_client")
 @pytest.mark.asyncio
-def test_scan_privmsg_rate_limit(bot_helper):
+@pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
+async def test_command(event_loop, bot_helper, aioresponses, msg, urls):
+    with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info, \
+        asynctest.mock.patch.object(bot_helper['linkinfo'], 'link_command',
+                                    wraps=bot_helper['linkinfo'].link_command) as link_command:
+        await bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :!link ' + msg)
+        get_link_info.assert_has_calls([mock.call(url) for url in urls])
+        assert link_command.call_count == 1
+
+
+@pytest.mark.asyncio
+def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
     """Test that we won't respond too frequently to URLs in messages.
 
     Unfortunately we can't currently test the passage of time, so the only
@@ -185,10 +203,103 @@ def test_scan_privmsg_rate_limit(bot_helper):
     linkinfo = bot_helper['linkinfo']
     count = int(linkinfo.config_get('rate_limit_count'))
     for i in range(count):
-        with mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
+        with asynctest.mock.patch.object(linkinfo, 'get_link_info', ) as get_link_info:
             yield from bot_helper.client.line_received(
                 ':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
             get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
-    with mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
+    with asynctest.mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
         yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
         assert not get_link_info.called
+
+
+class MockPlugin(Plugin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.handler_mock = mock.Mock(spec=callable)
+
+    @Plugin.hook('core.message.privmsg')
+    def privmsg(self, event):
+        self.handler_mock(event['message'])
+
+
+class TestNonBlocking:
+    class Bot(csbot.core.Bot):
+        available_plugins = csbot.core.Bot.available_plugins.copy()
+        available_plugins.update(mockplugin=MockPlugin)
+
+        # TODO: this is ugly, need to improve (a) subclassing behaviour and/or (b) test utilities
+        privmsg = Plugin.hook('core.message.privmsg')(csbot.core.Bot.privmsg)
+        fire_command = Plugin.hook('core.command')(csbot.core.Bot.fire_command)
+
+    CONFIG = f"""\
+    [@bot]
+    plugins = mockplugin linkinfo
+    """
+
+    pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
+
+    @pytest.mark.asyncio
+    async def test_non_blocking_privmsg(self, event_loop, bot_helper, aioresponses):
+        bot_helper.reset_mock()
+
+        event = asyncio.Event(loop=event_loop)
+
+        async def handler(url, **kwargs):
+            await event.wait()
+            return CallbackResult(status=200, content_type='text/html',
+                                  body=b'<html><head><title>foo</title></head><body></body></html>')
+        aioresponses.get('http://example.com/', callback=handler)
+
+        futures = bot_helper.receive([
+            ':nick!user@host PRIVMSG #channel :a',
+            ':nick!user@host PRIVMSG #channel :http://example.com/',
+            ':nick!user@host PRIVMSG #channel :b',
+        ])
+        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        assert bot_helper['mockplugin'].handler_mock.mock_calls == [
+            mock.call('a'),
+            mock.call('http://example.com/'),
+            mock.call('b'),
+        ]
+        bot_helper.client.send_line.assert_not_called()
+
+        event.set()
+        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        assert all(f.done() for f in futures)
+        bot_helper.client.send_line.assert_has_calls([
+            mock.call('NOTICE #channel :foo'),
+        ])
+
+    @pytest.mark.asyncio
+    async def test_non_blocking_command(self, event_loop, bot_helper, aioresponses):
+        bot_helper.reset_mock()
+
+        event = asyncio.Event(loop=event_loop)
+
+        async def handler(url, **kwargs):
+            await event.wait()
+            return CallbackResult(status=200, content_type='application/octet-stream',
+                                  body=b'<html><head><title>foo</title></head><body></body></html>')
+
+        aioresponses.get('http://example.com/', callback=handler)
+
+        futures = bot_helper.receive([
+            ':nick!user@host PRIVMSG #channel :a',
+            ':nick!user@host PRIVMSG #channel :!link http://example.com/',
+            ':nick!user@host PRIVMSG #channel :b',
+        ])
+        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        assert bot_helper['mockplugin'].handler_mock.mock_calls == [
+            mock.call('a'),
+            mock.call('!link http://example.com/'),
+            mock.call('b'),
+        ]
+        bot_helper.client.send_line.assert_not_called()
+
+        event.set()
+        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        assert all(f.done() for f in futures)
+        bot_helper.client.send_line.assert_has_calls([
+            mock.call('NOTICE #channel :Error: Content-Type not HTML-ish: '
+                      'application/octet-stream (http://example.com/)'),
+        ])
