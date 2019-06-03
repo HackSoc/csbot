@@ -373,9 +373,6 @@ class IRCClient:
         if self.__config['ircv3']:
             self.send(IRCMessage.create('CAP', ['END']))
 
-        # TODO: uncomment this? tests hang if uncommented...
-        # await self.wait_for_message(lambda m: (m.command_name == 'RPL_WELCOME', m))
-
         self._start_client_pings()
 
     async def connection_lost(self, exc):
