@@ -349,6 +349,6 @@ async def maybe_future_result(result, **kwargs):
     """
     future = maybe_future(result, **kwargs)
     if future:
-        return await result
+        return await future
     else:
-        return future
+        return result
