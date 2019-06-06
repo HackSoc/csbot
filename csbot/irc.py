@@ -262,6 +262,7 @@ class IRCClient:
         self.connected.clear()
         self.disconnected = asyncio.Event(loop=self.loop)
         self.disconnected.set()
+        self._last_message_received = self.loop.time()
         self._client_ping = None
         self._client_ping_counter = 0
 
@@ -387,6 +388,7 @@ class IRCClient:
 
     def line_received(self, line):
         """Callback for received raw IRC message."""
+        self._last_message_received = self.loop.time()
         msg = IRCMessage.parse(line)
         LOG.debug('>>> %s', msg.pretty)
         self.message_received(msg)
@@ -424,11 +426,24 @@ class IRCClient:
             self._client_ping = None
 
     async def _send_client_pings(self, interval):
+        """Send a client ``PING`` if no messages have been received for *interval* seconds."""
         self._client_ping_counter = 0
+        delay = interval
         while True:
-            await asyncio.sleep(interval)
-            self._client_ping_counter += 1
-            self.send_line(f'PING {self._client_ping_counter}')
+            await asyncio.sleep(delay)
+            now = self.loop.time()
+            remaining = self._last_message_received + interval - now
+
+            if remaining <= 0:
+                # Send the PING
+                self._client_ping_counter += 1
+                self.send_line(f'PING {self._client_ping_counter}')
+                # Wait for another interval
+                delay = interval
+            else:
+                # Wait until interval has elapsed since last message
+                delay = remaining
+
 
     class Waiter:
         predicate = None

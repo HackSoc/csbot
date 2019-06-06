@@ -132,8 +132,9 @@ class TestClientPing:
             'client_ping_interval': 3,
         }
 
-    @pytest.mark.asyncio(foo='bar')
+    @pytest.mark.asyncio
     async def test_client_PING(self, fast_forward, run_client):
+        """Check that client PING commands are sent at the expected interval."""
         run_client.reset_mock()
         run_client.client.send_line.assert_not_called()
         # Advance time, test that a ping was sent
@@ -159,6 +160,39 @@ class TestClientPing:
             mock.call('PING 3'),
             mock.call('PING 4'),
             mock.call('PING 5'),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_client_PING_only_when_needed(self, fast_forward, run_client):
+        """Check that client PING commands are sent relative to the last received message."""
+        run_client.reset_mock()
+        run_client.client.send_line.assert_not_called()
+        # Advance time to just before the second PING, check that the first PING was sent
+        await fast_forward(5)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+        ]
+        # Receive a message, this should reset the PING timer
+        run_client.receive(':nick!user@host PRIVMSG #channel :foo')
+        # Advance time to just after when the second PING would happen without any messages
+        # received, check that still only one PING was sent
+        await fast_forward(2)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+        ]
+        # Advance time to 4 seconds after the last message was received, and check that another
+        # PING has now been sent
+        await fast_forward(2)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
+        ]
+        # Disconnect, advance time, test that no more pings were sent
+        run_client.client.disconnect()
+        await fast_forward(12)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
         ]
 
 
