@@ -105,7 +105,11 @@ def main(config,
                 exc_info = (type(exception), exception, exception.__traceback__)
             else:
                 exc_info = None
-            rollbar.report_exc_info(exc_info)
+            extra_data = {
+                'csbot_event': context.get('csbot_event'),
+                'csbot_recent_messages': "\n".join(client.recent_messages),
+            }
+            rollbar.report_exc_info(exc_info, extra_data=extra_data)
             loop.default_exception_handler(context)
         client.loop.set_exception_handler(handler)
 

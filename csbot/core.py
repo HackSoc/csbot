@@ -83,6 +83,8 @@ class Bot(SpecialPlugin, IRCClient):
             client_ping_interval=int(self.config_get('client_ping')),
         )
 
+        self._recent_messages = collections.deque(maxlen=10)
+
         # Plumb in reply(...) method
         if self.config_getboolean('use_notice'):
             self.reply = self.notice
@@ -217,9 +219,14 @@ class Bot(SpecialPlugin, IRCClient):
         self.emit_new('core.raw.sent', {'message': line})
 
     def line_received(self, line):
+        self._recent_messages.append(line)
         fut = self.emit_new('core.raw.received', {'message': line})
         super().line_received(line)
         return fut
+
+    @property
+    def recent_messages(self):
+        return list(self._recent_messages)
 
     def on_welcome(self):
         self.emit_new('core.self.connected')

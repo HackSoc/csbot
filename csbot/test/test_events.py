@@ -581,6 +581,11 @@ class TestHybridEventRunner:
         assert complete == ['a2', 'a4', 'b2']
         assert event_runner.exception_handler.call_count == 3
 
+        # Check that exception handler calls have the correct event context
+        assert event_runner.exception_handler.mock_calls[0][1][1]['csbot_event'] == 'a'
+        assert event_runner.exception_handler.mock_calls[1][1][1]['csbot_event'] == 'a'
+        assert event_runner.exception_handler.mock_calls[2][1][1]['csbot_event'] == 'b'
+
 
 class TestEvent(unittest.TestCase):
     class DummyBot(object):

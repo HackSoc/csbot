@@ -220,23 +220,41 @@ class HybridEventRunner:
             for handler in self.get_handlers(event):
                 # Attempt to run the handler, but don't break everything if the handler fails
                 LOG.debug('running handler: %r', handler)
-                try:
-                    result = handler(event)
-                except Exception as e:
-                    self._handle_exception(exception=e)
-                    continue
-                # If the handler returned an awaitable (e.g. coroutine object), try to schedule it
-                future = maybe_future(
-                    result,
-                    log=LOG,
-                    loop=self.loop,
-                )
+                future = self._run_handler(handler, event)
                 if future:
                     new_futures.add(future)
         self.new_events.clear()
         if len(new_futures) > 0:
             LOG.debug('got %s new futures', len(new_futures))
         return new_futures
+
+    def _run_handler(self, handler, event):
+        """Call *handler* with *event* and log any exception.
+
+        If *handler* returns an awaitable, then it is wrapped in a coroutine that will log any
+        exception from awaiting it.
+        """
+        result = None
+        try:
+            result = handler(event)
+        except Exception as e:
+            self._handle_exception(exception=e, csbot_event=event)
+        future = maybe_future(
+            result,
+            log=LOG,
+            loop=self.loop,
+        )
+        if future:
+            future = asyncio.ensure_future(self._finish_async_handler(future, event), loop=self.loop)
+        return future
+
+    async def _finish_async_handler(self, future, event):
+        """Await *future* and log any exception.
+        """
+        try:
+            await future
+        except Exception as e:
+            self._handle_exception(future=future, csbot_event=event)
 
     async def _run(self):
         """Run the event runner loop.
@@ -266,22 +284,23 @@ class HybridEventRunner:
                 done_futures = done - {new_events}
                 LOG.debug('%s of %s futures done', len(done_futures), len(self.futures))
                 self.futures -= done_futures
-                for f in done_futures:
-                    if f.exception() is not None:
-                        self._handle_exception(future=f)
                 if new_events.done():
                     LOG.debug('new events to process')
                 else:
                     # If no new events, cancel the waiter, because we'll create a new one next iteration
                     new_events.cancel()
 
-    def _handle_exception(self, *, message='Unhandled exception in event handler', exception=None, future=None):
+    def _handle_exception(self, *, message='Unhandled exception in event handler',
+                          exception=None,
+                          future=None,
+                          csbot_event=None):
         if exception is None and future is not None:
             exception = future.exception()
         self.loop.call_exception_handler({
             'message': message,
             'exception': exception,
             'future': future,
+            'csbot_event': csbot_event,
         })
 
 
