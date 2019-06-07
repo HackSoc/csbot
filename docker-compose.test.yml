@@ -2,6 +2,6 @@ version: "3"
 
 services:
   sut:
-    build: .
+    image: "${IMAGE_NAME}"
     entrypoint: pytest
     command: []
