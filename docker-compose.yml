@@ -11,7 +11,7 @@ services:
       - ./deploy.env
     environment:
       MONGODB_URI: mongodb://mongodb:27017/csbot
-    command: ${CSBOT_CONFIG:-csbot.cfg}
+    command: csbot ${CSBOT_CONFIG:-csbot.cfg}
     ports:
       - "127.0.0.1:8180:80"
     labels:
