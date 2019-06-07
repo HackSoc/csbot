@@ -13,7 +13,10 @@ from .core import Bot
 LOG = logging.getLogger(__name__)
 
 
-@click.command(context_settings={'help_option_names': ['-h', '--help']})
+@click.command(context_settings={
+    'help_option_names': ['-h', '--help'],
+    'auto_envvar_prefix': 'CSBOT',
+})
 @click.option('--debug', '-d', is_flag=True, default=False,
               help='Turn on debug logging for the bot.')
 @click.option('--debug-irc', is_flag=True, default=False,
