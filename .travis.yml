@@ -3,19 +3,15 @@ dist: xenial
 language: python
 install:
   - pip install tox
-  - pip install python-coveralls
 
 matrix:
   include:
     - python: '3.6'
-      env: TOXENV=py36
+      env: TOXENV=py36-coveralls
     - python: '3.7'
-      env: TOXENV=py37
+      env: TOXENV=py37-coveralls
 
 script: tox
-
-after_success:
-  - coveralls
 
 cache:
   directories:
