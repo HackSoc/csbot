@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from csbot.test import read_fixture_file
+from . import read_fixture_file
 
 
 #: Tests are (number, url, content-type, fixture, expected)
