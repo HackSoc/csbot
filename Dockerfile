@@ -2,9 +2,9 @@ FROM python:3.7
 
 VOLUME /app
 WORKDIR /app
-COPY csbot ./csbot
-COPY csbot.*.cfg requirements.txt run_csbot.py docker-entrypoint.sh ./
-RUN find . -name '*.pyc' -delete
+COPY src ./src
+COPY tests ./tests
+COPY setup.py requirements.txt pytest.ini docker-entrypoint.sh csbot.*.cfg ./
 
 RUN pip install -r requirements.txt
 
