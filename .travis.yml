@@ -3,6 +3,7 @@ dist: xenial
 language: python
 install:
   - pip install tox
+  - pip install python-coveralls
 
 matrix:
   include:
