@@ -1,9 +1,9 @@
-from distutils.core import setup
+import setuptools
 
 
-setup(
+setuptools.setup(
     name='csbot',
-    version='0.1',
+    version='0.3.0',
     author='Alan Briolat',
     author_email='alan@briol.at',
     url='https://github.com/HackSoc/csbot',
