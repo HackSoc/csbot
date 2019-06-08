@@ -25,8 +25,6 @@ setuptools.setup(
         'async_generator',
         'rollbar',
     ],
-    extras_require={
-    },
     entry_points={
         'console_scripts': [
             'csbot = csbot:main',
