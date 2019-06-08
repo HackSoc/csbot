@@ -1,2 +1,14 @@
+# Exclude everything by default
+*
+
+# Whitelist specific files
+!src/**/*
+!tests/**/*
+!setup.py
+!requirements.txt
+!pytest.ini
+!csbot.*.cfg
+
+# Exclude Python temp files
 **/__pycache__
 **/*.pyc
