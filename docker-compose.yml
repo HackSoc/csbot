@@ -13,7 +13,7 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/csbot
     command: csbot ${CSBOT_CONFIG:-csbot.cfg}
     ports:
-      - "127.0.0.1:8180:80"
+      - "127.0.0.1:8180:8000"
     labels:
       - com.centurylinklabs.watchtower.enable=${CSBOT_WATCHTOWER:-false}
 
