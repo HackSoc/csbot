@@ -4,7 +4,7 @@ import pytest
 
 from csbot import core
 from csbot.plugin import Plugin
-from csbot.test.test_plugin_webserver import WebServer
+from .test_plugin_webserver import WebServer
 
 
 class WebhookTest(Plugin):

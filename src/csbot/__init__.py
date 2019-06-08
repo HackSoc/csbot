@@ -10,10 +10,22 @@ import rollbar
 from .core import Bot
 
 
+__version__ = None
+try:
+    import pkg_resources
+    __version__ = pkg_resources.get_distribution('csbot').version
+except (pkg_resources.DistributionNotFound, ImportError):
+    pass
+
+
 LOG = logging.getLogger(__name__)
 
 
-@click.command(context_settings={'help_option_names': ['-h', '--help']})
+@click.command(context_settings={
+    'help_option_names': ['-h', '--help'],
+    'auto_envvar_prefix': 'CSBOT',
+})
+@click.version_option(version=__version__)
 @click.option('--debug', '-d', is_flag=True, default=False,
               help='Turn on debug logging for the bot.')
 @click.option('--debug-irc', is_flag=True, default=False,

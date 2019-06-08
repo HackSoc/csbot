@@ -1,18 +1,17 @@
 sudo: false
 dist: xenial
 language: python
-python:
-  - 3.6
-  - 3.7
-
 install:
-  - pip install -r requirements.txt
+  - pip install tox
 
-script:
-  - pytest -v --cov
+matrix:
+  include:
+    - python: '3.6'
+      env: TOXENV=py36-coveralls
+    - python: '3.7'
+      env: TOXENV=py37-coveralls
 
-after_success:
-  - coveralls
+script: tox
 
 cache:
   directories:

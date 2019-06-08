@@ -4,8 +4,8 @@ import pytest
 import asynctest
 
 from csbot import core
-from csbot.test import read_fixture_file
-from csbot.test.test_plugin_webserver import WebServer
+from . import read_fixture_file
+from .test_plugin_webserver import WebServer
 
 
 class Bot(core.Bot):

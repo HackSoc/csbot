@@ -3,7 +3,7 @@ import re
 import pytest
 import urllib.parse as urlparse
 
-from csbot.test import read_fixture_file
+from . import read_fixture_file
 from csbot.plugins.youtube import YoutubeError
 
 

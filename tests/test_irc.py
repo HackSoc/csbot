@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from csbot.test import mock_open_connection, mock_open_connection_paused
+from . import mock_open_connection, mock_open_connection_paused
 from csbot.irc import IRCMessage, IRCParseError, IRCUser
 
 

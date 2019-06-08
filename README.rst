@@ -14,7 +14,7 @@ and running [1]_::
     $ python3 -m venv venv3
     $ source venv3/bin/activate
     $ pip install -r requirements.txt
-    $ ./run_csbot.py --help
+    $ csbot --help
 
 Look at ``csbot.deploy.cfg`` for an example of a bot configuration.
 
