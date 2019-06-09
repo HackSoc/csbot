@@ -23,6 +23,9 @@ setuptools.setup(
         'isodate>=0.5.1',
         'aiohttp>=3.5.1,<4.0',
         'async_generator',
+        'attrs',
+        'cattrs',
+        'toml',
         'rollbar',
     ],
     entry_points={
