@@ -1,8 +1,6 @@
 import collections
 import itertools
 
-import asyncio
-
 import configparser
 import straight.plugin
 
@@ -10,6 +8,7 @@ from csbot.plugin import Plugin, SpecialPlugin
 from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
+from csbot.util import maybe_future_result
 
 from .irc import IRCClient, IRCUser
 
@@ -23,6 +22,7 @@ class Bot(SpecialPlugin, IRCClient):
 
     #: Default configuration values
     CONFIG_DEFAULTS = {
+        'ircv3': False,
         'nickname': 'csyorkbot',
         'password': None,
         'auth_method': 'pass',
@@ -71,6 +71,7 @@ class Bot(SpecialPlugin, IRCClient):
         IRCClient.__init__(
             self,
             loop=loop,
+            ircv3=self.config_getboolean('ircv3'),
             nick=self.config_get('nickname'),
             username=self.config_get('username'),
             host=self.config_get('irc_host'),
@@ -81,6 +82,8 @@ class Bot(SpecialPlugin, IRCClient):
             client_ping_enabled=(int(self.config_get('client_ping')) > 0),
             client_ping_interval=int(self.config_get('client_ping')),
         )
+
+        self._recent_messages = collections.deque(maxlen=10)
 
         # Plumb in reply(...) method
         if self.config_getboolean('use_notice'):
@@ -95,7 +98,7 @@ class Bot(SpecialPlugin, IRCClient):
         self.commands = {}
 
         # Event runner
-        self.events = events.AsyncEventRunner(self._fire_hooks, self.loop)
+        self.events = events.HybridEventRunner(self._get_hooks, self.loop)
 
         # Keeps partial name lists between RPL_NAMREPLY and
         # RPL_ENDOFNAMES events
@@ -111,9 +114,8 @@ class Bot(SpecialPlugin, IRCClient):
         """
         self.plugins.teardown()
 
-    def _fire_hooks(self, event):
-        results = self.plugins.fire_hooks(event)
-        return list(itertools.chain(*results))
+    def _get_hooks(self, event):
+        return itertools.chain(*self.plugins.get_hooks(event.event_type))
 
     def post_event(self, event):
         return self.events.post_event(event)
@@ -161,8 +163,7 @@ class Bot(SpecialPlugin, IRCClient):
             self.post_event(command)
 
     @Plugin.hook('core.command')
-    @asyncio.coroutine
-    def fire_command(self, event):
+    async def fire_command(self, event):
         """Dispatch a command event to its callback.
         """
         # Ignore unknown commands
@@ -170,9 +171,7 @@ class Bot(SpecialPlugin, IRCClient):
             return
 
         f, _, _ = self.commands[event['command']]
-        if not asyncio.iscoroutinefunction(f):
-            f = asyncio.coroutine(f)
-        yield from f(event)
+        await maybe_future_result(f(event), log=self.log)
 
     @Plugin.command('help', help=('help [command]: show help for command, or '
                                   'show available commands'))
@@ -205,12 +204,14 @@ class Bot(SpecialPlugin, IRCClient):
         """
         self.bot.post_event(event)
 
-    def connection_made(self):
-        super().connection_made()
+    async def connection_made(self):
+        await super().connection_made()
+        if self.config_getboolean('ircv3'):
+            await self.request_capabilities(enable={'account-notify', 'extended-join'})
         self.emit_new('core.raw.connected')
 
-    def connection_lost(self, exc):
-        super().connection_lost(exc)
+    async def connection_lost(self, exc):
+        await super().connection_lost(exc)
         self.emit_new('core.raw.disconnected', {'reason': repr(exc)})
 
     def send_line(self, line):
@@ -218,9 +219,14 @@ class Bot(SpecialPlugin, IRCClient):
         self.emit_new('core.raw.sent', {'message': line})
 
     def line_received(self, line):
+        self._recent_messages.append(line)
         fut = self.emit_new('core.raw.received', {'message': line})
         super().line_received(line)
         return fut
+
+    @property
+    def recent_messages(self):
+        return list(self._recent_messages)
 
     def on_welcome(self):
         self.emit_new('core.self.connected')
@@ -327,14 +333,6 @@ class Bot(SpecialPlugin, IRCClient):
             'names': names,
             'raw_names': raw_names,
         })
-
-    # "IRC Client Capabilities"
-
-    def on_capabilities_available(self, capabilities):
-        super().on_capabilities_available(capabilities)
-        for cap in ['account-notify', 'extended-join']:
-            if cap in capabilities and cap not in self.enabled_capabilities:
-                self.enable_capability(cap)
 
     # Implement active account discovery via "formatted WHO"
 

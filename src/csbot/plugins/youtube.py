@@ -1,8 +1,8 @@
 import datetime
 import urllib.parse as urlparse
 
-import apiclient
 import isodate
+from aiogoogle import Aiogoogle, HTTPError
 
 from ..plugin import Plugin
 from .linkinfo import LinkInfoResult
@@ -39,11 +39,9 @@ class YoutubeError(Exception):
         self.http_error = http_error
 
     def __str__(self):
-        s = '%s: %s' % (self.http_error.resp.status, self.http_error._get_reason())
-        if self.http_error.resp.status == 400:
-            return s + ' - invalid API key?'
-        else:
-            return s
+        s = '%s: %s' % (self.http_error.res.status_code,
+                        self.http_error.res.json['error']['message'])
+        return s
 
 
 class Youtube(Plugin):
@@ -61,39 +59,29 @@ class Youtube(Plugin):
     RESPONSE = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}]'
     CMD_RESPONSE = RESPONSE + ' | {link}'
 
-    #: Hook for mocking HTTP responses to Google API client
-    http = None
-    client = None
+    async def get_video_json(self, id):
+        async with Aiogoogle(api_key=self.config_get('api_key')) as aiogoogle:
+            youtube_v3 = await aiogoogle.discover('youtube', 'v3')
+            request = youtube_v3.videos.list(id=id, hl='en', part='snippet,contentDetails,statistics')
+            response = await aiogoogle.as_api_key(request)
+            if len(response['items']) == 0:
+                return None
+            else:
+                return response['items'][0]
 
-    def setup(self):
-        super().setup()
-        self.client = apiclient.discovery.build(
-            'youtube',  'v3',
-            developerKey=self.config_get('api_key'),
-            http=self.http)
-
-    def get_video_json(self, id):
-        response = self.client.videos()\
-            .list(id=id, hl='en', part='snippet,contentDetails,statistics')\
-            .execute(http=self.http)
-        if len(response['items']) == 0:
-            return None
-        else:
-            return response['items'][0]
-
-    def _yt(self, url):
+    async def _yt(self, url):
         """Builds a nicely formatted version of youtube's own internal JSON"""
 
         vid_id = get_yt_id(url)
         if not vid_id:
             return None
         try:
-            json = self.get_video_json(vid_id)
+            json = await self.get_video_json(vid_id)
             if json is None:
                 return None
         except (KeyError, ValueError):
             return None
-        except apiclient.errors.HttpError as e:
+        except HTTPError as e:
             # Chain our own exception that gets a more sanitised error message
             raise YoutubeError(e) from e
 
@@ -155,10 +143,10 @@ class Youtube(Plugin):
     def linkinfo_integrate(self, linkinfo):
         """Handle recognised youtube urls."""
 
-        def page_handler(url, match):
+        async def page_handler(url, match):
             """Handles privmsg urls."""
             try:
-                response = self._yt(url)
+                response = await self._yt(url)
                 if response:
                     return LinkInfoResult(url.geturl(), self.RESPONSE.format(**response))
                 else:
@@ -171,11 +159,11 @@ class Youtube(Plugin):
 
     @Plugin.command('youtube')
     @Plugin.command('yt')
-    def all_hail_our_google_overlords(self, e):
+    async def all_hail_our_google_overlords(self, e):
         """I for one, welcome our Google overlords."""
 
         try:
-            response = self._yt(urlparse.urlparse(e["data"]))
+            response = await self._yt(urlparse.urlparse(e["data"]))
             if not response:
                 e.reply("Invalid video ID")
             else:

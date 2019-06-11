@@ -1,9 +1,8 @@
 import html
 import random
-import requests
 
 from ..plugin import Plugin
-from ..util import simple_http_get, cap_string, is_ascii
+from ..util import simple_http_get_async, cap_string, is_ascii
 from .linkinfo import LinkInfoResult
 
 
@@ -29,7 +28,7 @@ def fix_json_unicode(data):
     return data
 
 
-def get_info(number=None):
+async def get_info(number=None):
     """Gets the json data for a particular comic
     (or the latest, if none provided).
     """
@@ -38,13 +37,13 @@ def get_info(number=None):
     else:
         url = "http://xkcd.com/info.0.json"
 
-    httpdata = simple_http_get(url)
-    if httpdata.status_code != requests.codes.ok:
-        return None
+    async with simple_http_get_async(url) as httpdata:
+        if httpdata.status != 200:
+            return None
 
-    # Only care about part of the data
-    httpjson = httpdata.json()
-    data = {key: httpjson[key] for key in ["title", "alt", "num"]}
+        # Only care about part of the data
+        httpjson = await httpdata.json()
+        data = {key: httpjson[key] for key in ["title", "alt", "num"]}
 
     # Unfuck up unicode strings
     data = fix_json_unicode(data)
@@ -61,12 +60,12 @@ class xkcd(Plugin):
     class XKCDError(Exception):
         pass
 
-    def _xkcd(self, user_str):
+    async def _xkcd(self, user_str):
         """Get the url and title stuff.
         Returns a string of the response.
         """
 
-        latest = get_info()
+        latest = await get_info()
         if not latest:
             raise self.XKCDError("Error getting comics")
 
@@ -75,12 +74,12 @@ class xkcd(Plugin):
         if not user_str or user_str in {'0', 'latest', 'current', 'newest'}:
             requested = latest
         elif user_str in {'rand', 'random'}:
-            requested = get_info(random.randint(1, latest_num))
+            requested = await get_info(random.randint(1, latest_num))
         else:
             try:
                 num = int(user_str)
                 if 1 <= num <= latest_num:
-                    requested = get_info(num)
+                    requested = await get_info(num)
                 else:
                     raise self.XKCDError("Comic #{} is invalid. The latest is #{}"
                                          .format(num, latest_num))
@@ -99,14 +98,14 @@ class xkcd(Plugin):
     def linkinfo_integrate(self, linkinfo):
         """Handle recognised xkcd urls."""
 
-        def page_handler(url, match):
+        async def page_handler(url, match):
             """Use the main _xkcd function, then modify
             the result (if success) so it looks nicer.
             """
 
             # Remove leading and trailing '/'
             try:
-                response = self._xkcd(url.path.strip('/'))
+                response = await self._xkcd(url.path.strip('/'))
                 return LinkInfoResult(url.geturl(), '{1} - "{2}"'.format(*response))
             except self.XKCDError:
                 return None

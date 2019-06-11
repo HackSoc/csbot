@@ -2,20 +2,29 @@ version: "3"
 
 services:
   bot:
-    build: .
+    image: alanbriolat/csbot:latest
+    volumes:
+      - ${CSBOT_CONFIG_LOCAL:-./csbot.cfg}:/app/csbot.cfg
     links:
       - mongodb
-    volumes:
-      - .:/app
     env_file:
       - ./deploy.env
     environment:
       MONGODB_URI: mongodb://mongodb:27017/csbot
-    command: ./run_csbot.py csbot.deploy.cfg --rollbar
+    command: csbot ${CSBOT_CONFIG:-csbot.cfg}
     ports:
-      - "127.0.0.1:8180:80"
+      - "127.0.0.1:8180:8000"
+    labels:
+      - com.centurylinklabs.watchtower.enable=${CSBOT_WATCHTOWER:-false}
 
   mongodb:
     image: mongo:4.0
     volumes:
       - ./mongodb-data:/data/db
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --label-enable --cleanup --interval 120
+    restart: always

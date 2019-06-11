@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from csbot.test import read_fixture_file
+from . import read_fixture_file
 
 
 #: Tests are (number, url, content-type, fixture, expected)
@@ -87,48 +87,54 @@ json_test_cases = [
     """)
 class TestXKCDPlugin:
     @pytest.fixture
-    def populate_responses(self, bot_helper, responses):
-        """Populate all data into responses, don't assert that every request is fired."""
-        responses.assert_all_requests_are_fired = False
+    def populate_responses(self, bot_helper, aioresponses):
+        """Populate all data into responses."""
         for num, url, content_type, fixture, expected in json_test_cases:
-            responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type)
+            aioresponses.add(url, body=read_fixture_file(fixture),
+                             content_type=content_type)
 
+    @pytest.mark.asyncio
     @pytest.mark.usefixtures("populate_responses")
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
-    def test_correct(self, bot_helper, num, url, content_type, fixture, expected):
-        result = bot_helper['xkcd']._xkcd(num)
+    async def test_correct(self, bot_helper, num, url, content_type, fixture, expected):
+        result = await bot_helper['xkcd']._xkcd(num)
         assert result == expected
 
+    @pytest.mark.asyncio
     @pytest.mark.usefixtures("populate_responses")
-    def test_latest_success(self, bot_helper):
+    async def test_latest_success(self, bot_helper):
         # Also test the empty string
         num, url, content_type, fixture, expected = json_test_cases[0]
-        assert bot_helper['xkcd']._xkcd("") == expected
+        assert await bot_helper['xkcd']._xkcd("") == expected
 
+    @pytest.mark.asyncio
     @pytest.mark.usefixtures("populate_responses")
-    def test_random(self, bot_helper):
+    async def test_random(self, bot_helper):
         # !xkcd 221
         num, url, content_type, fixture, expected = json_test_cases[1]
         with patch("random.randint", return_value=1):
-            assert bot_helper['xkcd']._xkcd("rand") == expected
+            assert await bot_helper['xkcd']._xkcd("rand") == expected
 
-    def test_error(self, bot_helper, responses):
+    @pytest.mark.asyncio
+    async def test_error_1(self, bot_helper, aioresponses):
         num, url, content_type, fixture, _ = json_test_cases[0]  # Latest
         # Test if the comics are unavailable by making the latest return a 404
-        responses.add(responses.GET, url, body="404 - Not Found",
-                      content_type="text/html", status=404)
+        aioresponses.get(url, body="404 - Not Found",
+                         content_type="text/html", status=404)
         with pytest.raises(bot_helper['xkcd'].XKCDError):
-            bot_helper['xkcd']._xkcd("")
-        responses.reset()
+            await bot_helper['xkcd']._xkcd("")
 
+    @pytest.mark.asyncio
+    async def test_error_2(self, bot_helper, aioresponses):
+        num, url, content_type, fixture, _ = json_test_cases[0]  # Latest
         # Now override the actual 404 page and the latest "properly"
-        responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                      content_type=content_type)
-        responses.add(responses.GET, "http://xkcd.com/404/info.0.json",
-                      body="404 - Not Found", content_type="text/html",
-                      status=404)
+        aioresponses.get(url, body=read_fixture_file(fixture),
+                         content_type=content_type,
+                         repeat=True)
+        aioresponses.get("http://xkcd.com/404/info.0.json",
+                         body="404 - Not Found", content_type="text/html",
+                         status=404)
 
         error_cases = [
             "flibble",
@@ -139,7 +145,7 @@ class TestXKCDPlugin:
 
         for case in error_cases:
             with pytest.raises(bot_helper['xkcd'].XKCDError):
-                bot_helper['xkcd']._xkcd(case)
+                await bot_helper['xkcd']._xkcd(case)
 
 
 @pytest.mark.bot(config="""\
@@ -148,25 +154,26 @@ class TestXKCDPlugin:
     """)
 class TestXKCDLinkInfoIntegration:
     @pytest.fixture
-    def populate_responses(self, bot_helper, responses):
-        """Populate all data into responses, don't assert that every request is fired."""
-        responses.assert_all_requests_are_fired = False
+    def populate_responses(self, bot_helper, aioresponses):
+        """Populate all data into responses."""
         for num, url, content_type, fixture, expected in json_test_cases:
-            responses.add(responses.GET, url, body=read_fixture_file(fixture),
-                          content_type=content_type)
+            aioresponses.get(url, body=read_fixture_file(fixture),
+                             content_type=content_type)
 
     @pytest.mark.usefixtures("populate_responses")
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
-    def test_integration(self, bot_helper, num, url, content_type, fixture, expected):
+    async def test_integration(self, bot_helper, num, url, content_type, fixture, expected):
         _, title, alt = expected
         url = 'http://xkcd.com/{}'.format(num)
-        result = bot_helper['linkinfo'].get_link_info(url)
+        result = await bot_helper['linkinfo'].get_link_info(url)
         assert title in result.text
         assert alt in result.text
 
     @pytest.mark.usefixtures("populate_responses")
-    def test_integration_error(self, bot_helper):
+    @pytest.mark.asyncio
+    async def test_integration_error(self, bot_helper):
         # Error case
-        result = bot_helper['linkinfo'].get_link_info("http://xkcd.com/flibble")
+        result = await bot_helper['linkinfo'].get_link_info("http://xkcd.com/flibble")
         assert result.is_error

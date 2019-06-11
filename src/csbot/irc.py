@@ -6,6 +6,7 @@ from collections import namedtuple
 import codecs
 import base64
 import types
+from typing import Callable, Tuple, Any, Iterable, Awaitable
 
 from ._rfc import NUMERIC_REPLIES
 
@@ -190,6 +191,10 @@ class IRCCodec(codecs.Codec):
             return codecs.decode(input, 'cp1252', 'replace')
 
 
+class IRCClientError(Exception):
+    pass
+
+
 class IRCClient:
     """Internet Relay Chat client protocol.
 
@@ -228,6 +233,7 @@ class IRCClient:
     #: Generate a default configuration.  Easier to call this and update the
     #: result than relying on ``dict.copy()``.
     DEFAULTS = staticmethod(lambda: dict(
+        ircv3=False,
         nick='csbot',
         username=None,
         host='irc.freenode.net',
@@ -256,8 +262,11 @@ class IRCClient:
         self.connected.clear()
         self.disconnected = asyncio.Event(loop=self.loop)
         self.disconnected.set()
+        self._last_message_received = self.loop.time()
         self._client_ping = None
         self._client_ping_counter = 0
+
+        self._message_waiters = set()
 
         self.nick = self.__config['nick']
         self.available_capabilities = set()
@@ -270,9 +279,11 @@ class IRCClient:
             await self.connect()
             self.connected.set()
             self.disconnected.clear()
-            self.connection_made()
-            await self.read_loop()
-            self.connection_lost(self.reader.exception())
+            # Need to start read_loop() first so that connection_made() can await messages
+            read_loop_fut = self.loop.create_task(self.read_loop())
+            await self.connection_made()
+            await read_loop_fut
+            await self.connection_lost(self.reader.exception())
             self.connected.clear()
             self.disconnected.set()
             if self._exiting:
@@ -315,7 +326,7 @@ class IRCClient:
                 break
             self.line_received(self.codec.decode(line[:-2]))
 
-    def connection_made(self):
+    async def connection_made(self):
         """Callback for successful connection.
 
         Register with the IRC server.
@@ -328,38 +339,44 @@ class IRCClient:
         password = self.__config['password']
         auth_method = self.__config['auth_method']
 
+        if self.__config['ircv3']:
+            # Discover available capabilities
+            self.send(IRCMessage.create('CAP', ['LS']))
+            await self.wait_for_message(lambda m: (m.command == 'CAP' and m.params[1] == 'LS', m))
+
         if auth_method == 'pass':
             if password:
                 self.send(IRCMessage.create('PASS', [password]))
             self.set_nick(nick)
             self.send(user_msg)
         elif auth_method == 'sasl_plain':
-            # Just assume the server is going to understand our attempt at SASL
-            # authentication...
-            # TODO: proper stateful capability negotiation at this step
-            self.enable_capability('sasl')
+            sasl_enabled = await self.request_capabilities(enable={'sasl'})
             self.set_nick(nick)
             self.send(user_msg)
-            self.send(IRCMessage.create('AUTHENTICATE', ['PLAIN']))
-            # SASL PLAIN authentication message (https://tools.ietf.org/html/rfc4616)
-            # (assuming authzid = authcid = nick)
-            sasl_plain = '{}\0{}\0{}'.format(nick, nick, password)
-            # Well this is awkward... password string encoded to bytes as utf-8,
-            # base64-encoded to different bytes, converted back to string for
-            # use in the IRCMessage (which later encodes it as utf-8...)
-            sasl_plain_b64 = base64.b64encode(sasl_plain.encode('utf-8')).decode('ascii')
-            self.send(IRCMessage.create('AUTHENTICATE', [sasl_plain_b64]))
-            self.send(IRCMessage.create('CAP', ['END']))
+            if sasl_enabled:
+                self.send(IRCMessage.create('AUTHENTICATE', ['PLAIN']))
+                # SASL PLAIN authentication message (https://tools.ietf.org/html/rfc4616)
+                # (assuming authzid = authcid = nick)
+                sasl_plain = '{}\0{}\0{}'.format(nick, nick, password)
+                # Well this is awkward... password string encoded to bytes as utf-8,
+                # base64-encoded to different bytes, converted back to string for
+                # use in the IRCMessage (which later encodes it as utf-8...)
+                sasl_plain_b64 = base64.b64encode(sasl_plain.encode('utf-8')).decode('ascii')
+                self.send(IRCMessage.create('AUTHENTICATE', [sasl_plain_b64]))
+                sasl_success = await self.wait_for_message(lambda m: (m.command in ('903', '904'), m.command == '903'))
+                if not sasl_success:
+                    LOG.error('SASL authentication failed')
+            else:
+                LOG.error('could not enable "sasl" capability, skipping authentication')
         else:
             raise ValueError('unknown auth_method: {}'.format(auth_method))
 
-        # Discover available client capabilities, if any, which should get
-        # enabled in callbacks triggered by the CAP LS response
-        self.send_line('CAP LS')
+        if self.__config['ircv3']:
+            self.send(IRCMessage.create('CAP', ['END']))
 
         self._start_client_pings()
 
-    def connection_lost(self, exc):
+    async def connection_lost(self, exc):
         """Handle a broken connection by attempting to reconnect.
 
         Won't reconnect if the broken connection was deliberate (i.e.
@@ -371,12 +388,14 @@ class IRCClient:
 
     def line_received(self, line):
         """Callback for received raw IRC message."""
+        self._last_message_received = self.loop.time()
         msg = IRCMessage.parse(line)
         LOG.debug('>>> %s', msg.pretty)
         self.message_received(msg)
 
     def message_received(self, msg):
         """Callback for received parsed IRC message."""
+        self.process_wait_for_message(msg)
         self._dispatch_method('irc_' + msg.command_name, msg)
 
     def send_line(self, data):
@@ -407,33 +426,101 @@ class IRCClient:
             self._client_ping = None
 
     async def _send_client_pings(self, interval):
+        """Send a client ``PING`` if no messages have been received for *interval* seconds."""
         self._client_ping_counter = 0
+        delay = interval
         while True:
-            await asyncio.sleep(interval)
-            self._client_ping_counter += 1
-            self.send_line(f'PING {self._client_ping_counter}')
+            await asyncio.sleep(delay)
+            now = self.loop.time()
+            remaining = self._last_message_received + interval - now
+
+            if remaining <= 0:
+                # Send the PING
+                self._client_ping_counter += 1
+                self.send_line(f'PING {self._client_ping_counter}')
+                # Wait for another interval
+                delay = interval
+            else:
+                # Wait until interval has elapsed since last message
+                delay = remaining
+
+
+    class Waiter:
+        predicate = None
+        future = None
+
+        def __init__(self, predicate, future):
+            self.predicate = predicate
+            self.future = future
+
+    def wait_for_message(self, predicate: Callable[[IRCMessage], Tuple[bool, Any]]) -> asyncio.Future:
+        """Wait for a message that matches *predicate*.
+
+        *predicate* should return a `(did_match, result)` tuple, where *did_match* is a boolean
+        indicating if the message is a match, and *result* is the value to return.
+
+        Returns a future that is resolved with *result* on the first matching message.
+        """
+        waiter = self.Waiter(predicate, self.loop.create_future())
+        self._message_waiters.add(waiter)
+        return waiter.future
+
+    def process_wait_for_message(self, msg):
+        done = set()
+        for w in self._message_waiters:
+            if not w.future.done():
+                matched, result = False, None
+                try:
+                    matched, result = w.predicate(msg)
+                except Exception as e:
+                    w.future.set_exception(e)
+                if matched:
+                    w.future.set_result(result)
+            if w.future.done():
+                done.add(w)
+        self._message_waiters.difference_update(done)
 
     # Specific commands for sending messages
 
-    def enable_capability(self, name):
-        """Enable client capability *name*.
+    def request_capabilities(self, *, enable: Iterable[str] = None, disable: Iterable[str] = None) -> Awaitable[bool]:
+        """Request a change to the enabled IRCv3 capabilities.
 
-        Should wait for :meth:`on_capability_enabled` before assuming it is
-        enabled.
+        *enable* and *disable* are sets of capability names, with *disable* taking precedence.
+
+        Returns a future which resolves with True if the request is successful, or False otherwise.
         """
-        if name not in self.available_capabilities:
-            LOG.warning('Enabling client capability "{}" not in response to CAP LS'.format(name))
-        self.send_line('CAP REQ :{}'.format(name))
+        if not self.__config['ircv3']:
+            raise IRCClientError('configured with ircv3=False, cannot use capability negotiation')
 
-    def disable_capability(self, name):
-        """Disable client capability *name*.
+        enable_set = set(enable or ())
+        disable_set = set(disable or ())
+        enable_set.difference_update(disable_set)
+        unknown = enable_set.union(disable_set).difference(self.available_capabilities)
+        if unknown:
+            LOG.warning('attempting to request unknown capabilities: %r', unknown)
 
-        Should wait for :meth:`on_capability_disabled` befor assuming it is
-        disabled.
-        """
-        if name not in self.available_capabilities:
-            LOG.warning('Disabling client capability "{}" not in response to CAP LS'.format(name))
-        self.send_line('CAP REQ :-{}'.format(name))
+        request = ' '.join(sorted(enable_set) + [f'-{c}' for c in sorted(disable_set)])
+        if len(request) == 0:
+            LOG.warning('no capabilities requested, not sending CAP REQ')
+            fut = self.loop.create_future()
+            fut.set_result(True)
+            return fut
+        else:
+            message = IRCMessage.create('CAP', ['REQ', request])
+            self.send(message)
+            return self._wait_for_capability_response(request)
+
+    def _wait_for_capability_response(self, request):
+        def predicate(msg):
+            if msg.command == 'CAP':
+                _, subcommand, response = msg.params
+                response = response.strip()
+                if subcommand == 'ACK' and response == request:
+                    return True, True
+                elif subcommand == 'NAK' and response == request:
+                    return True, False
+            return False, None
+        return self.wait_for_message(predicate)
 
     def set_nick(self, nick):
         """Ask the server to set our nick."""

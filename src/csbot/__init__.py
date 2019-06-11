@@ -4,12 +4,28 @@ import signal
 import os
 
 import click
+import aiohttp
 import rollbar
 
 from .core import Bot
 
 
-@click.command(context_settings={'help_option_names': ['-h', '--help']})
+__version__ = None
+try:
+    import pkg_resources
+    __version__ = pkg_resources.get_distribution('csbot').version
+except (pkg_resources.DistributionNotFound, ImportError):
+    pass
+
+
+LOG = logging.getLogger(__name__)
+
+
+@click.command(context_settings={
+    'help_option_names': ['-h', '--help'],
+    'auto_envvar_prefix': 'CSBOT',
+})
+@click.version_option(version=__version__)
 @click.option('--debug', '-d', is_flag=True, default=False,
               help='Turn on debug logging for the bot.')
 @click.option('--debug-irc', is_flag=True, default=False,
@@ -22,12 +38,30 @@ from .core import Bot
               help='Turn on all debug logging.')
 @click.option('--colour/--no-colour', 'colour_logging', default=None,
               help='Use colour in logging. [default: automatic]')
-@click.option('--rollbar/--no-rollbar', 'use_rollbar', default=False,
-              help='Enable Rollbar error reporting.')
+@click.option('--rollbar-token', default=None,
+              help='Rollbar access token, enables Rollbar error reporting.')
+@click.option('--github-token', default=None,
+              help='GitHub "personal access token", enables GitHub deployment reporting.')
+@click.option('--github-repo', default=None,
+              help='GitHub repository to report deployments to.')
+@click.option('--env-name', default='development',
+              help='Deployment environment name. [default: development]')
 @click.argument('config', type=click.File('r'))
-def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colour_logging, use_rollbar):
+def main(config,
+         debug,
+         debug_irc,
+         debug_events,
+         debug_asyncio,
+         debug_all,
+         colour_logging,
+         rollbar_token,
+         github_token,
+         github_repo,
+         env_name):
     """Run an IRC bot from a configuration file.
     """
+    revision = os.environ.get('SOURCE_COMMIT', None)
+
     # Apply "debug all" option
     if debug_all:
         debug = debug_irc = debug_events = debug_asyncio = True
@@ -73,10 +107,9 @@ def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colou
     client = Bot(config)
     client.bot_setup()
 
-    # Configure Rollbar for exception reporting
-    if use_rollbar:
-        rollbar.init(os.environ['ROLLBAR_ACCESS_TOKEN'],
-                     os.environ.get('ROLLBAR_ENV', 'development'))
+    # Configure Rollbar for exception reporting, report deployment
+    if rollbar_token:
+        rollbar.init(rollbar_token, env_name)
 
         def handler(loop, context):
             exception = context.get('exception')
@@ -84,9 +117,19 @@ def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colou
                 exc_info = (type(exception), exception, exception.__traceback__)
             else:
                 exc_info = None
-            rollbar.report_exc_info(exc_info)
+            extra_data = {
+                'csbot_event': context.get('csbot_event'),
+                'csbot_recent_messages': "\n".join(client.recent_messages),
+            }
+            rollbar.report_exc_info(exc_info, extra_data=extra_data)
             loop.default_exception_handler(context)
         client.loop.set_exception_handler(handler)
+
+        if revision:
+            client.loop.run_until_complete(rollbar_report_deploy(rollbar_token, env_name, revision))
+
+    if github_token and github_repo and revision:
+        client.loop.run_until_complete(github_report_deploy(github_token, github_repo, env_name, revision))
 
     # Run the client
     def stop():
@@ -98,6 +141,67 @@ def main(config, debug, debug_irc, debug_events, debug_asyncio, debug_all, colou
 
     # When the loop ends, run teardown
     client.bot_teardown()
+
+
+async def rollbar_report_deploy(rollbar_token, env_name, revision):
+    async with aiohttp.ClientSession() as session:
+        request = session.post(
+            'https://api.rollbar.com/api/1/deploy/',
+            data={
+                'access_token': rollbar_token,
+                'environment': env_name,
+                'revision': revision,
+            },
+        )
+        async with request as response:
+            data = await response.json()
+            if response.status == 200:
+                LOG.info('Reported deploy to Rollbar: env=%s revision=%s deploy_id=%s',
+                         env_name, revision, data['data']['deploy_id'])
+            else:
+                LOG.error('Error reporting deploy to Rollbar: %s', data['message'])
+
+
+async def github_report_deploy(github_token, github_repo, env_name, revision):
+    headers = {
+        'Authorization': f'token {github_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
+        create_request = session.post(
+            f'https://api.github.com/repos/{github_repo}/deployments',
+            json={
+                'ref': revision,
+                'auto_merge': False,
+                'environment': env_name,
+                'description': 'Bot running with new version',
+            },
+        )
+        async with create_request as create_response:
+            if create_response.status != 201:
+                LOG.error('Error reporting deploy to GitHub (create deploy): %s %s\n%s',
+                          create_response.status, create_response.reason, await create_response.text())
+                return
+
+            deploy = await create_response.json()
+
+        status_request = session.post(
+            deploy['statuses_url'],
+            json={
+                'state': 'success',
+
+            },
+        )
+        async with status_request as status_response:
+            if status_response.status != 201:
+                LOG.error('Error reporting deploy to GitHub (update status): %s %s\n%s',
+                          create_response.status, create_response.reason, await create_response.text())
+                return
+
+            status = await status_response.json()
+
+        LOG.info('Reported deploy to GitHub: env=%s revision=%s deploy_id=%s',
+                 env_name, revision, deploy["id"])
 
 
 class PrettyStreamHandler(logging.StreamHandler):

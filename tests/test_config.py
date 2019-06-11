@@ -1,6 +1,6 @@
 import pytest
 
-from csbot.test import TempEnvVars
+from . import TempEnvVars
 import csbot.plugin
 
 

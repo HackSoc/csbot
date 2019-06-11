@@ -6,10 +6,11 @@ from unittest import mock
 import pytest
 import aiofastforward
 import responses as responses_
+from aioresponses import aioresponses as aioresponses_
 
-from csbot import test
 from csbot.irc import IRCClient
 from csbot.core import Bot
+from . import mock_open_connection
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ async def irc_client(request, event_loop, irc_client_class, pre_irc_client, irc_
     else:
         client = irc_client_class(loop=event_loop, **irc_client_config)
     # Connect fake stream reader/writer (for tests that don't need the read loop)
-    with test.mock_open_connection():
+    with mock_open_connection():
         await client.connect()
 
     # Mock all the things!
@@ -105,8 +106,7 @@ class IRCClientHelper:
         """Shortcut to push a series of lines to the client."""
         if isinstance(lines, str):
             lines = [lines]
-        for l in lines:
-            self.client.line_received(l)
+        return [self.client.line_received(l) for l in lines]
 
     def assert_sent(self, lines):
         """Check that a list of (unicode) strings have been sent.
@@ -138,7 +138,7 @@ async def run_client(event_loop, irc_client_helper):
     ...     await irc_client_helper.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
     ...     irc_client_helper.assert_sent('PRIVMSG #channel :what do you mean, hello?')
     """
-    with test.mock_open_connection():
+    with mock_open_connection():
         # Start the client
         run_fut = event_loop.create_task(irc_client_helper.client.run())
         await irc_client_helper.client.connected.wait()
@@ -177,3 +177,9 @@ class BotHelper(IRCClientHelper):
 def responses():
     with responses_.RequestsMock() as rsps:
         yield rsps
+
+
+@pytest.fixture
+def aioresponses():
+    with aioresponses_() as m:
+        yield m

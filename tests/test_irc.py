@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from csbot.test import mock_open_connection, mock_open_connection_paused
+from . import mock_open_connection, mock_open_connection_paused
 from csbot.irc import IRCMessage, IRCParseError, IRCUser
 
 
@@ -132,8 +132,9 @@ class TestClientPing:
             'client_ping_interval': 3,
         }
 
-    @pytest.mark.asyncio(foo='bar')
+    @pytest.mark.asyncio
     async def test_client_PING(self, fast_forward, run_client):
+        """Check that client PING commands are sent at the expected interval."""
         run_client.reset_mock()
         run_client.client.send_line.assert_not_called()
         # Advance time, test that a ping was sent
@@ -159,6 +160,39 @@ class TestClientPing:
             mock.call('PING 3'),
             mock.call('PING 4'),
             mock.call('PING 5'),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_client_PING_only_when_needed(self, fast_forward, run_client):
+        """Check that client PING commands are sent relative to the last received message."""
+        run_client.reset_mock()
+        run_client.client.send_line.assert_not_called()
+        # Advance time to just before the second PING, check that the first PING was sent
+        await fast_forward(5)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+        ]
+        # Receive a message, this should reset the PING timer
+        run_client.receive(':nick!user@host PRIVMSG #channel :foo')
+        # Advance time to just after when the second PING would happen without any messages
+        # received, check that still only one PING was sent
+        await fast_forward(2)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+        ]
+        # Advance time to 4 seconds after the last message was received, and check that another
+        # PING has now been sent
+        await fast_forward(2)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
+        ]
+        # Disconnect, advance time, test that no more pings were sent
+        run_client.client.disconnect()
+        await fast_forward(12)
+        assert run_client.client.send_line.mock_calls == [
+            mock.call('PING 1'),
+            mock.call('PING 2'),
         ]
 
 
@@ -305,6 +339,92 @@ def test_parse_failure(irc_client_helper):
     """
     with pytest.raises(IRCParseError):
         irc_client_helper.receive('')
+
+
+@pytest.mark.asyncio
+async def test_wait_for_success(irc_client_helper):
+    messages = [
+        IRCMessage(None, 'PING', ['0'], 'PING', 'PING :0'),
+        IRCMessage(None, 'PING', ['1'], 'PING', 'PING :1'),
+        IRCMessage(None, 'PING', ['2'], 'PING', 'PING :2'),
+    ]
+
+    mock_predicate = mock.Mock(return_value=(False, None))
+    fut_mock = irc_client_helper.client.wait_for_message(mock_predicate)
+
+    # Predicate is called, but future is not resolved
+    irc_client_helper.receive(messages[0].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+    ]
+    assert not fut_mock.done()
+
+    # Predicate is called, and future is resolved with matching message
+    mock_predicate.return_value = (True, 'foo')
+    irc_client_helper.receive(messages[1].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+        mock.call(messages[1]),
+    ]
+    assert fut_mock.done()
+    assert fut_mock.result() == 'foo'
+
+    # Predicate is not called, because once resolved it was removed
+    irc_client_helper.receive(messages[2].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+        mock.call(messages[1]),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_wait_for_cancelled(irc_client_helper):
+    messages = [
+        IRCMessage(None, 'PING', ['0'], 'PING', 'PING :0'),
+        IRCMessage(None, 'PING', ['1'], 'PING', 'PING :1'),
+    ]
+
+    mock_predicate = mock.Mock(return_value=(False, None))
+    fut_mock = irc_client_helper.client.wait_for_message(mock_predicate)
+
+    # Predicate is called, but future is not resolved
+    irc_client_helper.receive(messages[0].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+    ]
+    assert not fut_mock.done()
+
+    # Predicate is not called, because future was cancelled
+    fut_mock.cancel()
+    irc_client_helper.receive(messages[1].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_wait_for_exception(irc_client_helper):
+    messages = [
+        IRCMessage(None, 'PING', ['0'], 'PING', 'PING :0'),
+        IRCMessage(None, 'PING', ['1'], 'PING', 'PING :1'),
+    ]
+
+    mock_predicate = mock.Mock(side_effect=Exception())
+    fut_mock = irc_client_helper.client.wait_for_message(mock_predicate)
+
+    # Predicate is called, but future has exception
+    irc_client_helper.receive(messages[0].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+    ]
+    assert fut_mock.done()
+    assert fut_mock.exception() is not None
+
+    # Predicate is not called, because future is already done
+    irc_client_helper.receive(messages[1].raw)
+    assert mock_predicate.mock_calls == [
+        mock.call(messages[0]),
+    ]
 
 
 # Test that calling various commands causes the appropriate messages to be sent to the server

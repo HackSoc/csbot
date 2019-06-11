@@ -1,8 +1,7 @@
-import requests
 import urllib.parse
 
 from csbot.plugin import Plugin
-from csbot.util import simple_http_get
+from csbot.util import simple_http_get_async
 
 
 class Hoogle(Plugin):
@@ -14,43 +13,45 @@ class Hoogle(Plugin):
         super(Hoogle, self).setup()
 
     @Plugin.command('hoogle')
-    def search_hoogle(self, e):
+    async def search_hoogle(self, e):
         """Search Hoogle with a given string and return the first few
         (exact number configurable) results.
         """
 
         query = e['data']
         hurl = 'http://www.haskell.org/hoogle/?mode=json&hoogle=' + query
-        hresp = simple_http_get(hurl)
+        async with simple_http_get_async(hurl) as hresp:
 
-        if hresp.status_code != requests.codes.ok:
-            self.log.warn('request failed for ' + hurl)
-            return
+            if hresp.status != 200:
+                self.log.warn('request failed for ' + hurl)
+                return
 
-        # The Hoogle response JSON is of the following format:
-        # {
-        #  "version": "<hoogle version>"
-        #  "results": [
-        #    {
-        #      "location": "<link to docs>"
-        #      "self":     "<name> :: <type>"
-        #      "docs":     "<short description>"
-        #    },
-        #    ...
-        #  ]
-        # }
+            # The Hoogle response JSON is of the following format:
+            # {
+            #  "version": "<hoogle version>"
+            #  "results": [
+            #    {
+            #      "location": "<link to docs>"
+            #      "self":     "<name> :: <type>"
+            #      "docs":     "<short description>"
+            #    },
+            #    ...
+            #  ]
+            # }
 
-        maxresults = int(self.config_get('results'))
+            maxresults = int(self.config_get('results'))
 
-        if hresp.json is None:
+            json = await hresp.json()
+
+        if json is None:
             self.log.warn('invalid JSON received from Hoogle')
             return
 
-        if 'parseError' in hresp.json():
-            e.reply(hresp.json()['parseError'].replace('\n', ' '))
+        if 'parseError' in json:
+            e.reply(json['parseError'].replace('\n', ' '))
             return
 
-        allresults = hresp.json()['results']
+        allresults = json['results']
         totalresults = len(allresults)
         results = allresults[0:maxresults]
         niceresults = []
