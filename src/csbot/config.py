@@ -226,8 +226,8 @@ def option_map(cls: Type, *, default=None, example=None, help: str) -> attr.Attr
     return attr.ib(**attrib_kwargs)
 
 
-# TODO: additional newlines to make the output readable
 # TODO: commented output
+# TODO: distinguish between "example" and "default" values?
 class TomlExampleGenerator:
     _BARE_KEY_REGEX = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -370,6 +370,7 @@ class TomlExampleGenerator:
                                   [attrib.name])
 
         for attrib in deferred:
+            self._write("\n")
             self._generate_option(getattr(example, attrib.name),
                                   attrib,
                                   absolute_path + [attrib.name],
