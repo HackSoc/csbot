@@ -12,6 +12,7 @@ import lxml.html
 
 from ..plugin import Plugin
 from ..util import Struct, simple_http_get_async, maybe_future_result
+from .. import config
 
 
 LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
@@ -54,6 +55,19 @@ class LinkInfo(Plugin):
         # Maximum response size
         'max_response_size': 1048576,  # 1MB
     }
+
+    @config.config
+    class Config:
+        scan_limit = config.option(int, default=1, help="Maximum number of parts of a PRIVMSG to scan for URLs")
+        minimum_slug_length = config.option(int, default=10, help="Minimum slug length in 'title in URL' filter")
+        max_file_ext_length = config.option(
+            int, default=6, help="Maximum file extension length (including the dot) for 'title in URL' filter")
+        minimum_path_match = config.option(
+            float, default=0.5,
+            help="Minimum match (fraction) between path component and title to be considered 'title in URL'")
+        rate_limit_time = config.option(int, default=60, help="Number of seconds for rolling rate limit period")
+        rate_limit_count = config.option(int, default=5, help="maximum rate of URL responses over rate limiting period")
+        max_response_size = config.option(int, default=1048576, help="Maximum HTTP response size (in bytes)")
 
     def __init__(self, *args, **kwargs):
         super(LinkInfo, self).__init__(*args, **kwargs)

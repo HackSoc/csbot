@@ -4,6 +4,8 @@ import logging
 import os
 from typing import List, Callable
 
+from . import config
+
 
 def build_plugin_dict(plugins):
     """Build a dictionary mapping the value of :meth:`~Plugin.plugin_name` to
@@ -19,6 +21,19 @@ def build_plugin_dict(plugins):
         else:
             mapping[name] = P
     return mapping
+
+
+def build_config_cls(plugins):
+    plugin_configs = {}
+    for P in plugins:
+        cls = getattr(P, 'Config', None)
+        if config.is_structure(cls):
+            plugin_configs[P.plugin_name()] = config.option(
+                cls,
+                example=cls,
+                help=f"{P.plugin_name()} plugin configuration",
+            )
+    return config.make_class('AllPluginConfig', plugin_configs)
 
 
 class LazyMethod:

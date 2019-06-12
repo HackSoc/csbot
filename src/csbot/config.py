@@ -140,12 +140,18 @@ def is_allowable_type(cls):
     return is_structure(cls) or cls in (str, bool, int, float)
 
 
+_ATTRS_KWARGS = {
+    "slots": True,
+    "kw_only": True,
+}
+
+
 def config(cls):
-    attrs_kwargs = {
-        "slots": True,
-        "kw_only": True,
-    }
-    return attr.s(**attrs_kwargs)(cls)
+    return attr.s(**_ATTRS_KWARGS)(cls)
+
+
+def make_class(name: str, attrs: Union[List[attr.Attribute], Dict[str,attr.Attribute]]):
+    return attr.make_class(name, attrs, **_ATTRS_KWARGS)
 
 
 def option(cls: Type, *, default=None, example=None, env: Union[str, List[str]] = None, help: str) -> attr.Attribute:
@@ -422,44 +428,3 @@ def generate_toml_example(obj, commented=False):
     generator = TomlExampleGenerator(commented=commented)
     generator.generate(obj, stream)
     return stream.getvalue()
-
-
-# @attr.s(kw_only=True)
-# class FooConfig:
-#     a: int = attr.ib()
-#     b: int = attr.ib(default=1)
-
-
-# all_configs = {
-#     "foo": FooConfig,
-# }
-
-
-# @attr.s
-# class TopLevel:
-#     foo: FooConfig = attr.ib(factory=FooConfig)
-
-
-# TopLevel = attr.make_class(
-#     'TopLevel',
-#     attrs={
-#         name: attr.ib(type=cls, factory=cls)
-#         for name, cls in all_configs.items()
-#     },
-# )
-
-
-# class Foo:
-#     @config
-#     class Config:
-#         @config
-#         class Bar:
-#             a = option("a")
-#
-#         of_a = option_list(Bar)
-#         to_a = option_map(Bar)
-#
-#     @classmethod
-#     def plugin_name(cls):
-#         return cls.__name__.lower()
-
