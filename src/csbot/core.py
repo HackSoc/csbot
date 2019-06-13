@@ -1,10 +1,9 @@
 import collections
 import itertools
 
-import straight.plugin
 import toml
 
-from csbot.plugin import Plugin, SpecialPlugin
+from csbot.plugin import Plugin, SpecialPlugin, find_plugins
 from csbot.plugin import build_plugin_dict, PluginManager
 import csbot.events as events
 from csbot.events import Event, CommandEvent
@@ -21,7 +20,6 @@ class PluginError(Exception):
 class Bot(SpecialPlugin, IRCClient):
     # TODO: use IRCUser instances instead of raw user string
 
-    # TODO: get this included in `csbot_util generate_config`
     @config.config
     class Config:
         ircv3 = config.option(bool, default=False, help="Enable IRCv3 features (i.e. 'client capabilities')")
@@ -43,8 +41,7 @@ class Bot(SpecialPlugin, IRCClient):
 
     #: Dictionary containing available plugins for loading, using
     #: straight.plugin to discover plugin classes under a namespace.
-    available_plugins = build_plugin_dict(straight.plugin.load(
-        'csbot.plugins', subclasses=Plugin))
+    available_plugins = build_plugin_dict(find_plugins())
 
     _WHO_IDENTIFY = ('1', '%na')
 

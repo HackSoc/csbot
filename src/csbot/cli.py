@@ -4,17 +4,27 @@ import click
 
 from . import config
 from .core import Bot
-from .plugin import build_config_cls
+from .plugin import find_plugins
 
 
-# TODO: get available plugin list
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def util():
     pass
 
 
+@util.command(help="List available plugins")
+def list_plugins():
+    for P in find_plugins():
+        sys.stdout.write(f"{P.plugin_name():<20}  ({P.__module__}.{P.__name__})\n")
+
+
 @util.command(help="Generate example configuration file")
-def generate_config():
-    cls = build_config_cls(Bot.available_plugins.values())
+def example_config():
+    plugins = [Bot]
+    plugins.extend(find_plugins())
     generator = config.TomlExampleGenerator()
-    generator.generate(cls, sys.stdout)
+    for P in plugins:
+        cls = getattr(P, 'Config', None)
+        if config.is_structure(cls):
+            generator.generate(cls, sys.stdout, prefix=[P.plugin_name()])
+            sys.stdout.write("\n\n")

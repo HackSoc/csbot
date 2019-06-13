@@ -4,7 +4,17 @@ import logging
 import os
 from typing import List, Callable
 
+import straight.plugin
+
 from . import config
+
+
+def find_plugins():
+    """Find available plugins.
+
+    Returns a list of discovered plugin classes.
+    """
+    return list(straight.plugin.load('csbot.plugins', subclasses=Plugin))
 
 
 def build_plugin_dict(plugins):
@@ -21,19 +31,6 @@ def build_plugin_dict(plugins):
         else:
             mapping[name] = P
     return mapping
-
-
-def build_config_cls(plugins):
-    plugin_configs = {}
-    for P in plugins:
-        cls = getattr(P, 'Config', None)
-        if config.is_structure(cls):
-            plugin_configs[P.plugin_name()] = config.option(
-                cls,
-                example=cls,
-                help=f"{P.plugin_name()} plugin configuration",
-            )
-    return config.make_class('AllPluginConfig', plugin_configs)
 
 
 class LazyMethod:

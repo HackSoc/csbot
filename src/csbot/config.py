@@ -277,13 +277,15 @@ class TomlExampleGenerator:
         s = f"{s}\n"
         self._write(s, raw=True)
 
-    def generate(self, obj, stream: TextIO):
+    def generate(self, obj, stream: TextIO, prefix: List[str] = None):
         """Generate an example from *obj* and write it to *stream*."""
         if inspect.isclass(obj):
             obj = make_example(obj)
         assert is_structure(obj)
+        if prefix is None:
+            prefix = []
         with self._use_stream(stream):
-            self._generate_structure(obj, [])
+            self._generate_structure(obj, prefix)
 
     def _generate_option(self,
                          example: Any,
