@@ -29,8 +29,8 @@ class TestHookOrdering:
         )
 
     CONFIG = f"""\
-    [@bot]
-    plugins = mockplugin
+    ["@bot"]
+    plugins = "mockplugin"
     """
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 

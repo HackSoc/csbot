@@ -1,8 +1,8 @@
 import collections
 import itertools
 
-import configparser
 import straight.plugin
+import toml
 
 from csbot.plugin import Plugin, SpecialPlugin
 from csbot.plugin import build_plugin_dict, PluginManager
@@ -61,11 +61,9 @@ class Bot(SpecialPlugin, IRCClient):
         SpecialPlugin.__init__(self, self)
 
         # Load configuration
-        self.config_root = configparser.ConfigParser(interpolation=None,
-                                                     allow_no_value=True)
-        self.config_root.optionxform = str  # No lowercase option names
+        self.config_root = {}
         if config is not None:
-            self.config_root.read_file(config)
+            self.config_root = toml.load(config)
 
         # Initialise IRCClient from Bot configuration
         IRCClient.__init__(

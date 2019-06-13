@@ -24,15 +24,15 @@ class MockBot(csbot.core.Bot):
 
 
 base_config = """
-[@mockbot]
-plugins = mockplugin
+["@mockbot"]
+plugins = "mockplugin"
 """
 
 plugin_config = """
 [mockplugin]
-default = config1
-env_and_default = config2
-env_only = config3
+default = "config1"
+env_and_default = "config2"
+env_only = "config3"
 """
 
 

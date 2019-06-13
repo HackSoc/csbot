@@ -131,8 +131,8 @@ error_test_cases = [
 
 
 pytestmark = pytest.mark.bot(config="""\
-    [@bot]
-    plugins = linkinfo
+    ["@bot"]
+    plugins = "linkinfo"
     """)
 
 
@@ -232,8 +232,8 @@ class TestNonBlocking:
         fire_command = Plugin.hook('core.command')(csbot.core.Bot.fire_command)
 
     CONFIG = f"""\
-    [@bot]
-    plugins = mockplugin linkinfo
+    ["@bot"]
+    plugins = "mockplugin linkinfo"
     """
 
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)

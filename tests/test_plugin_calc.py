@@ -2,8 +2,8 @@ import pytest
 
 
 pytestmark = pytest.mark.bot(config="""\
-    [@bot]
-    plugins = calc
+    ["@bot"]
+    plugins = "calc"
     """)
 
 

@@ -87,11 +87,11 @@ def pre_irc_client(aioresponses):
 
 
 @pytest.mark.bot(config="""\
-    [@bot]
-    plugins = youtube
+    ["@bot"]
+    plugins = "youtube"
 
     [youtube]
-    api_key = abc
+    api_key = "abc"
     """)
 class TestYoutubePlugin:
     @pytest.mark.asyncio
@@ -109,11 +109,11 @@ class TestYoutubePlugin:
 
 
 @pytest.mark.bot(config="""\
-    [@bot]
-    plugins = linkinfo youtube
+    ["@bot"]
+    plugins = "linkinfo youtube"
 
     [youtube]
-    api_key = abc
+    api_key = "abc"
     """)
 class TestYoutubeLinkInfoIntegration:
     @pytest.fixture

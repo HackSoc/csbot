@@ -41,35 +41,35 @@ async def client(bot_helper, aiohttp_client):
 
 class TestGitHubPlugin:
     CONFIG = """\
-    [@bot]
-    plugins = webserver webhook github
+    ["@bot"]
+    plugins = "webserver webhook github"
 
     [webhook]
-    url_secret = foobar
+    url_secret = "foobar"
 
     [github]
     # Re-usable format strings
-    fmt.source = [{repository[name]}] {sender[login]}
-    fmt.issue_num = issue #{issue[number]}
-    fmt.issue_text = {issue[title]} ({issue[html_url]})
-    fmt.pr_num = PR #{pull_request[number]}
-    fmt.pr_text = {pull_request[title]} ({pull_request[html_url]})
+    "fmt.source" = "[{repository[name]}] {sender[login]}"
+    "fmt.issue_num" = "issue #{issue[number]}"
+    "fmt.issue_text" = "{issue[title]} ({issue[html_url]})"
+    "fmt.pr_num" = "PR #{pull_request[number]}"
+    "fmt.pr_text" = "{pull_request[title]} ({pull_request[html_url]})"
 
     # Format strings for specific events
-    fmt/create = {fmt.source} created {ref_type} {ref} ({repository[html_url]}/tree/{ref})
-    fmt/delete = {fmt.source} deleted {ref_type} {ref}
-    fmt/issues/* = {fmt.source} {event_subtype} {fmt.issue_num}: {fmt.issue_text}
-    fmt/issues/assigned = {fmt.source} {event_subtype} {fmt.issue_num} to {assignee[login]}: {fmt.issue_text}
-    fmt/pull_request/* = {fmt.source} {event_subtype} {fmt.pr_num}: {fmt.pr_text}
-    fmt/pull_request/assigned = {fmt.source} {event_subtype} {fmt.pr_num} to {assignee[login]}: {fmt.pr_text}
-    fmt/pull_request/review_requested = {fmt.source} requested review from {requested_reviewer[login]} on {fmt.pr_num}: {fmt.pr_text}
-    fmt/pull_request_review/submitted = {fmt.source} reviewed {fmt.pr_num} ({review_state}): {review[html_url]}
-    fmt/push/pushed = {fmt.source} pushed {count} new commit(s) to {short_ref}: {compare}
-    fmt/push/forced = {fmt.source} updated {short_ref}: {compare}
-    fmt/release/* = {fmt.source} {event_subtype} release {release[name]}: {release[html_url]}
+    "fmt/create" = "{fmt.source} created {ref_type} {ref} ({repository[html_url]}/tree/{ref})"
+    "fmt/delete" = "{fmt.source} deleted {ref_type} {ref}"
+    "fmt/issues/*" = "{fmt.source} {event_subtype} {fmt.issue_num}: {fmt.issue_text}"
+    "fmt/issues/assigned" = "{fmt.source} {event_subtype} {fmt.issue_num} to {assignee[login]}: {fmt.issue_text}"
+    "fmt/pull_request/*" = "{fmt.source} {event_subtype} {fmt.pr_num}: {fmt.pr_text}"
+    "fmt/pull_request/assigned" = "{fmt.source} {event_subtype} {fmt.pr_num} to {assignee[login]}: {fmt.pr_text}"
+    "fmt/pull_request/review_requested" = "{fmt.source} requested review from {requested_reviewer[login]} on {fmt.pr_num}: {fmt.pr_text}"
+    "fmt/pull_request_review/submitted" = "{fmt.source} reviewed {fmt.pr_num} ({review_state}): {review[html_url]}"
+    "fmt/push/pushed" = "{fmt.source} pushed {count} new commit(s) to {short_ref}: {compare}"
+    "fmt/push/forced" = "{fmt.source} updated {short_ref}: {compare}"
+    "fmt/release/*" = "{fmt.source} {event_subtype} release {release[name]}: {release[html_url]}"
 
-    [github/alanbriolat/csbot-webhook-test]
-    notify = #mychannel
+    ["github/alanbriolat/csbot-webhook-test"]
+    notify = "#mychannel"
     """
     URL = f'/webhook/github/foobar'
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
@@ -212,12 +212,12 @@ class TestGitHubPlugin:
 
 
 @pytest.mark.bot(cls=Bot, config="""\
-[@bot]
-plugins = webserver webhook github
+["@bot"]
+plugins = "webserver webhook github"
 [webhook]
-url_secret = test_url
+url_secret = "test_url"
 [github]
-secret =
+secret = ""
 """)
 async def test_signature_ignored(bot_helper, client):
     """X-Hub-Signature invalid, but secret is blank, so not verified and handler called"""
@@ -235,12 +235,12 @@ async def test_signature_ignored(bot_helper, client):
 
 
 @pytest.mark.bot(cls=Bot, config="""\
-[@bot]
-plugins = webserver webhook github
+["@bot"]
+plugins = "webserver webhook github"
 [webhook]
-url_secret = test_url
+url_secret = "test_url"
 [github]
-secret = wrong_secret
+secret = "wrong_secret"
 """)
 async def test_signature_secret_invalid(bot_helper, client):
     """X-Hub-Signature used different secret, fails verification, handler not called"""
@@ -256,12 +256,12 @@ async def test_signature_secret_invalid(bot_helper, client):
 
 
 @pytest.mark.bot(cls=Bot, config="""\
-[@bot]
-plugins = webserver webhook github
+["@bot"]
+plugins = "webserver webhook github"
 [webhook]
-url_secret = test_url
+url_secret = "test_url"
 [github]
-secret = foobar
+secret = "foobar"
 """)
 async def test_signature_secret_valid(bot_helper, client):
     """X-Hub-Signature used same secret, passes verification, handler called"""
@@ -277,14 +277,14 @@ async def test_signature_secret_valid(bot_helper, client):
 
 
 @pytest.mark.bot(cls=Bot, config="""\
-[@bot]
-plugins = webserver webhook github
+["@bot"]
+plugins = "webserver webhook github"
 [webhook]
-url_secret = test_url
+url_secret = "test_url"
 [github]
-secret = foobar
-[github/alanbriolat/csbot-webhook-test]
-secret = wrong_secret
+secret = "foobar"
+["github/alanbriolat/csbot-webhook-test"]
+secret = "wrong_secret"
 """)
 async def test_signature_per_repo_secret_invalid(bot_helper, client):
     """Per-repo config has wrong secret, fails verification, handler not called"""
@@ -300,14 +300,14 @@ async def test_signature_per_repo_secret_invalid(bot_helper, client):
 
 
 @pytest.mark.bot(cls=Bot, config="""\
-[@bot]
-plugins = webserver webhook github
+["@bot"]
+plugins = "webserver webhook github"
 [webhook]
-url_secret = test_url
+url_secret = "test_url"
 [github]
-secret = wrong_secret
-[github/alanbriolat/csbot-webhook-test]
-secret = foobar
+secret = "wrong_secret"
+["github/alanbriolat/csbot-webhook-test"]
+secret = "foobar"
 """)
 async def test_signature_per_repo_secret_valid(bot_helper, client):
     """Per-repo config has correct secret, passes verification, handler called"""

@@ -377,9 +377,18 @@ class Plugin(object, metaclass=PluginMeta):
         """Identical to :meth:`config_get`, but proxying ``getboolean``.
         """
         if key in self.CONFIG_DEFAULTS:
-            return self.config.getboolean(key, self.CONFIG_DEFAULTS[key])
+            value = self.config.get(key, self.CONFIG_DEFAULTS[key])
         else:
-            return self.config.getboolean(key)
+            value = self.config[key]
+
+        if isinstance(value, bool):
+            return value
+        elif value.lower() in {"true", "yes", "1"}:
+            return True
+        elif value.lower() in {"false", "no", "0"}:
+            return False
+        else:
+            raise ValueError("unrecognised boolean: %s" % (value,))
 
 
 class SpecialPlugin(Plugin):
