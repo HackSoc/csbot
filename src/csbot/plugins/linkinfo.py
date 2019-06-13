@@ -133,7 +133,7 @@ class LinkInfo(Plugin):
         # Don't want to be scanning URLs inside commands,
         # especially because we'd show information twice when the "link"
         # command is invoked...
-        if e['message'].startswith(self.bot.config_get('command_prefix')):
+        if e['message'].startswith(self.bot.config.command_prefix):
             return
 
         parts = e['message'].split()
