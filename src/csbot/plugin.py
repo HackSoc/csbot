@@ -190,6 +190,7 @@ class Plugin(object, metaclass=PluginMeta):
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
         self._db = None
+        self.__config = None
 
     @classmethod
     def plugin_name(cls):
@@ -335,10 +336,22 @@ class Plugin(object, metaclass=PluginMeta):
 
         .. seealso:: :mod:`configparser`
         """
+        if self.__config is not None:
+            return self.__config
+
+        # Get dict-like access to config
         plugin = self.plugin_name()
-        if plugin not in self.bot.config_root:
-            self.bot.config_root[plugin] = {}
-        return self.bot.config_root[plugin]
+        if plugin in self.bot.config_root:
+            self.__config = self.bot.config_root[plugin]
+        else:
+            self.__config = {}
+
+        # Upgrade to structure-based config if defined
+        cls = getattr(self, 'Config', None)
+        if config.is_structure(cls):
+            self.__config = config.structure(self.__config, cls)
+
+        return self.__config
 
     def subconfig(self, subsection):
         """Get a configuration subsection for this plugin.
@@ -346,6 +359,9 @@ class Plugin(object, metaclass=PluginMeta):
         Uses the ``[plugin_name/subsection]`` section of the configuration file,
         creating an empty section if it doesn't exist.
         """
+        if config.is_structure(self.config):
+            raise PluginFeatureError("subconfig() incompatible with plugin.Config, "
+                                     "use config.option_map()")
         section = self.plugin_name() + '/' + subsection
         if section not in self.bot.config_root:
             self.bot.config_root[section] = {}
@@ -363,6 +379,10 @@ class Plugin(object, metaclass=PluginMeta):
 
         :exc:`KeyError` is raised if none of the methods succeed.
         """
+        if config.is_structure(self.config):
+            raise PluginFeatureError("config_get('<key>') incompatible with plugin.Config, "
+                                     "use self.config.<key>")
+
         if key in self.config:
             return self.config[key]
 
@@ -376,6 +396,10 @@ class Plugin(object, metaclass=PluginMeta):
     def config_getboolean(self, key):
         """Identical to :meth:`config_get`, but proxying ``getboolean``.
         """
+        if config.is_structure(self.config):
+            raise PluginFeatureError("config_getboolean('<key>') incompatible with plugin.Config, "
+                                     "use self.config.<key>")
+
         if key in self.CONFIG_DEFAULTS:
             value = self.config.get(key, self.CONFIG_DEFAULTS[key])
         else:
