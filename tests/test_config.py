@@ -25,7 +25,7 @@ class MockBot(csbot.core.Bot):
 
 base_config = """
 ["@mockbot"]
-plugins = "mockplugin"
+plugins = ["mockplugin"]
 """
 
 plugin_config = """

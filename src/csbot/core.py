@@ -11,6 +11,7 @@ from csbot.events import Event, CommandEvent
 from csbot.util import maybe_future_result
 
 from .irc import IRCClient, IRCUser
+from . import config
 
 
 class PluginError(Exception):
@@ -20,34 +21,25 @@ class PluginError(Exception):
 class Bot(SpecialPlugin, IRCClient):
     # TODO: use IRCUser instances instead of raw user string
 
-    #: Default configuration values
-    CONFIG_DEFAULTS = {
-        'ircv3': False,
-        'nickname': 'csyorkbot',
-        'password': None,
-        'auth_method': 'pass',
-        'username': 'csyorkbot',
-        'realname': 'cs-york bot',
-        'sourceURL': 'http://github.com/csyork/csbot/',
-        'lineRate': '1',
-        'irc_host': 'irc.freenode.net',
-        'irc_port': '6667',
-        'bind_addr': None,
-        'command_prefix': '!',
-        'use_notice': True,
-        'client_ping': 0,
-        'channels': ' '.join([
-            '#cs-york-dev',
-        ]),
-        'plugins': ' '.join([
-            'example',
-        ]),
-    }
-
-    #: Environment variable fallbacks
-    CONFIG_ENVVARS = {
-        'password': ['IRC_PASS'],
-    }
+    # TODO: get this included in `csbot_util generate_config`
+    @config.config
+    class Config:
+        ircv3 = config.option(bool, default=False, help="Enable IRCv3 features (i.e. 'client capabilities')")
+        # TODO: required + example, instead of default
+        nickname = config.option(str, default="csyorkbot", help="IRC nick")
+        username = config.option(str, default="csyorkbot", help="IRC user")
+        realname = config.option(str, default="", example="cs-york bot", help="IRC 'real name'")
+        auth_method = config.option(str, default="pass", help="Authentication method: 'pass' or 'sasl_plain")
+        password = config.option(str, env="IRC_PASS", example="password123", help="Authentication password")
+        # TODO: required
+        irc_host = config.option(str, example="irc.freenode.net", help="IRC server hostname")
+        irc_port = config.option(int, default=6667, help="IRC server port")
+        command_prefix = config.option(str, default="!", help="Prefix for invoking commands")
+        channels = config.option_list(str, example=["#cs-york-dev"], help="Channels to join")
+        plugins = config.option_list(str, example=["logger linkinfo"], help="Plugins to load")
+        use_notice = config.option(int, default=True, help="Use NOTICE instead of PRIVMSG to send messages")
+        client_ping = config.option(int, default=0, help="Send PING if no messages for this many seconds (0=disabled)")
+        bind_addr = config.option(str, example="192.168.1.111", help="Bind to specific local address")
 
     #: Dictionary containing available plugins for loading, using
     #: straight.plugin to discover plugin classes under a namespace.
@@ -69,29 +61,29 @@ class Bot(SpecialPlugin, IRCClient):
         IRCClient.__init__(
             self,
             loop=loop,
-            ircv3=self.config_getboolean('ircv3'),
-            nick=self.config_get('nickname'),
-            username=self.config_get('username'),
-            host=self.config_get('irc_host'),
-            port=self.config_get('irc_port'),
-            password=self.config_get('password'),
-            auth_method=self.config_get('auth_method'),
-            bind_addr=self.config_get('bind_addr'),
-            client_ping_enabled=(int(self.config_get('client_ping')) > 0),
-            client_ping_interval=int(self.config_get('client_ping')),
+            ircv3=self.config.ircv3,
+            nick=self.config.nickname,
+            username=self.config.username,
+            host=self.config.irc_host,
+            port=self.config.irc_port,
+            password=self.config.password,
+            auth_method=self.config.auth_method,
+            bind_addr=self.config.bind_addr,
+            client_ping_enabled=(self.config.client_ping > 0),
+            client_ping_interval=self.config.client_ping,
         )
 
         self._recent_messages = collections.deque(maxlen=10)
 
         # Plumb in reply(...) method
-        if self.config_getboolean('use_notice'):
+        if self.config.use_notice:
             self.reply = self.notice
         else:
             self.reply = self.msg
 
         # Plugin management
         self.plugins = PluginManager([self], self.available_plugins,
-                                     self.config_get('plugins').split(),
+                                     self.config.plugins,
                                      [self])
         self.commands = {}
 
@@ -148,7 +140,7 @@ class Bot(SpecialPlugin, IRCClient):
 
     @Plugin.hook('core.self.connected')
     def signedOn(self, event):
-        for c in self.config_get('channels').split():
+        for c in self.config.channels:
             event.bot.join(c)
 
     @Plugin.hook('core.message.privmsg')
@@ -156,7 +148,7 @@ class Bot(SpecialPlugin, IRCClient):
         """Handle commands inside PRIVMSGs."""
         # See if this is a command
         command = CommandEvent.parse_command(
-            event, self.config_get('command_prefix'), event.bot.nick)
+            event, self.config.command_prefix, event.bot.nick)
         if command is not None:
             self.post_event(command)
 
@@ -204,7 +196,7 @@ class Bot(SpecialPlugin, IRCClient):
 
     async def connection_made(self):
         await super().connection_made()
-        if self.config_getboolean('ircv3'):
+        if self.config.ircv3:
             await self.request_capabilities(enable={'account-notify', 'extended-join'})
         self.emit_new('core.raw.connected')
 

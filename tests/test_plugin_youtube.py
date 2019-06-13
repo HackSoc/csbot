@@ -88,7 +88,7 @@ def pre_irc_client(aioresponses):
 
 @pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "youtube"
+    plugins = ["youtube"]
 
     [youtube]
     api_key = "abc"
@@ -110,7 +110,7 @@ class TestYoutubePlugin:
 
 @pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "linkinfo youtube"
+    plugins = ["linkinfo", "youtube"]
 
     [youtube]
     api_key = "abc"

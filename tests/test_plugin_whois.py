@@ -22,7 +22,7 @@ def bot_helper_class(bot_helper_class):
 
 pytestmark = pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "mongodb usertrack whois"
+    plugins = ["mongodb", "usertrack", "whois"]
 
     [mongodb]
     mode = "mock"

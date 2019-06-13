@@ -154,6 +154,7 @@ def make_class(name: str, attrs: Union[List[attr.Attribute], Dict[str,attr.Attri
     return attr.make_class(name, attrs, **_ATTRS_KWARGS)
 
 
+# TODO: "required" options?
 def option(cls: Type, *, default=None, example=None, env: Union[str, List[str]] = None, help: str) -> attr.Attribute:
     assert is_allowable_type(cls)
     type = cls

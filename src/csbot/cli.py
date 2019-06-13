@@ -7,6 +7,7 @@ from .core import Bot
 from .plugin import build_config_cls
 
 
+# TODO: get available plugin list
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def util():
     pass

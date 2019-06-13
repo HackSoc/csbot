@@ -42,7 +42,7 @@ async def client(bot_helper, aiohttp_client):
 class TestGitHubPlugin:
     CONFIG = """\
     ["@bot"]
-    plugins = "webserver webhook github"
+    plugins = ["webserver", "webhook", "github"]
 
     [webhook]
     url_secret = "foobar"
@@ -213,7 +213,7 @@ class TestGitHubPlugin:
 
 @pytest.mark.bot(cls=Bot, config="""\
 ["@bot"]
-plugins = "webserver webhook github"
+plugins = ["webserver", "webhook", "github"]
 [webhook]
 url_secret = "test_url"
 [github]
@@ -236,7 +236,7 @@ async def test_signature_ignored(bot_helper, client):
 
 @pytest.mark.bot(cls=Bot, config="""\
 ["@bot"]
-plugins = "webserver webhook github"
+plugins = ["webserver", "webhook", "github"]
 [webhook]
 url_secret = "test_url"
 [github]
@@ -257,7 +257,7 @@ async def test_signature_secret_invalid(bot_helper, client):
 
 @pytest.mark.bot(cls=Bot, config="""\
 ["@bot"]
-plugins = "webserver webhook github"
+plugins = ["webserver", "webhook", "github"]
 [webhook]
 url_secret = "test_url"
 [github]
@@ -278,7 +278,7 @@ async def test_signature_secret_valid(bot_helper, client):
 
 @pytest.mark.bot(cls=Bot, config="""\
 ["@bot"]
-plugins = "webserver webhook github"
+plugins = ["webserver", "webhook", "github"]
 [webhook]
 url_secret = "test_url"
 [github]
@@ -301,7 +301,7 @@ async def test_signature_per_repo_secret_invalid(bot_helper, client):
 
 @pytest.mark.bot(cls=Bot, config="""\
 ["@bot"]
-plugins = "webserver webhook github"
+plugins = ["webserver", "webhook", "github"]
 [webhook]
 url_secret = "test_url"
 [github]

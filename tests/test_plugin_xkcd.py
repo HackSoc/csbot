@@ -83,7 +83,7 @@ json_test_cases = [
 
 @pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "xkcd"
+    plugins = ["xkcd"]
     """)
 class TestXKCDPlugin:
     @pytest.fixture
@@ -150,7 +150,7 @@ class TestXKCDPlugin:
 
 @pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "linkinfo xkcd"
+    plugins = ["linkinfo", "xkcd"]
     """)
 class TestXKCDLinkInfoIntegration:
     @pytest.fixture

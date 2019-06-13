@@ -28,7 +28,7 @@ class TestWebhookPlugin:
     BOT_CLASS = Bot
     CONFIG = f"""\
     ["@bot"]
-    plugins = "webserver webhook webhookexample"
+    plugins = ["webserver", "webhook", "webhookexample"]
 
     [webhook]
     url_secret = "{SECRET}"

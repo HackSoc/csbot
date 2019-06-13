@@ -132,7 +132,7 @@ error_test_cases = [
 
 pytestmark = pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "linkinfo"
+    plugins = ["linkinfo"]
     """)
 
 
@@ -233,7 +233,7 @@ class TestNonBlocking:
 
     CONFIG = f"""\
     ["@bot"]
-    plugins = "mockplugin linkinfo"
+    plugins = ["mockplugin", "linkinfo"]
     """
 
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)

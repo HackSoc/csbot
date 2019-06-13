@@ -34,7 +34,7 @@ class Bot(core.Bot):
 
 pytestmark = pytest.mark.bot(cls=Bot, config="""\
     ["@bot"]
-    plugins = "webserver webserverexample"
+    plugins = ["webserver", "webserverexample"]
     """)
 
 

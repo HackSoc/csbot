@@ -156,7 +156,7 @@ nsfw_test_cases = [
 
 pytestmark = pytest.mark.bot(config="""\
     ["@bot"]
-    plugins = "linkinfo imgur"
+    plugins = ["linkinfo", "imgur"]
 
     [imgur]
     client_id = "abc"
