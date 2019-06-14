@@ -184,6 +184,35 @@ def test_config_option_env():
         assert c5.c is True
 
 
+@pytest.mark.skip
+def test_config_option_required():
+    @config.config
+    class Config:
+        a = config.option(int, required=True, help="")
+        b = config.option(int, default=12, required=True, help="")
+        c = config.option(int, example=22, required=True, help="")
+
+    # Required and no default: raises error
+    with pytest.raises(config.ConfigurationError):
+        c1 = config.structure({
+            # "a": 1,
+            "b": 2,
+            "c": 3,
+        }, Config)
+
+    # Required and has a default: default ignored, raises error
+    with pytest.raises(config.ConfigurationError):
+        c2 = config.structure({
+            "a": 1,
+            # "b": 2,
+            "c": 3,
+        }, Config)
+
+    # Required, has example, using make_example(): no error, gets example value
+    c3 = config.make_example(Config)
+    assert c3.c == 22
+
+
 def test_config_option_list():
     default_list = [1, 2, 3]
 

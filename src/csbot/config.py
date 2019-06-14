@@ -55,6 +55,10 @@ def dump(o, f):
     return toml.dump(unstructure(o), f)
 
 
+class ConfigurationError(Exception):
+    pass
+
+
 class Factory:
     _example_mode = False
 
@@ -150,11 +154,9 @@ def config(cls):
     return attr.s(**_ATTRS_KWARGS)(cls)
 
 
-def make_class(name: str, attrs: Union[List[attr.Attribute], Dict[str,attr.Attribute]]):
-    return attr.make_class(name, attrs, **_ATTRS_KWARGS)
-
-
 # TODO: "required" options?
+# TODO: user-friendly exceptions (write own validators)
+# TODO: stop strings being structured at list of 1-char strings, raise exception instead
 def option(cls: Type, *, default=None, example=None, env: Union[str, List[str]] = None, help: str) -> attr.Attribute:
     assert is_allowable_type(cls)
     type = cls
