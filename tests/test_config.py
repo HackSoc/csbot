@@ -401,18 +401,17 @@ def test_config_option_example():
     assert c1.i == {"x": 1}
     assert c1.j == {}
 
-    with config.Factory.example_mode():
-        c2 = Config()
-        assert c2.a == 2
-        assert c2.b == 4
-        assert c2.c == 5
-        assert c2.d == 6
-        assert c2.e == [4, 5, 6]
-        assert c2.f == [1, 2, 3]
-        assert c2.g == [4, 5, 6]
-        assert c2.h == {"x": 2}
-        assert c2.i == {"x": 1}
-        assert c2.j == {"x": 2}
+    c2 = config.make_example(Config)
+    assert c2.a == 2
+    assert c2.b == 4
+    assert c2.c == 5
+    assert c2.d == 6
+    assert c2.e == [4, 5, 6]
+    assert c2.f == [1, 2, 3]
+    assert c2.g == [4, 5, 6]
+    assert c2.h == {"x": 2}
+    assert c2.i == {"x": 1}
+    assert c2.j == {"x": 2}
 
 
 def assert_valid_toml(s):
