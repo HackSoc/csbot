@@ -38,8 +38,7 @@ class LinkInfoResult(Struct):
 
 
 class LinkInfo(Plugin):
-    @config.config
-    class Config:
+    class Config(config.Config):
         scan_limit = config.option(int, default=1, help="Maximum number of parts of a PRIVMSG to scan for URLs")
         minimum_slug_length = config.option(int, default=10, help="Minimum slug length in 'title in URL' filter")
         max_file_ext_length = config.option(

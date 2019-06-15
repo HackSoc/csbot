@@ -20,8 +20,7 @@ class PluginError(Exception):
 class Bot(SpecialPlugin, IRCClient):
     # TODO: use IRCUser instances instead of raw user string
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         ircv3 = config.option(bool, default=False, help="Enable IRCv3 features (i.e. 'client capabilities')")
         # TODO: required + example, instead of default
         nickname = config.option(str, default="csyorkbot", help="IRC nick")

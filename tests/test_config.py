@@ -3,8 +3,7 @@ import toml
 
 from . import TempEnvVars
 import csbot.plugin
-# from csbot import config
-from csbot import schema as config
+from csbot import config
 
 
 class MockPlugin(csbot.plugin.Plugin):

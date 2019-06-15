@@ -345,7 +345,7 @@ class Plugin(object, metaclass=PluginMeta):
 
         # Upgrade to structure-based config if defined
         cls = getattr(self, 'Config', None)
-        if config.is_structure(cls):
+        if config.is_config(cls):
             self.__config = config.structure(self.__config, cls)
 
         return self.__config
@@ -356,7 +356,7 @@ class Plugin(object, metaclass=PluginMeta):
         Uses the ``[plugin_name/subsection]`` section of the configuration file,
         creating an empty section if it doesn't exist.
         """
-        if config.is_structure(self.config):
+        if config.is_config(self.config):
             raise PluginFeatureError("subconfig() incompatible with plugin.Config, "
                                      "use config.option_map()")
         section = self.plugin_name() + '/' + subsection
@@ -376,7 +376,7 @@ class Plugin(object, metaclass=PluginMeta):
 
         :exc:`KeyError` is raised if none of the methods succeed.
         """
-        if config.is_structure(self.config):
+        if config.is_config(self.config):
             raise PluginFeatureError("config_get('<key>') incompatible with plugin.Config, "
                                      "use self.config.<key>")
 
@@ -393,7 +393,7 @@ class Plugin(object, metaclass=PluginMeta):
     def config_getboolean(self, key):
         """Identical to :meth:`config_get`, but proxying ``getboolean``.
         """
-        if config.is_structure(self.config):
+        if config.is_config(self.config):
             raise PluginFeatureError("config_getboolean('<key>') incompatible with plugin.Config, "
                                      "use self.config.<key>")
 
