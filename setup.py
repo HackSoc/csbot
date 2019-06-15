@@ -26,6 +26,7 @@ setuptools.setup(
         'attrs',
         'cattrs',
         'toml',
+        'schematics',
         'rollbar',
     ],
     entry_points={

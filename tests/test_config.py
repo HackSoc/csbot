@@ -3,7 +3,8 @@ import toml
 
 from . import TempEnvVars
 import csbot.plugin
-from csbot import config
+# from csbot import config
+from csbot import schema as config
 
 
 class MockPlugin(csbot.plugin.Plugin):
@@ -79,8 +80,7 @@ def test_with_plugin_section(bot_helper):
 
 
 def test_config_option_default():
-    @config.config
-    class Config:
+    class Config(config.Config):
         # Implicit default=None
         a = config.option(int, help="")
         # Default of correct type
@@ -93,18 +93,17 @@ def test_config_option_default():
     assert c.b == 1
     assert c.c == 2
 
-    @config.config
-    class BadDefault:
-        a = config.option(int, default="2", help="")
-        b = config.option(int, default=lambda: "3", help="")
+    class BadDefault(config.Config):
+        a = config.option(int, default="blah", help="")
+        b = config.option(int, default=lambda: "blah", help="")
 
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             # Set b, so only a's default is tested
             "b": 3,
         }, BadDefault)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             # Set a, so only b's default is tested
             "a": 3,
@@ -112,8 +111,7 @@ def test_config_option_default():
 
 
 def test_config_option_validate():
-    @config.config
-    class Config:
+    class Config(config.Config):
         # Option with default=None (or omitted) can be None
         a = config.option(int, help="")
         # Option without default=None must not be None
@@ -134,21 +132,20 @@ def test_config_option_validate():
     assert c2.a is None
 
     # (But incorrect type is not allowed)
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
-            "a": "3",
-        })
+            "a": "blah",
+        }, Config)
 
     # None value where default!=None is not allowed
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             "b": None,
         }, Config)
 
 
 def test_config_option_env():
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option(str, env=["A_PRIMARY", "A_FALLBACK"], help="")
         b = config.option(int, env=["B_ENV"], help="")
         c = config.option(bool, env="C_ENV", help="")
@@ -171,7 +168,7 @@ def test_config_option_env():
         assert c4.b == 2
 
     # Type conversion: bool
-    with TempEnvVars({"C_ENV": "yes"}):
+    with TempEnvVars({"C_ENV": "true"}):
         c5 = config.structure({}, Config)
         assert c5.c is True
     with TempEnvVars({"C_ENV": "false"}):
@@ -184,40 +181,34 @@ def test_config_option_env():
         assert c5.c is True
 
 
-@pytest.mark.skip
 def test_config_option_required():
-    @config.config
-    class Config:
-        a = config.option(int, required=True, help="")
-        b = config.option(int, default=12, required=True, help="")
-        c = config.option(int, example=22, required=True, help="")
+    class Config(config.Config):
+        a = config.option(int, default=12, required=True, help="")
+        b = config.option(int, example=22, required=True, help="")
 
     # Required and no default: raises error
-    with pytest.raises(config.ConfigurationError):
+    with pytest.raises(config.ConfigError):
         c1 = config.structure({
-            # "a": 1,
-            "b": 2,
-            "c": 3,
+            "a": 2,
+            # "b": 3,
         }, Config)
 
-    # Required and has a default: default ignored, raises error
-    with pytest.raises(config.ConfigurationError):
-        c2 = config.structure({
-            "a": 1,
-            # "b": 2,
-            "c": 3,
-        }, Config)
+    # Required and has a default: default is used
+    c2 = config.structure({
+        # "a": 2,
+        "b": 3,
+    }, Config)
+    assert c2.a == 12
 
     # Required, has example, using make_example(): no error, gets example value
     c3 = config.make_example(Config)
-    assert c3.c == 22
+    assert c3.b == 22
 
 
 def test_config_option_list():
     default_list = [1, 2, 3]
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_list(int, help="")
         b = config.option_list(int, default=default_list, help="")
         c = config.option_list(int, default=lambda: [4, 5, 6], help="")
@@ -249,10 +240,10 @@ def test_config_option_list():
     assert c3.a == [10, 11]
 
     # Check the type of sequence values
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             "a": [1, None],
-        })
+        }, Config)
 
 
 def test_config_option_map():
@@ -261,8 +252,7 @@ def test_config_option_map():
         "y": 2,
     }
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_map(int, help="")
         b = config.option_map(int, default=default_map, help="")
         c = config.option_map(int, default=lambda: {"y": 3, "z": 4}, help="")
@@ -294,23 +284,21 @@ def test_config_option_map():
     assert c3.a == {"(1, 2)": 2}
 
     # Check the type of values
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             "a": {"x": None},
         }, Config)
 
 
 def test_config_nested():
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         x = config.option(int, default=1, help="")
         y = config.option(int, default=2, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option(Inner, help="")
         b = config.option(Inner, default=Inner, help="")
-        c = config.option(Inner, default=lambda: Inner(x=3, y=4), help="")
+        c = config.option(Inner, default=lambda: Inner(dict(x=3, y=4)), help="")
 
     # Check all default values
     c1 = config.structure({}, Config)
@@ -330,13 +318,11 @@ def test_config_nested():
 
 
 def test_config_nested_list():
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         x = config.option(int, default=1, help="")
         y = config.option(int, default=2, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_list(Inner, help="")
 
     # Check default value
@@ -360,7 +346,7 @@ def test_config_nested_list():
     assert c2.a[2].y == 22
 
     # Check type enforcement
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             "a": [
                 {"x": None},
@@ -369,13 +355,11 @@ def test_config_nested_list():
 
 
 def test_config_nested_map():
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         x = config.option(int, default=1, help="")
         y = config.option(int, default=2, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_map(Inner, help="")
 
     # Check default value
@@ -396,7 +380,7 @@ def test_config_nested_map():
     assert c2.a["c"].y == 21
 
     # Check type enforcement
-    with pytest.raises(TypeError):
+    with pytest.raises(config.ConfigError):
         config.structure({
             "a": {
                 "b": {"x": None},
@@ -405,8 +389,7 @@ def test_config_nested_map():
 
 
 def test_config_option_example():
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option(int, default=1, example=2, help="default and example values")
         b = config.option(int, default=lambda: 3, example=lambda: 4, help="default and example callables")
         c = config.option(int, default=5, help="only default")
@@ -463,8 +446,7 @@ CONFIG_GENERATOR_TESTS = []
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_simple():
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option(int, default=12, help="int with default value")
         b = config.option(int, example=22, help="int with example value")
         c = config.option(int, help="int with no default value")
@@ -484,8 +466,7 @@ def _test_config_generator_simple():
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_simple_list():
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_list(int, default=[1, 2, 3], help="list of ints with default value")
         b = config.option_list(int, help="list of ints with no default value")
 
@@ -499,8 +480,7 @@ def _test_config_generator_simple_list():
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_simple_map():
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_map(int, default={"x": 1, "y": 2}, help="map of ints with default value")
         b = config.option_map(int, help="map of ints with no default value")
 
@@ -515,15 +495,13 @@ def _test_config_generator_simple_map():
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_structure():
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         x = config.option(int, default=1, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option(Inner, help="no default")
-        b = config.option(Inner, default=Inner(x=100), help="default value")
-        c = config.option(Inner, default=lambda: Inner(x=200), help="default callable")
+        b = config.option(Inner, default=Inner(dict(x=100)), help="default value")
+        c = config.option(Inner, default=lambda: Inner(dict(x=200)), help="default callable")
 
     return Config, [
         "## no default",
@@ -539,14 +517,12 @@ def _test_config_generator_structure():
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_structure_list():
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         x = config.option(int, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_list(Inner, help="no default")
-        b = config.option_list(Inner, default=[Inner(x=10), Inner(x=20)], help="default value")
+        b = config.option_list(Inner, default=[Inner(dict(x=10)), Inner(dict(x=20))], help="default value")
 
     return Config, [
         "## no default",
@@ -561,14 +537,12 @@ def _test_config_generator_structure_list():
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_structure_map():
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         x = config.option(int, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_map(Inner, help="no default")
-        b = config.option_map(Inner, default={"i": Inner(x=10), "j": Inner(x=20)}, help="default value")
+        b = config.option_map(Inner, default={"i": Inner(dict(x=10)), "j": Inner(dict(x=20))}, help="default value")
 
     return Config, [
         "## no default",
@@ -583,17 +557,14 @@ def _test_config_generator_structure_map():
 
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_complex_nesting():
-    @config.config
-    class InnerB:
+    class InnerB(config.Config):
         a = config.option(int, default=1, help="")
 
-    @config.config
-    class InnerA:
+    class InnerA(config.Config):
         a = config.option_list(InnerB, default=[InnerB(), InnerB()], help="")
         b = config.option_map(InnerB, default={"x": InnerB(), "y": InnerB()}, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_list(InnerA, default=[InnerA(), InnerA()], help="")
         b = config.option_map(InnerA, default={"x": InnerA(), "y": InnerA()}, help="")
 
@@ -646,13 +617,11 @@ def _test_config_generator_complex_nesting():
 @CONFIG_GENERATOR_TESTS.append
 def _test_config_generator_quoted_key():
     """Check keys that need to be quoted to be valid TOML."""
-    @config.config
-    class Inner:
+    class Inner(config.Config):
         a = config.option(int, default=1, help="")
         b = config.option_map(int, default={"?": 1, "#": 2, "[": 3}, help="")
 
-    @config.config
-    class Config:
+    class Config(config.Config):
         a = config.option_map(Inner, default={"?": Inner(), "#": Inner(), "[": Inner()}, help="")
         b = config.option_map(int, default={"?": 1, "#": 2, "[": 3}, help="")
 
