@@ -180,6 +180,30 @@ def test_config_option_env():
         assert c5.c is True
 
 
+def test_config_option_types():
+    """Check that only whitelisted types are allowed for options."""
+    class A(config.Config):
+        a = config.option(int, default=1, help="")
+
+    class B:
+        pass
+
+    # Check that all types that should be valid for options are allowed
+    for t in (A, str, int, float, bool):
+        config.option(t, help="")
+        config.option_list(t, help="")
+        config.option_map(t, help="")
+
+    # Check that types that shouldn't be valid for options raise exceptions
+    for t in (B, None, object):
+        with pytest.raises(TypeError):
+            config.option(t, help="")
+        with pytest.raises(TypeError):
+            config.option_list(t, help="")
+        with pytest.raises(TypeError):
+            config.option_map(t, help="")
+
+
 def test_config_option_not_required_no_default():
     """Check that default value of None is the default behaviour."""
     class Config(config.Config):
