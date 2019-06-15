@@ -22,14 +22,12 @@ class Bot(SpecialPlugin, IRCClient):
 
     class Config(config.Config):
         ircv3 = config.option(bool, default=False, help="Enable IRCv3 features (i.e. 'client capabilities')")
-        # TODO: required + example, instead of default
-        nickname = config.option(str, default="csyorkbot", help="IRC nick")
+        nickname = config.option(str, required=True, example="csyorkbot", help="IRC nick")
         username = config.option(str, default="csyorkbot", help="IRC user")
         realname = config.option(str, default="", example="cs-york bot", help="IRC 'real name'")
         auth_method = config.option(str, default="pass", help="Authentication method: 'pass' or 'sasl_plain")
         password = config.option(str, env="IRC_PASS", example="password123", help="Authentication password")
-        # TODO: required
-        irc_host = config.option(str, example="irc.freenode.net", help="IRC server hostname")
+        irc_host = config.option(str, required=True, example="irc.freenode.net", help="IRC server hostname")
         irc_port = config.option(int, default=6667, help="IRC server port")
         command_prefix = config.option(str, default="!", help="Prefix for invoking commands")
         channels = config.option_list(str, example=["#cs-york-dev"], help="Channels to join")

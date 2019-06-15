@@ -10,6 +10,7 @@ from aioresponses import aioresponses as aioresponses_
 
 from csbot.irc import IRCClient
 from csbot.core import Bot
+from csbot import config
 from . import mock_open_connection
 
 
@@ -30,6 +31,12 @@ def fast_forward(event_loop):
 
 
 @pytest.fixture
+def config_example_mode():
+    with config.example_mode():
+        yield
+
+
+@pytest.fixture
 def irc_client_class():
     return IRCClient
 
@@ -46,7 +53,7 @@ def irc_client_config():
 
 
 @pytest.fixture
-async def irc_client(request, event_loop, irc_client_class, pre_irc_client, irc_client_config):
+async def irc_client(request, event_loop, config_example_mode, irc_client_class, pre_irc_client, irc_client_config):
     # Create client and make it use our event loop
     bot_marker = request.node.get_closest_marker('bot')
     if bot_marker is not None:
