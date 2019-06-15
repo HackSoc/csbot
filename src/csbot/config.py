@@ -158,13 +158,16 @@ class Default:
 
 
 def option(cls: _OptionType, *,
-           required: bool = False,
+           required: bool = None,
            default: _DefaultValue = None,
            example: _DefaultValue = None,
            env: Union[str, List[str]] = None,
            help: str) -> types.BaseType:
     if not is_allowable_type(cls):
         raise TypeError(f"cls must be subclass of Config or one of {_TYPE_MAP.keys()}")
+
+    if required is None and default is not None:
+        required = True
 
     if isinstance(env, str):
         env = [env]
@@ -175,7 +178,7 @@ def option(cls: _OptionType, *,
         field = _TYPE_MAP[cls]
 
     field_kwargs = {
-        "required": required or default is not None,
+        "required": required,
         "default": Default(default, example, env),
         "metadata": {
             METADATA_KEY: OptionMetadata(

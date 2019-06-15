@@ -180,28 +180,76 @@ def test_config_option_env():
         assert c5.c is True
 
 
-def test_config_option_required():
+def test_config_option_not_required_no_default():
+    """Check that default value of None is the default behaviour."""
     class Config(config.Config):
-        a = config.option(int, default=12, required=True, help="")
-        b = config.option(int, example=22, required=True, help="")
+        a = config.option(int, help="")
 
-    # Required and no default: raises error
+    c = config.structure({}, Config)
+    assert c.a is None
+
+
+def test_config_option_required_no_default():
+    """Check behaviour of ``required=True`` with no default value."""
+    class Config(config.Config):
+        a = config.option(int, required=True, help="")
+
     with pytest.raises(config.ConfigError):
-        c1 = config.structure({
-            "a": 2,
-            # "b": 3,
-        }, Config)
+        config.structure({}, Config)
 
-    # Required and has a default: default is used
-    c2 = config.structure({
-        # "a": 2,
-        "b": 3,
-    }, Config)
-    assert c2.a == 12
+    with pytest.raises(config.ConfigError):
+        config.structure({"a": None}, Config)
 
-    # Required, has example, using make_example(): no error, gets example value
-    c3 = config.make_example(Config)
-    assert c3.b == 22
+    c = config.structure({"a": 12}, Config)
+    assert c.a == 12
+
+
+def test_config_option_required_default():
+    """Check behaviour of ``required=True`` with a default value."""
+    class Config(config.Config):
+        a = config.option(int, required=True, default=12, help="")
+
+    c = config.structure({}, Config)
+    assert c.a == 12
+
+    c = config.structure({"a": 23}, Config)
+    assert c.a == 23
+
+    with pytest.raises(config.ConfigError):
+        config.structure({"a": None}, Config)
+
+
+def test_config_option_required_example():
+    """Check behaviour of ``required=True`` with an example value (but no default)."""
+    class Config(config.Config):
+        a = config.option(int, required=True, example=12, help="")
+
+    with pytest.raises(config.ConfigError):
+        config.structure({}, Config)
+
+    c = config.make_example(Config)
+    assert c.a == 12
+
+
+def test_config_option_implicitly_required():
+    """Check that a non-None default value forces the field to be required."""
+    class Config(config.Config):
+        a = config.option(int, default=12, help="")
+
+    c = config.structure({}, Config)
+    assert c.a == 12
+
+    with pytest.raises(config.ConfigError):
+        config.structure({"a": None}, Config)
+
+
+def test_config_option_not_required_default():
+    """Check that ``required=False`` overrides the "implicitly required" behaviour of having a default."""
+    class Config(config.Config):
+        a = config.option(int, default=12, required=False, help="")
+
+    c = config.structure({"a": None}, Config)
+    assert c.a is None
 
 
 def test_config_option_list():
