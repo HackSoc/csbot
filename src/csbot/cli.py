@@ -25,6 +25,6 @@ def example_config():
     generator = config.TomlExampleGenerator()
     for P in plugins:
         cls = getattr(P, 'Config', None)
-        if config.is_structure(cls):
+        if config.is_config(cls):
             generator.generate(cls, sys.stdout, prefix=[P.plugin_name()])
             sys.stdout.write("\n\n")
