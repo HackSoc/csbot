@@ -54,6 +54,10 @@ class PluginFeatureError(Exception):
     pass
 
 
+class PluginConfigError(Exception):
+    pass
+
+
 class PluginManager(abc.Mapping):
     """A simple plugin manager and proxy.
 
@@ -187,7 +191,7 @@ class Plugin(object, metaclass=PluginMeta):
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
         self._db = None
-        self.__config = None
+        self.__config = self._get_config(bot)
 
     @classmethod
     def plugin_name(cls):
@@ -324,6 +328,25 @@ class Plugin(object, metaclass=PluginMeta):
         """
         self.bot.unregister_commands(tag=self)
 
+    @classmethod
+    def _get_config(cls, bot):
+        # Get dict-like access to config
+        plugin = cls.plugin_name()
+        if plugin in bot.config_root:
+            cfg = bot.config_root[plugin]
+        else:
+            cfg = {}
+
+        # Upgrade to structure-based config if defined
+        config_cls = getattr(cls, 'Config', None)
+        if config.is_config(config_cls):
+            try:
+                cfg = config.structure(cfg, config_cls)
+            except config.ConfigError as e:
+                raise PluginConfigError(f"error in config for plugin '{cls.plugin_name()}': {e}") from e
+
+        return cfg
+
     @property
     def config(self):
         """Get the configuration section for this plugin.
@@ -333,21 +356,8 @@ class Plugin(object, metaclass=PluginMeta):
 
         .. seealso:: :mod:`configparser`
         """
-        if self.__config is not None:
-            return self.__config
-
-        # Get dict-like access to config
-        plugin = self.plugin_name()
-        if plugin in self.bot.config_root:
-            self.__config = self.bot.config_root[plugin]
-        else:
-            self.__config = {}
-
-        # Upgrade to structure-based config if defined
-        cls = getattr(self, 'Config', None)
-        if config.is_config(cls):
-            self.__config = config.structure(self.__config, cls)
-
+        if self.__config is None:
+            self.__config = self._get_config(self.bot)
         return self.__config
 
     def subconfig(self, subsection):

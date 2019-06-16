@@ -4,7 +4,7 @@ import itertools
 import toml
 
 from csbot.plugin import Plugin, SpecialPlugin, find_plugins
-from csbot.plugin import build_plugin_dict, PluginManager
+from csbot.plugin import build_plugin_dict, PluginManager, PluginConfigError
 import csbot.events as events
 from csbot.events import Event, CommandEvent
 from csbot.util import maybe_future_result
@@ -31,7 +31,7 @@ class Bot(SpecialPlugin, IRCClient):
         irc_port = config.option(int, default=6667, help="IRC server port")
         command_prefix = config.option(str, default="!", help="Prefix for invoking commands")
         channels = config.option_list(str, example=["#cs-york-dev"], help="Channels to join")
-        plugins = config.option_list(str, example=["logger linkinfo"], help="Plugins to load")
+        plugins = config.option_list(str, example=["logger", "linkinfo"], help="Plugins to load")
         use_notice = config.option(int, default=True, help="Use NOTICE instead of PRIVMSG to send messages")
         client_ping = config.option(int, default=0, help="Send PING if no messages for this many seconds (0=disabled)")
         bind_addr = config.option(str, example="192.168.1.111", help="Bind to specific local address")
@@ -43,13 +43,13 @@ class Bot(SpecialPlugin, IRCClient):
     _WHO_IDENTIFY = ('1', '%na')
 
     def __init__(self, config=None, loop=None):
-        # Initialise plugin
-        SpecialPlugin.__init__(self, self)
-
         # Load configuration
         self.config_root = {}
         if config is not None:
             self.config_root = toml.load(config)
+
+        # Initialise plugin
+        SpecialPlugin.__init__(self, self)
 
         # Initialise IRCClient from Bot configuration
         IRCClient.__init__(
@@ -369,3 +369,17 @@ class Bot(SpecialPlugin, IRCClient):
         with a reference to a real method, e.g. ``self.reply = self.msg``.
         """
         raise NotImplementedError
+
+    @classmethod
+    def write_example_config(cls, f):
+        plugins = [cls]
+        plugins.extend(cls.available_plugins[k] for k in sorted(cls.available_plugins.keys()))
+        generator = config.TomlExampleGenerator()
+        for P in plugins:
+            config_cls = getattr(P, 'Config', None)
+            if config.is_config(config_cls):
+                try:
+                    generator.generate(config_cls, f, prefix=[P.plugin_name()])
+                except config.ConfigError as e:
+                    raise PluginConfigError(f"error in example config for plugin '{P.plugin_name()}': {e}") from e
+                f.write("\n\n")

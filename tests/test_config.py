@@ -1,3 +1,5 @@
+import io
+
 import pytest
 import toml
 
@@ -736,3 +738,32 @@ def test_config_generator(test_factory):
     assert_valid_toml(output_obj)
     assert_toml_equal(output_obj, expected)
     assert config.loads(output_obj, cls) == obj
+
+
+class TestExampleConfig:
+    @pytest.fixture(params=csbot.plugin.find_plugins())
+    def plugin_cls(self, request):
+        """Generates a test for each available plugin."""
+        if not config.is_config(getattr(request.param, "Config", None)):
+            pytest.skip("plugin does not have Config class")
+        return request.param
+
+    @pytest.fixture
+    def irc_client_class(self, plugin_cls):
+        """Generate a bot class that contains only the plugin under test."""
+        class Bot(csbot.core.Bot):
+            available_plugins = csbot.plugin.build_plugin_dict([plugin_cls])
+        return Bot
+
+    @pytest.fixture
+    def config_file(self, irc_client_class):
+        """Generate an example config for the bot class which contains only the plugin under test."""
+        cfg = io.StringIO()
+        irc_client_class.write_example_config(cfg)
+        cfg.seek(0)
+        return cfg
+
+    def test_example_config_is_valid(self, event_loop, irc_client_class, config_file, plugin_cls):
+        """Test that the generated config can be loaded by the plugin under test."""
+        bot = irc_client_class(config=config_file, loop=event_loop)
+        plugin_cls(bot)
