@@ -6,7 +6,19 @@ import io
 import logging
 import os
 import re
-from typing import Type, TypeVar, List, Dict, Any, Union, Callable, TextIO
+from typing import (
+    cast,
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Mapping,
+    TextIO,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import attr
 from schematics import Model, types
@@ -14,32 +26,154 @@ import schematics.exceptions
 import toml
 from toml.encoder import _dump_str
 
-# TODO: add test that checks that the example configuration can be generated and loaded (therefore that no plugins have
-#       required options without an example value)
-# TODO: warn about mutable default/example values
+# TODO: warn about mutable default/example values?
 # TODO: required=True for option_list and option_map?
 # TODO: choices?
 # TODO; custom errors instead of leaking Schematics exceptions?
 
-LOG = logging.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 
-METADATA_KEY = 'csbot_config'
+_METADATA_KEY = 'csbot_config'
 
+
+class Config(Model):
+    """Base class for configuration schemas.
+
+    Use :func:`option`, :func:`option_list` and :func:`option_map` to create fields in the schema.
+    Schemas are also valid option types, so deeper structures can be defined.
+
+    >>> class MyConfig(Config):
+    ...     delay = option(float, default=0.5, help="Number of seconds to wait")
+    ...     notify = option_list(str, help="Users to notify")
+    """
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join(f'{a.name}={repr(a.value)}' for a in self.atoms())})"
+
+
+#: Raised when configuration fails to validate
+ConfigError = schematics.exceptions.DataError
+
+
+_example_mode = False
+
+
+@contextmanager
+def example_mode():
+    """For the duration of this context manager, try to use example values before default values."""
+    global _example_mode
+    old = _example_mode
+    _example_mode = True
+    yield
+    _example_mode = old
+
+
+# Mapping of Python types to Schematics field types
 _TYPE_MAP = {
     str: types.StringType,
     int: types.IntType,
     float: types.FloatType,
     bool: types.BooleanType,
 }
+# Basic option types available to the developer
+_B = TypeVar("_B", Config, str, int, float, bool)
+# All internal option types, including lists and dicts
+_O = TypeVar("_O",
+             Config, str, int, float, bool,
+             List[Config], List[str], List[int], List[float], List[bool],
+             Dict[str, Config], Dict[str, str], Dict[str, int], Dict[str, float], Dict[str, bool])
+# Type of default value for an option
+_DefaultValue = Union[None, _O]
+# Type of callable to create a default value for an option
+_DefaultCall = Callable[[], _DefaultValue[_O]]
+# Type of a "default" or "example" argument
+_DefaultArg = Union[_DefaultValue[_O], _DefaultCall[_O]]
 
-_T = TypeVar("_T")
 
-_DefaultValue = Union[type(None), _T, Callable[[], _T]]
+def is_config(obj: Any) -> bool:
+    """Is *obj* a configuration class or instance?"""
+    if inspect.isclass(obj):
+        return issubclass(obj, Config)
+    else:
+        return isinstance(obj, Config)
 
-_example_mode = False
+
+def is_allowable_type(cls: Type) -> bool:
+    """Is *cls* allowed as a configuration option type?"""
+    return cls in _TYPE_MAP or is_config(cls)
 
 
-class OptionKind(Enum):
+def structure(data: Mapping[str, Any], cls: Type[Config]) -> Config:
+    """Create an instance of *cls* from plain Python structure *data*."""
+    o = cls(data)
+    o.validate()
+    return o
+
+
+def unstructure(obj: Config) -> Mapping[str, Any]:
+    """Get plain Python structured data from *obj*."""
+    return obj.to_native()
+
+
+def loads(s: str, cls: Type[Config]) -> Config:
+    """Create an instance of *cls* from the TOML in *s*."""
+    return structure(toml.loads(s), cls)
+
+
+def dumps(obj: Config) -> str:
+    """Get TOML string representation of *obj*."""
+    return toml.dumps(unstructure(obj))
+
+
+def load(f: TextIO, cls: Type[Config]) -> Config:
+    """Create an instance of *cls* from the TOML in *f*."""
+    return structure(toml.load(f), cls)
+
+
+def dump(obj: Config, f: TextIO):
+    """Write TOML representation of *obj* to *f*."""
+    return toml.dump(unstructure(obj), f)
+
+
+class _Default(Generic[_O]):
+    """A callable to get a default or example value.
+
+    Both *default* and *example* can be either a value or a callable that returns a value.
+    Returns *default* (or the result of calling it, if callable) when called.
+
+    When called "normally", returns the value of the first environment variable in *env* that exists, or returns
+    *default* if no environment variable is used.
+
+    When called inside ``with example_mode()``, returns *example* if non-None, otherwise returns *default* (but without
+    environment variable behaviour). This allows configuration to define required fields without default values that can
+    still generate a useful example (see :class:`TomlExampleGenerator`) without otherwise supplying data.
+    """
+    def __init__(self, default: _DefaultArg = None, example: _DefaultArg = None, env: List[str] = None):
+        self._default: _DefaultCall = default if callable(default) else lambda: default
+        self._example: _DefaultCall = example if callable(example) else lambda: example
+        self._env: List[str] = env or []
+
+    def __call__(self) -> Union[str, _DefaultValue[_O]]:
+        global _example_mode
+        if _example_mode:
+            return self._get_example()
+        else:
+            return self._get_default()
+
+    def _get_default(self, use_env: bool = True) -> Union[str, _DefaultValue[_O]]:
+        if use_env:
+            for var in self._env:
+                if var in os.environ:
+                    return os.environ[var]
+        return self._default()
+
+    def _get_example(self) -> Union[str, _DefaultValue[_O]]:
+        example = self._example()
+        if example is None:
+            example = self._get_default(use_env=False)
+        return example
+
+
+class _OptionKind(Enum):
     SIMPLE = "simple"
     STRUCTURE = "structure"
     SIMPLE_LIST = "simple_list"
@@ -53,121 +187,32 @@ class OptionKind(Enum):
 
 
 @attr.s(slots=True, frozen=True)
-class OptionMetadata:
-    type = attr.ib()
-    kind: OptionKind = attr.ib(validator=attr.validators.in_(OptionKind))
+class _OptionMetadata(Generic[_B]):
+    type: Type[_B] = attr.ib()
+    kind: _OptionKind = attr.ib(validator=attr.validators.in_(_OptionKind))
     help: str = attr.ib(default="", validator=attr.validators.instance_of(str))
 
 
-@contextmanager
-def example_mode():
-    global _example_mode
-    old = _example_mode
-    _example_mode = True
-    yield
-    _example_mode = old
-
-
-class Config(Model):
-    def __repr__(self):
-        return f"{self.__class__.__name__}({', '.join(f'{a.name}={repr(a.value)}' for a in self.atoms())})"
-
-
-ConfigError = schematics.exceptions.DataError
-
-
-_SimpleOptionType = Union[Type[str], Type[int], Type[float], Type[bool]]
-_OptionType = Union[Type[Config], _SimpleOptionType]
-
-
-def is_config(obj):
-    if inspect.isclass(obj):
-        return issubclass(obj, Config)
-    else:
-        return isinstance(obj, Config)
-
-
-def is_allowable_type(cls):
-    return cls in _TYPE_MAP or is_config(cls)
-
-
-def structure(data: Dict[str, Any], cls: Type[Config]) -> Config:
-    o = cls(data)
-    o.validate()
-    return o
-
-
-def unstructure(obj: Config) -> Dict[str, Any]:
-    return obj.to_native()
-
-
-def loads(s: str, cls: Type[Config]) -> Config:
-    return structure(toml.loads(s), cls)
-
-
-def dumps(obj: Config) -> str:
-    return toml.dumps(unstructure(obj))
-
-
-def load(f, cls: Type[Config]) -> Config:
-    return structure(toml.load(f), cls)
-
-
-def dump(obj: Config, f):
-    return toml.dump(unstructure(obj), f)
-
-
-class Default:
-    """A callable to get a default or example value.
-
-    Returns *default* (or the result of calling it, if callable) when called.
-
-    If inside a ``with example_mode()``, first tries to return *example* (or the result of calling it, if callable),
-    and falls back to *default* if *example* was None.
-
-    This allows plugin configuration to define required fields that can still generate a useful example without any
-    data being supplied.
-
-    TODO: document *env*
-    """
-    def __init__(self, default: _DefaultValue = None, example: _DefaultValue = None, env: List[str] = None):
-        self._default = default if callable(default) else lambda: default
-        self._example = example if callable(example) else lambda: example
-        self._env = env or []
-
-    def __call__(self):
-        global _example_mode
-        if _example_mode:
-            return self._get_example()
-        else:
-            return self._get_default()
-
-    def _get_default(self, use_env: bool = True):
-        if use_env:
-            for var in self._env:
-                if var in os.environ:
-                    print(f"found {var} in os.environ")
-                    return os.environ[var]
-        return self._default()
-
-    def _get_example(self):
-        example = self._example()
-        if example is None:
-            example = self._get_default(use_env=False)
-        return example
-
-
-def option(cls: _OptionType, *,
+def option(cls: Type[_B], *,
            required: bool = None,
-           default: _DefaultValue = None,
-           example: _DefaultValue = None,
+           default: _DefaultArg = None,
+           example: _DefaultArg = None,
            env: Union[str, List[str]] = None,
-           help: str) -> types.BaseType:
+           help: str):
+    """Create a configuration option that contains a value of type *cls*.
+
+    :param cls:         Option type (see :func:`is_allowable_type`)
+    :param required:    A non-None value is required? (default: False if default is None, otherwise True)
+    :param default:     Default value if no value is supplied (default: None)
+    :param example:     Default value when generating example configuration (default: None)
+    :param env:         Environment variables to try if no value is supplied, before using default (default: [])
+    :param help:        Description of option, included when generating example configuration
+    """
     if not is_allowable_type(cls):
         raise TypeError(f"cls must be subclass of Config or one of {_TYPE_MAP.keys()}")
 
-    if required is None and default is not None:
-        required = True
+    if required is None:
+        required = default is not None
 
     if isinstance(env, str):
         env = [env]
@@ -179,11 +224,11 @@ def option(cls: _OptionType, *,
 
     field_kwargs = {
         "required": required,
-        "default": Default(default, example, env),
+        "default": _Default(default, example, env),
         "metadata": {
-            METADATA_KEY: OptionMetadata(
+            _METADATA_KEY: _OptionMetadata(
                 type=cls,
-                kind=OptionKind.STRUCTURE if is_config(cls) else OptionKind.SIMPLE,
+                kind=_OptionKind.STRUCTURE if is_config(cls) else _OptionKind.SIMPLE,
                 help=help,
             ),
         },
@@ -191,10 +236,17 @@ def option(cls: _OptionType, *,
     return field(**field_kwargs)
 
 
-def option_list(cls: _OptionType, *,
-                default: _DefaultValue = None,
-                example: _DefaultValue = None,
+def option_list(cls: Type[_B], *,
+                default: _DefaultArg[List[_B]] = None,
+                example: _DefaultArg[List[_B]] = None,
                 help: str):
+    """Create a configuration option that contains a list of *cls* values.
+
+    :param cls:         Option type (see :func:`is_allowable_type`)
+    :param default:     Default value if no value is supplied (default: empty list)
+    :param example:     Default value when generating example configuration (default: empty list)
+    :param help:        Description of option, included when generating example configuration
+    """
     if not is_allowable_type(cls):
         raise TypeError(f"cls must be subclass of Config or one of {_TYPE_MAP.keys()}")
 
@@ -208,11 +260,11 @@ def option_list(cls: _OptionType, *,
 
     field_kwargs = {
         "required": True,   # Disallow None as a value, empty list is fine
-        "default": Default(default, example),
+        "default": _Default(default, example),
         "metadata": {
-            METADATA_KEY: OptionMetadata(
+            _METADATA_KEY: _OptionMetadata(
                 type=cls,
-                kind=OptionKind.STRUCTURE_LIST if is_config(cls) else OptionKind.SIMPLE_LIST,
+                kind=_OptionKind.STRUCTURE_LIST if is_config(cls) else _OptionKind.SIMPLE_LIST,
                 help=help,
             ),
         },
@@ -220,10 +272,17 @@ def option_list(cls: _OptionType, *,
     return types.ListType(inner_field, **field_kwargs)
 
 
-def option_map(cls: _OptionType, *,
-               default: _DefaultValue = None,
-               example: _DefaultValue = None,
+def option_map(cls: Type[_B], *,
+               default: _DefaultArg[Dict[str, _B]] = None,
+               example: _DefaultArg[Dict[str, _B]] = None,
                help: str):
+    """Create a configuration option that contains a mapping of string keys to *cls* values.
+
+    :param cls:         Option type (see :func:`is_allowable_type`)
+    :param default:     Default value if no value is supplied (default: empty list)
+    :param example:     Default value when generating example configuration (default: empty list)
+    :param help:        Description of option, included when generating example configuration
+    """
     if not is_allowable_type(cls):
         raise TypeError(f"cls must be subclass of Config or one of {_TYPE_MAP.keys()}")
 
@@ -237,11 +296,11 @@ def option_map(cls: _OptionType, *,
 
     field_kwargs = {
         "required": True,   # Disallow None as a value, empty dict is fine
-        "default": Default(default, example),
+        "default": _Default(default, example),
         "metadata": {
-            METADATA_KEY: OptionMetadata(
+            _METADATA_KEY: _OptionMetadata(
                 type=cls,
-                kind=OptionKind.STRUCTURE_MAP if is_config(cls) else OptionKind.SIMPLE_MAP,
+                kind=_OptionKind.STRUCTURE_MAP if is_config(cls) else _OptionKind.SIMPLE_MAP,
                 help=help,
             ),
         },
@@ -250,6 +309,7 @@ def option_map(cls: _OptionType, *,
 
 
 def make_example(cls: Type[Config]) -> Config:
+    """Create an instance of *cls* without supplying data, using "example" or "default" values for each option."""
     with example_mode():
         o = cls()
         o.validate()
@@ -303,12 +363,14 @@ class TomlExampleGenerator:
     def generate(self, obj: Union[Config, Type[Config]], stream: TextIO, prefix: List[str] = None):
         """Generate an example from *obj* and write it to *stream*."""
         if inspect.isclass(obj):
-            obj = make_example(obj)
+            obj_ = make_example(obj)
+        else:
+            obj_ = cast(Config, obj)
         assert is_config(obj)
         if prefix is None:
             prefix = []
         with self._use_stream(stream):
-            self._generate_structure(obj, prefix)
+            self._generate_structure(obj_, prefix)
 
     def _generate_option(self,
                          example: Any,
@@ -328,17 +390,17 @@ class TomlExampleGenerator:
         metadata = self._get_metadata(field)
         if metadata.help:
             self._writeline(f"## {metadata.help}")
-        if metadata.kind is OptionKind.SIMPLE:
+        if metadata.kind is _OptionKind.SIMPLE:
             self._generate_simple(example, relative_path)
-        elif metadata.kind is OptionKind.SIMPLE_LIST:
+        elif metadata.kind is _OptionKind.SIMPLE_LIST:
             self._generate_simple_list(example, relative_path)
-        elif metadata.kind is OptionKind.SIMPLE_MAP:
+        elif metadata.kind is _OptionKind.SIMPLE_MAP:
             self._generate_simple_map(example, relative_path)
-        elif metadata.kind is OptionKind.STRUCTURE:
+        elif metadata.kind is _OptionKind.STRUCTURE:
             self._generate_structure(example, absolute_path)
-        elif metadata.kind is OptionKind.STRUCTURE_LIST:
+        elif metadata.kind is _OptionKind.STRUCTURE_LIST:
             self._generate_structure_list(example, absolute_path)
-        elif metadata.kind is OptionKind.STRUCTURE_MAP:
+        elif metadata.kind is _OptionKind.STRUCTURE_MAP:
             self._generate_structure_map(example, absolute_path)
 
     def _generate_simple(self, example: Any, relative_path: List[str]):
@@ -435,12 +497,8 @@ class TomlExampleGenerator:
                 self._generate_structure(value, absolute_path + [name])
 
     @classmethod
-    def _get_attributes(cls, obj):
-        return getattr(obj, "__attrs_attrs__")
-
-    @classmethod
-    def _get_metadata(cls, field: types.BaseType) -> OptionMetadata:
-        return field.metadata[METADATA_KEY]
+    def _get_metadata(cls, field: types.BaseType) -> _OptionMetadata:
+        return field.metadata[_METADATA_KEY]
 
     @classmethod
     def _make_key(cls, path):
@@ -448,7 +506,8 @@ class TomlExampleGenerator:
                          for _ in path])
 
 
-def generate_toml_example(obj, commented=False):
+def generate_toml_example(obj: Union[Config, Type[Config]], commented: bool = False) -> str:
+    """Generate an example configuration from *obj* as a TOML string."""
     stream = io.StringIO()
     generator = TomlExampleGenerator(commented=commented)
     generator.generate(obj, stream)
