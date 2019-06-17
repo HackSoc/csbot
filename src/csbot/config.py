@@ -186,7 +186,7 @@ class _OptionKind(Enum):
         return self in {self.SIMPLE, self.SIMPLE_LIST, self.SIMPLE_MAP}
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(frozen=True)
 class _OptionMetadata(Generic[_B]):
     type: Type[_B] = attr.ib()
     kind: _OptionKind = attr.ib(validator=attr.validators.in_(_OptionKind))
