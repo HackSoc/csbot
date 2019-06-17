@@ -191,8 +191,8 @@ class _OptionMetadata(Generic[_B]):
 
 def option(cls: Type[_B], *,
            required: bool = None,
-           default: _DefaultArg = None,
-           example: _DefaultArg = None,
+           default: _DefaultArg[_B] = None,
+           example: _DefaultArg[_B] = None,
            env: Union[str, List[str]] = None,
            help: str):
     """Create a configuration option that contains a value of type *cls*.
