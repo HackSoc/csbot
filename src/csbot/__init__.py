@@ -198,7 +198,7 @@ async def github_report_deploy(github_token, github_repo, env_name, revision):
                           create_response.status, create_response.reason, await create_response.text())
                 return
 
-            status = await status_response.json()
+            await status_response.json()
 
         LOG.info('Reported deploy to GitHub: env=%s revision=%s deploy_id=%s',
                  env_name, revision, deploy["id"])

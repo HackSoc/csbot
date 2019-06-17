@@ -293,15 +293,15 @@ class Bot(SpecialPlugin, IRCClient):
 
         # TODO: restore this functionality
         # Get a mapping from status characters to mode flags
-        #prefixes = self.supported.getFeature('PREFIX')
-        #inverse_prefixes = dict((v[0], k) for k, v in prefixes.items())
+        # prefixes = self.supported.getFeature('PREFIX')
+        # inverse_prefixes = dict((v[0], k) for k, v in prefixes.items())
 
         # Get mode characters from name prefix
-        #def f(name):
-        #    if name[0] in inverse_prefixes:
-        #        return (name[1:], set(inverse_prefixes[name[0]]))
-        #    else:
-        #        return (name, set())
+        # def f(name):
+        #     if name[0] in inverse_prefixes:
+        #         return (name[1:], set(inverse_prefixes[name[0]]))
+        #     else:
+        #         return (name, set())
         def f(name):
             return name.lstrip('@+'), set()
         names = list(map(f, raw_names))
