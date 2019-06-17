@@ -2,7 +2,14 @@ import collections
 from collections import abc
 import logging
 import os
-from typing import List, Callable
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
 
 import straight.plugin
 
@@ -80,7 +87,7 @@ class PluginManager(abc.Mapping):
     """
 
     #: Loaded plugins.
-    plugins = {}
+    plugins: MutableMapping[str, "Plugin"]
 
     def __init__(self, loaded, available, plugins, args):
         self.log = logging.getLogger(__name__)
@@ -173,16 +180,18 @@ class Plugin(object, metaclass=PluginMeta):
     """
 
     #: Default configuration values, used automatically by :meth:`config_get`.
-    CONFIG_DEFAULTS = {}
+    CONFIG_DEFAULTS: Mapping[str, Any] = {}
     #: Configuration environment variables, used automatically by
     #: :meth:`config_get`.
-    CONFIG_ENVVARS = {}
+    CONFIG_ENVVARS: Mapping[str, Sequence[str]] = {}
     #: Plugins that :meth:`missing_dependencies` should check for.
-    PLUGIN_DEPENDS = []
+    PLUGIN_DEPENDS: Sequence[str] = []
 
     #: The plugin's logger, created by default using the plugin class'
     #: containing module name as the logger name.
     log = None
+
+    plugin_hooks: Mapping[str, Sequence[str]]
 
     def __init__(self, bot):
         # Get the logger for the module the actual plugin is defined in, not
