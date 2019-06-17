@@ -1,5 +1,6 @@
 import collections
 from collections import abc
+from functools import partial
 import logging
 import os
 from typing import (
@@ -8,9 +9,12 @@ from typing import (
     List,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Sequence,
+    Set,
 )
 
+import attr
 import straight.plugin
 
 from . import config
@@ -144,31 +148,83 @@ class PluginManager(abc.Mapping):
 ProvidedByPlugin = collections.namedtuple('ProvidedByPlugin', ['plugin', 'kwargs'])
 
 
+@attr.s
+class _PluginData:
+    dependencies: Set[str] = attr.ib(factory=set)
+    hooks: MutableMapping[str, MutableSequence[str]] = attr.ib(factory=lambda: collections.defaultdict(list))
+    commands = attr.ib(factory=list)
+    integrations = attr.ib(factory=list)
+
+    def depends(self, *dependencies):
+        self.dependencies.update(dependencies)
+
+    def hook(self, name, f=None):
+        if f is None:
+            return partial(self.hook, name)
+        else:
+            if f.__name__ not in self.hooks[name]:
+                self.hooks[name].append(f.__name__)
+            return f
+
+    def command(self, name, f=None, **metadata):
+        if f is None:
+            return partial(self.command, name, **metadata)
+        else:
+            self.commands.append((name, metadata, f.__name__))
+            return f
+
+    def integrate_with(self, *otherplugins):
+        if len(otherplugins) == 0:
+            raise PluginFeatureError("no plugins specified in Plugin .integrate_with()")
+
+        def decorate(f):
+            self.integrations.append((otherplugins, f.__name__))
+            return f
+        return decorate
+
+
 class PluginMeta(type):
     """Metaclass for :class:`Plugin` that collects methods tagged with plugin
     feature decorators.
     """
-    def __init__(cls, name, bases, dict):
-        super(PluginMeta, cls).__init__(name, bases, dict)
+    _plugin_data_stack: MutableSequence[_PluginData] = []
+
+    @classmethod
+    def __prepare__(mcs, name, bases, **kwargs):
+        """Prepare "plugin data" context.
+
+        The plugin data object is put on the top of a stack, so is "current" for the lifetime of creating a new
+        :class:`Plugin` class, except if a nested class is being created.
+        """
+        data = _PluginData()
+        mcs._plugin_data_stack.append(data)
+        return dict(
+            __plugin_data=data,
+        )
+
+    def __new__(mcs, name, bases, attrs, **kwargs):
+        mcs._plugin_data_stack.pop()
+        return super().__new__(mcs, name, bases, attrs)
+
+    def __init__(cls, name, bases, attrs):
+        super(PluginMeta, cls).__init__(name, bases, attrs)
 
         # Initialise plugin features
         cls.PLUGIN_DEPENDS = set(cls.PLUGIN_DEPENDS)
-        cls.plugin_hooks = collections.defaultdict(list)
-        cls.plugin_cmds = []
-        cls.plugin_integrations = []
+        cls._Plugin__plugin_data = data = attrs.pop("__plugin_data")
         cls.plugin_provide = []
 
         # Scan for decorated methods
-        for name, attr in dict.items():
-            for h in getattr(attr, 'plugin_hooks', ()):
-                cls.plugin_hooks[h].append(name)
-            for cmd, metadata in getattr(attr, 'plugin_cmds', ()):
-                cls.plugin_cmds.append((cmd, metadata, name))
-            if len(getattr(attr, 'plugin_integrate_with', [])) > 0:
-                cls.plugin_integrations.append((attr.plugin_integrate_with, name))
+        for name, attr in attrs.items():
             if isinstance(attr, ProvidedByPlugin):
                 cls.PLUGIN_DEPENDS.add(attr.plugin)
                 cls.plugin_provide.append((name, attr))
+
+    @classmethod
+    def current(mcs):
+        if len(mcs._plugin_data_stack) == 0:
+            raise TypeError("attempting to use plugin features outside of a Plugin subclass")
+        return mcs._plugin_data_stack[-1]
 
 
 class Plugin(object, metaclass=PluginMeta):
@@ -191,7 +247,7 @@ class Plugin(object, metaclass=PluginMeta):
     #: containing module name as the logger name.
     log = None
 
-    plugin_hooks: Mapping[str, Sequence[str]]
+    __plugin_data: _PluginData
 
     def __init__(self, bot):
         # Get the logger for the module the actual plugin is defined in, not
@@ -199,7 +255,6 @@ class Plugin(object, metaclass=PluginMeta):
         # 'csbot.plugin' instead.
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
-        self._db = None
         self.__config = self._get_config(bot)
 
     @classmethod
@@ -227,13 +282,7 @@ class Plugin(object, metaclass=PluginMeta):
 
     @staticmethod
     def hook(hook):
-        def decorate(f):
-            if hasattr(f, 'plugin_hooks'):
-                f.plugin_hooks.add(hook)
-            else:
-                f.plugin_hooks = set((hook,))
-            return f
-        return decorate
+        return PluginMeta.current().hook(hook)
 
     @staticmethod
     def command(cmd, **metadata):
@@ -247,13 +296,7 @@ class Plugin(object, metaclass=PluginMeta):
             def foo_command(self, e):
                 pass
         """
-        def decorate(f):
-            if hasattr(f, 'plugin_cmds'):
-                f.plugin_cmds.append((cmd, metadata))
-            else:
-                f.plugin_cmds = [(cmd, metadata)]
-            return f
-        return decorate
+        return PluginMeta.current().command(cmd, **metadata)
 
     @staticmethod
     def integrate_with(*otherplugins):
@@ -267,14 +310,7 @@ class Plugin(object, metaclass=PluginMeta):
                   guaranteed, because attribute order is not preserved during
                   class creation.
         """
-        if len(otherplugins) == 0:
-            raise PluginFeatureError('no plugins specified in Plugin'
-                                     '.integrate_with()')
-
-        def decorate(f):
-            f.plugin_integrate_with = otherplugins
-            return f
-        return decorate
+        return PluginMeta.current().integrate_with(*otherplugins)
 
     @staticmethod
     def use(other, **kwargs):
@@ -292,12 +328,13 @@ class Plugin(object, metaclass=PluginMeta):
 
             self.bot.plugins[other].provide(self.plugin_name(), **kwargs)
         """
+        # TODO: replace with descriptor, record dependency in _PluginData
         return ProvidedByPlugin(other, kwargs)
 
     def get_hooks(self, hook: str) -> List[Callable]:
         """Get a list of this plugin's handlers for *hook*.
         """
-        return [getattr(self, name) for name in self.plugin_hooks.get(hook, ())]
+        return [getattr(self, name) for name in self.__plugin_data.hooks.get(hook, ())]
 
     def provide(self, plugin_name, **kwarg):
         """Provide a value for a :meth:`Plugin.use` usage."""
@@ -315,7 +352,7 @@ class Plugin(object, metaclass=PluginMeta):
             new_value = other.provide(self.plugin_name(), **provided_by.kwargs)
             setattr(self, name, new_value)
 
-        for plugin_names, name in self.plugin_integrations:
+        for plugin_names, name in self.__plugin_data.integrations:
             plugins = [self.bot.plugins[p] for p in plugin_names
                        if p in self.bot.plugins]
             # Only fire integration method if all named plugins were loaded
@@ -323,7 +360,7 @@ class Plugin(object, metaclass=PluginMeta):
                 f = getattr(self, name)
                 f(*plugins)
 
-        for cmd, meta, name in self.plugin_cmds:
+        for cmd, meta, name in self.__plugin_data.commands:
             self.bot.register_command(
                 cmd,
                 meta,
