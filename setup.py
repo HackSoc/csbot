@@ -24,7 +24,6 @@ setuptools.setup(
         'aiohttp>=3.5.1,<4.0',
         'async_generator',
         'attrs',
-        'cattrs',
         'toml',
         'schematics',
         'rollbar',
