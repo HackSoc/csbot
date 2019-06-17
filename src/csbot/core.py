@@ -371,10 +371,10 @@ class Bot(SpecialPlugin, IRCClient):
         raise NotImplementedError
 
     @classmethod
-    def write_example_config(cls, f):
+    def write_example_config(cls, f, commented=False):
         plugins = [cls]
         plugins.extend(cls.available_plugins[k] for k in sorted(cls.available_plugins.keys()))
-        generator = config.TomlExampleGenerator()
+        generator = config.TomlExampleGenerator(commented=commented)
         for P in plugins:
             config_cls = getattr(P, 'Config', None)
             if config.is_config(config_cls):

@@ -26,10 +26,6 @@ import schematics.exceptions
 import toml
 from toml.encoder import _dump_str
 
-# TODO: warn about mutable default/example values?
-# TODO: required=True for option_list and option_map?
-# TODO: choices?
-# TODO; custom errors instead of leaking Schematics exceptions?
 
 _LOG = logging.getLogger(__name__)
 
@@ -316,14 +312,12 @@ def make_example(cls: Type[Config]) -> Config:
         return o
 
 
-# TODO: commented output
-# TODO: distinguish between "example" and "default" values?
 class TomlExampleGenerator:
     _BARE_KEY_REGEX = re.compile(r"^[A-Za-z0-9_-]+$")
 
     def __init__(self, *, commented=False):
         self._stream = None
-        self._commented = False
+        self._commented = commented
         self._encoder = toml.TomlEncoder()
         self._at_start = True
 
@@ -478,7 +472,6 @@ class TomlExampleGenerator:
         if len(example) == 0:
             key = self._make_key(absolute_path)
             self._writeline(f"# [[{key}]]")
-            # TODO: generate skeleton/outline of structure class?
         else:
             for item in example:
                 self._generate_structure(item, absolute_path, is_list_item=True)
@@ -491,7 +484,6 @@ class TomlExampleGenerator:
         if len(example) == 0:
             key = self._make_key(absolute_path)
             self._writeline(f"# [{key}._key_]")
-            # TODO: generate skeleton/outline of structure class?
         else:
             for name, value in example.items():
                 self._generate_structure(value, absolute_path + [name])

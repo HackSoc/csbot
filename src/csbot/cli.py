@@ -17,5 +17,7 @@ def list_plugins():
 
 
 @util.command(help="Generate example configuration file")
-def example_config():
-    Bot.write_example_config(sys.stdout)
+@click.option("--commented/--uncommented", "commented", default=False,
+              help="Comment out all generated configuration")
+def example_config(commented):
+    Bot.write_example_config(sys.stdout, commented)

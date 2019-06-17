@@ -740,6 +740,30 @@ def test_config_generator(test_factory):
     assert config.loads(output_obj, cls) == obj
 
 
+def test_config_generator_commented():
+    class Inner(config.Config):
+        x = config.option(int, help="")
+
+    class Config(config.Config):
+        a = config.option_map(Inner, help="no default")
+        b = config.option_map(Inner, default={"i": Inner(dict(x=10)), "j": Inner(dict(x=20))}, help="default value")
+
+    expected = [
+        "## no default",
+        "# [a._key_]",
+        "## default value",
+        "# [b.i]",
+        "# x = 10",
+        "# [b.j]",
+        "# x = 20",
+    ]
+
+    obj = config.make_example(Config)
+    output = config.generate_toml_example(obj, commented=True)
+    assert_valid_toml(output)
+    assert_toml_equal(output, expected)
+
+
 class TestExampleConfig:
     @pytest.fixture(params=csbot.plugin.find_plugins())
     def plugin_cls(self, request):
