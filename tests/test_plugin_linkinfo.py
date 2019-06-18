@@ -8,7 +8,7 @@ import asynctest.mock
 import aiohttp
 from aioresponses import CallbackResult
 
-from csbot.plugin import Plugin
+from csbot.plugin import Plugin, find_plugins
 import csbot.core
 
 
@@ -212,31 +212,22 @@ def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
         assert not get_link_info.called
 
 
-class MockPlugin(Plugin):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.handler_mock = mock.Mock(spec=callable)
-
-    @Plugin.hook('core.message.privmsg')
-    def privmsg(self, event):
-        self.handler_mock(event['message'])
-
-
 class TestNonBlocking:
-    class Bot(csbot.core.Bot):
-        available_plugins = csbot.core.Bot.available_plugins.copy()
-        available_plugins.update(mockplugin=MockPlugin)
+    class MockPlugin(Plugin):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.handler_mock = mock.Mock(spec=callable)
 
-        # TODO: this is ugly, need to improve (a) subclassing behaviour and/or (b) test utilities
-        privmsg = Plugin.hook('core.message.privmsg')(csbot.core.Bot.privmsg)
-        fire_command = Plugin.hook('core.command')(csbot.core.Bot.fire_command)
+        @Plugin.hook('core.message.privmsg')
+        def privmsg(self, event):
+            self.handler_mock(event['message'])
 
     CONFIG = f"""\
     ["@bot"]
     plugins = ["mockplugin", "linkinfo"]
     """
 
-    pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
+    pytestmark = pytest.mark.bot(plugins=find_plugins() + [MockPlugin], config=CONFIG)
 
     @pytest.mark.asyncio
     async def test_non_blocking_privmsg(self, event_loop, bot_helper, aioresponses):

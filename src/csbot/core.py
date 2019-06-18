@@ -1,5 +1,6 @@
 import collections
 import itertools
+from typing import Any, Mapping, Sequence, Type
 
 from csbot.plugin import Plugin, SpecialPlugin, find_plugins
 from csbot.plugin import build_plugin_dict, PluginManager, PluginConfigError
@@ -36,11 +37,18 @@ class Bot(SpecialPlugin, IRCClient):
 
     #: Dictionary containing available plugins for loading, using
     #: straight.plugin to discover plugin classes under a namespace.
-    available_plugins = build_plugin_dict(find_plugins())
+    available_plugins: Mapping[str, Type[Plugin]]
 
     _WHO_IDENTIFY = ('1', '%na')
 
-    def __init__(self, config=None, loop=None):
+    def __init__(self, config=None, *, plugins: Sequence[Type[Plugin]] = None, loop=None):
+        # Record available plugins
+        if plugins is None:
+            self.available_plugins = build_plugin_dict(find_plugins())
+        else:
+            self.available_plugins = build_plugin_dict(plugins)
+
+        # Load configuration
         self.config_root = config
         if self.config_root is None:
             self.config_root = {}
@@ -370,11 +378,14 @@ class Bot(SpecialPlugin, IRCClient):
         raise NotImplementedError
 
     @classmethod
-    def write_example_config(cls, f, commented=False):
-        plugins = [cls]
-        plugins.extend(cls.available_plugins[k] for k in sorted(cls.available_plugins.keys()))
+    def write_example_config(cls, f, plugins=None, commented=False):
+        plugins_ = [cls]
+        if plugins is None:
+            plugins_.extend(sorted(find_plugins(), key=lambda p: p.plugin_name()))
+        else:
+            plugins_.extend(plugins)
         generator = config.TomlExampleGenerator(commented=commented)
-        for P in plugins:
+        for P in plugins_:
             config_cls = getattr(P, 'Config', None)
             if config.is_config(config_cls):
                 try:

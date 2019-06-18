@@ -3,16 +3,13 @@ import json
 import pytest
 import asynctest
 
-from csbot import core
+from csbot.plugins.webhook import Webhook
+from csbot.plugins.github import GitHub
 from . import read_fixture_file
 from .test_plugin_webserver import WebServer
 
 
-class Bot(core.Bot):
-    available_plugins = core.Bot.available_plugins.copy()
-    available_plugins.update(
-        webserver=WebServer,
-    )
+PLUGINS = [WebServer, Webhook, GitHub]
 
 
 @pytest.fixture
@@ -72,7 +69,7 @@ class TestGitHubPlugin:
     notify = "#mychannel"
     """
     URL = f'/webhook/github/foobar'
-    pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
+    pytestmark = pytest.mark.bot(plugins=PLUGINS, config=CONFIG)
 
     TEST_CASES = [
         # ping: https://developer.github.com/webhooks/#ping-event
@@ -211,7 +208,7 @@ class TestGitHubPlugin:
         bot_helper.assert_sent(expected)
 
 
-@pytest.mark.bot(cls=Bot, config="""\
+@pytest.mark.bot(plugins=PLUGINS, config="""\
 ["@bot"]
 plugins = ["webserver", "webhook", "github"]
 [webhook]
@@ -234,7 +231,7 @@ async def test_signature_ignored(bot_helper, client):
         m.assert_called_once()
 
 
-@pytest.mark.bot(cls=Bot, config="""\
+@pytest.mark.bot(plugins=PLUGINS, config="""\
 ["@bot"]
 plugins = ["webserver", "webhook", "github"]
 [webhook]
@@ -255,7 +252,7 @@ async def test_signature_secret_invalid(bot_helper, client):
         m.assert_not_called()
 
 
-@pytest.mark.bot(cls=Bot, config="""\
+@pytest.mark.bot(plugins=PLUGINS, config="""\
 ["@bot"]
 plugins = ["webserver", "webhook", "github"]
 [webhook]
@@ -276,7 +273,7 @@ async def test_signature_secret_valid(bot_helper, client):
         m.assert_called_once()
 
 
-@pytest.mark.bot(cls=Bot, config="""\
+@pytest.mark.bot(plugins=PLUGINS, config="""\
 ["@bot"]
 plugins = ["webserver", "webhook", "github"]
 [webhook]
@@ -299,7 +296,7 @@ async def test_signature_per_repo_secret_invalid(bot_helper, client):
         m.assert_not_called()
 
 
-@pytest.mark.bot(cls=Bot, config="""\
+@pytest.mark.bot(plugins=PLUGINS, config="""\
 ["@bot"]
 plugins = ["webserver", "webhook", "github"]
 [webhook]
