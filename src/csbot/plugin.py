@@ -1,6 +1,7 @@
 import collections
 from collections import abc
 from functools import partial
+import itertools
 import logging
 import os
 from typing import (
@@ -19,6 +20,7 @@ import attr
 import straight.plugin
 
 from . import config
+from .util import topological_sort
 
 
 def find_plugins():
@@ -102,21 +104,40 @@ class PluginManager(abc.Mapping):
         for p in loaded:
             self.plugins[p.plugin_name()] = p
 
-        # Attempt to load other plugins
+        # All known plugins that should be loaded eventually, including those pre-loaded
+        known = set(self.plugins.keys())
+        # Plugins that need to be loaded still
+        targets = set()
+
+        # Warn about duplicate and non-existent plugins
         for p in plugins:
-            if p in self.plugins:
-                self.log.warning('not loading duplicate plugin:  ' + p)
+            if p in known:
+                self.log.warning(f"not loading duplicate plugin: {p}")
             elif p not in available:
-                self.log.error('plugin not found: ' + p)
+                self.log.error(f"plugin not found: {p}")
             else:
-                P = available[p]
-                missing = P.missing_dependencies(self.plugins)
-                if len(missing) > 0:
-                    raise PluginDependencyUnmet(
-                        "{} has unmet dependencies: {}".format(
-                            p, ', '.join(missing)))
-                self.plugins[p] = P(*args)
-                self.log.info('plugin loaded: ' + p)
+                known.add(p)
+                targets.add(p)
+
+        # Check for dependencies that won't be met
+        for p in targets:
+            cls = available[p]
+            missing = cls.missing_dependencies(known)
+            if len(missing) > 0:
+                raise PluginDependencyUnmet(f"{p} has unmet dependencies: {', '.join(missing)}")
+
+        # Figure out a plugin load order from the dependency graph
+        dependencies = {p: set() for p in known}
+        for p in targets:
+            cls = available[p]
+            dependencies[p] = cls._Plugin__plugin_data.dependencies
+        ordered = [p for p in itertools.chain(*topological_sort(dependencies)) if p not in self.plugins]
+
+        # Load the plugins in order
+        for p in ordered:
+            cls = available[p]
+            self.plugins[p] = cls(*args)
+            self.log.info(f"plugin loaded: {p}")
 
     def __getattr__(self, name):
         """Treat all undefined public attributes as proxy methods.

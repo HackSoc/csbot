@@ -50,22 +50,17 @@ class TestDependency:
                   config=io.StringIO("""["@bot"]\nplugins = ["mockplugin3", "mockplugin2", "mockplugin1"]"""))
         assert isinstance(bot.plugins["mockplugin1"], self.MockPlugin1)
 
-    @pytest.mark.xfail(raises=PluginDependencyUnmet)
     def test_dependency_order(self, event_loop, config_example_mode):
         """Check that plugin dependencies can be satisfied regardless of order in config."""
         bot = Bot(plugins=[self.MockPlugin2, self.MockPlugin3],
                   config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin3"]"""))
         assert isinstance(bot.plugins["mockplugin2"], self.MockPlugin2)
 
-    @pytest.mark.xfail(raises=PluginDependencyUnmet)
     def test_dependency_cycle(self, event_loop, config_example_mode):
-        """Check that plugin dependency cycles are handled.
-
-        TODO: should either be an obvious exception, or should be explicitly allowed
-        """
-        bot = Bot(plugins=[self.MockPlugin4, self.MockPlugin5],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin4", "mockplugin5"]"""))
-        assert isinstance(bot.plugins["mockplugin4"], self.MockPlugin4)
+        """Check that plugin dependency cycles are handled."""
+        with pytest.raises(ValueError):
+            Bot(plugins=[self.MockPlugin4, self.MockPlugin5],
+                config=io.StringIO("""["@bot"]\nplugins = ["mockplugin4", "mockplugin5"]"""))
 
 
 class TestHook:
