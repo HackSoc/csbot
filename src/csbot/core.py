@@ -1,6 +1,6 @@
 import collections
 import itertools
-from typing import Any, Mapping, Sequence, Type
+from typing import Mapping, Sequence, Type
 
 from csbot.plugin import Plugin, SpecialPlugin, find_plugins
 from csbot.plugin import build_plugin_dict, PluginManager, PluginConfigError

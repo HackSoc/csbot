@@ -9,7 +9,6 @@ import aiohttp
 from aioresponses import CallbackResult
 
 from csbot.plugin import Plugin, find_plugins
-import csbot.core
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
