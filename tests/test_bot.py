@@ -353,11 +353,31 @@ class TestUse:
         bot = Bot(plugins=[self.MockPlugin1, self.MockPlugin2],
                   config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin1"]"""))
         assert bot.plugins["mockplugin2"].handler_mock.mock_calls == []
+
+        # Setup bot, access provided value, assert provide() was called
         bot.bot_setup()
         assert bot.plugins["mockplugin1"].a == "baz"
         assert bot.plugins["mockplugin2"].handler_mock.mock_calls == [
             mock.call("provide", "mockplugin1", {"foo": "bar"}),
         ]
+
+    def test_provide_called_only_once(self, event_loop, config_example_mode):
+        """Check that provide() method is only called once for each plugin."""
+        bot = Bot(plugins=[self.MockPlugin1, self.MockPlugin2],
+                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin1"]"""))
+        assert bot.plugins["mockplugin2"].handler_mock.mock_calls == []
+
+        # Setup bot, access provided value, assert provide() was called
+        bot.bot_setup()
+        assert bot.plugins["mockplugin1"].a == "baz"
+        assert bot.plugins["mockplugin2"].handler_mock.mock_calls == [
+            mock.call("provide", "mockplugin1", {"foo": "bar"}),
+        ]
+
+        # Access provided value again, assert provide() wasn't called a second time
+        bot.plugins["mockplugin2"].handler_mock.reset_mock()
+        assert bot.plugins["mockplugin1"].a == "baz"
+        assert bot.plugins["mockplugin2"].handler_mock.mock_calls == []
 
     def test_no_provide_method(self, event_loop, config_example_mode):
         """Check that an error happens when target plugin doesn't implement provide()."""

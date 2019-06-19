@@ -12,6 +12,7 @@ from typing import (
     MutableSequence,
     Sequence,
     Set,
+    Type,
 )
 
 import attr
@@ -145,7 +146,29 @@ class PluginManager(abc.Mapping):
         return iter(self.plugins)
 
 
-ProvidedByPlugin = collections.namedtuple('ProvidedByPlugin', ['plugin', 'kwargs'])
+@attr.s
+class ProvidedByPlugin:
+    """Descriptor for plugin attributes that get (and cache) a value from another plugin.
+
+    See :meth:`Plugin.use`.
+    """
+    plugin: str = attr.ib()
+    kwargs: Mapping[str, Any] = attr.ib()
+    name: str = attr.ib(default=None)
+
+    def __set_name__(self, owner: Type["Plugin"], name: str):
+        if not issubclass(owner, Plugin):
+            raise PluginFeatureError("Can only Plugin.use() inside a Plugin subclass")
+        self.name = name
+
+    def __get__(self, instance: "Plugin", owner: Type["Plugin"]):
+        if instance is None:
+            raise AttributeError("Plugin.use() attributes only work on instances")
+        attribute = f"_{self.__class__.__name__}__{self.name}"
+        if not hasattr(instance, attribute):
+            other = instance.bot.plugins[self.plugin]
+            setattr(instance, attribute, other.provide(instance.plugin_name(), **self.kwargs))
+        return getattr(instance, attribute)
 
 
 @attr.s
@@ -154,6 +177,7 @@ class _PluginData:
     hooks: MutableMapping[str, MutableSequence[str]] = attr.ib(factory=lambda: collections.defaultdict(list))
     commands = attr.ib(factory=list)
     integrations = attr.ib(factory=list)
+    uses: MutableSequence[ProvidedByPlugin] = attr.ib(factory=list)
 
     def depends(self, *dependencies):
         self.dependencies.update(dependencies)
@@ -181,6 +205,12 @@ class _PluginData:
             self.integrations.append((otherplugins, f.__name__))
             return f
         return decorate
+
+    def use(self, other, kwargs):
+        self.depends(other)
+        descriptor = ProvidedByPlugin(other, kwargs)
+        self.uses.append(descriptor)
+        return descriptor
 
 
 class PluginMeta(type):
@@ -210,15 +240,8 @@ class PluginMeta(type):
         super(PluginMeta, cls).__init__(name, bases, attrs)
 
         # Initialise plugin features
-        cls.PLUGIN_DEPENDS = set(cls.PLUGIN_DEPENDS)
         cls._Plugin__plugin_data = data = attrs.pop("__plugin_data")
-        cls.plugin_provide = []
-
-        # Scan for decorated methods
-        for name, attr in attrs.items():
-            if isinstance(attr, ProvidedByPlugin):
-                cls.PLUGIN_DEPENDS.add(attr.plugin)
-                cls.plugin_provide.append((name, attr))
+        data.depends(*cls.PLUGIN_DEPENDS)
 
     @classmethod
     def current(mcs):
@@ -278,7 +301,7 @@ class Plugin(object, metaclass=PluginMeta):
         This should be used with some container of already loaded plugin names
         (e.g. a dictionary or set) to find out which dependencies are missing.
         """
-        return [p for p in cls.PLUGIN_DEPENDS if p not in plugins]
+        return [p for p in cls.__plugin_data.dependencies if p not in plugins]
 
     @staticmethod
     def hook(hook):
@@ -328,8 +351,7 @@ class Plugin(object, metaclass=PluginMeta):
 
             self.bot.plugins[other].provide(self.plugin_name(), **kwargs)
         """
-        # TODO: replace with descriptor, record dependency in _PluginData
-        return ProvidedByPlugin(other, kwargs)
+        return PluginMeta.current().use(other, kwargs)
 
     def get_hooks(self, hook: str) -> List[Callable]:
         """Get a list of this plugin's handlers for *hook*.
@@ -347,10 +369,9 @@ class Plugin(object, metaclass=PluginMeta):
         * Fire all plugin integration methods.
         * Register all commands provided by the plugin.
         """
-        for name, provided_by in self.plugin_provide:
-            other = self.bot.plugins[provided_by.plugin]
-            new_value = other.provide(self.plugin_name(), **provided_by.kwargs)
-            setattr(self, name, new_value)
+        # Preserve old behaviour of provide() being called during setup()
+        for descriptor in self.__plugin_data.uses:
+            getattr(self, descriptor.name)
 
         for plugin_names, name in self.__plugin_data.integrations:
             plugins = [self.bot.plugins[p] for p in plugin_names
