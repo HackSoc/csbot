@@ -566,7 +566,7 @@ def _test_config_generator_simple_list():
 
     return Config, [
         "## list of ints with default value",
-        "a = [ 1, 2, 3,]",
+        "a = [1, 2, 3]",
         "## list of ints with no default value",
         "b = []",
     ]
@@ -740,6 +740,30 @@ def _test_config_generator_quoted_key():
         'b."?" = 1',
         'b."#" = 2',
         'b."[" = 3',
+    ]
+
+
+@CONFIG_GENERATOR_TESTS.append
+def _test_config_generator_list_wrap():
+    """Check that long lists are split onto multiple lines."""
+    class Config(config.Config):
+        a = config.option_list(str, default=["abcdefghijklmnopqrstuvwxyz" for _ in range(2)], help="")
+        b = config.option_list(str, default=["abcdefghijklmnopqrstuvwxyz" for _ in range(5)], help="")
+        abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = config.option_list(str, help="")
+
+    return Config, [
+        # Shorter than threshold, don't split
+        'a = ["abcdefghijklmnopqrstuvwxyz", "abcdefghijklmnopqrstuvwxyz"]',
+        # Longer than threshold, split
+        'b = [',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        ']',
+        # Key longer than threshold, but no items, don't split
+        'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = []',
     ]
 
 

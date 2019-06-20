@@ -30,7 +30,8 @@ class Bot(SpecialPlugin, IRCClient):
         irc_port = config.option(int, default=6667, help="IRC server port")
         command_prefix = config.option(str, default="!", help="Prefix for invoking commands")
         channels = config.option(config.WordList, example=["#cs-york-dev"], help="Channels to join")
-        plugins = config.option(config.WordList, example=["logger", "linkinfo"], help="Plugins to load")
+        plugins = config.option(config.WordList, example=lambda: sorted(p.plugin_name() for p in find_plugins()),
+                                help="Plugins to load")
         use_notice = config.option(int, default=True, help="Use NOTICE instead of PRIVMSG to send messages")
         client_ping = config.option(int, default=0, help="Send PING if no messages for this many seconds (0=disabled)")
         bind_addr = config.option(str, example="192.168.1.111", help="Bind to specific local address")
