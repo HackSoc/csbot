@@ -63,12 +63,24 @@ def example_mode():
     _example_mode = old
 
 
+class WordList(types.ListType):
+    """A list of strings that also accepts a space-separated string instead."""
+    def __init__(self, min_size=None, max_size=None, **kwargs):
+        super().__init__(types.StringType, min_size, max_size, **kwargs)
+
+    def convert(self, value, context=None):
+        if isinstance(value, str):
+            value = value.split()
+        return super().convert(value, context)
+
+
 # Mapping of Python types to Schematics field types
 _TYPE_MAP = {
     str: types.StringType,
     int: types.IntType,
     float: types.FloatType,
     bool: types.BooleanType,
+    WordList: WordList,
 }
 # Basic option types available to the developer
 _B = TypeVar("_B", Config, str, int, float, bool)

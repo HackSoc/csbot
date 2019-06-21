@@ -499,6 +499,23 @@ def test_config_option_example():
     assert c2.j == {"x": 2}
 
 
+def test_config_option_wordlist():
+    class Config(config.Config):
+        a = config.option(config.WordList, help="")
+        b = config.option(config.WordList, help="")
+        c = config.option(config.WordList, default="foo bar baz", help="")
+        d = config.option(config.WordList, default=["ab", "cd", "ef"], help="")
+
+    c = config.structure({
+        "a": "foo bar baz",
+        "b": ["ab", "cd", "ef"],
+    }, Config)
+    assert c.a == ["foo", "bar", "baz"]
+    assert c.b == ["ab", "cd", "ef"]
+    assert c.c == ["foo", "bar", "baz"]
+    assert c.d == ["ab", "cd", "ef"]
+
+
 def assert_valid_toml(s):
     try:
         toml.loads(s)
@@ -789,5 +806,5 @@ class TestExampleConfig:
 
     def test_example_config_is_valid(self, event_loop, irc_client_class, config_file, plugin_cls):
         """Test that the generated config can be loaded by the plugin under test."""
-        bot = irc_client_class(config=config_file, loop=event_loop)
+        bot = irc_client_class(config=toml.load(config_file), loop=event_loop)
         plugin_cls(bot)

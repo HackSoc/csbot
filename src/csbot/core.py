@@ -1,8 +1,6 @@
 import collections
 import itertools
 
-import toml
-
 from csbot.plugin import Plugin, SpecialPlugin, find_plugins
 from csbot.plugin import build_plugin_dict, PluginManager, PluginConfigError
 import csbot.events as events
@@ -30,8 +28,8 @@ class Bot(SpecialPlugin, IRCClient):
         irc_host = config.option(str, required=True, example="irc.freenode.net", help="IRC server hostname")
         irc_port = config.option(int, default=6667, help="IRC server port")
         command_prefix = config.option(str, default="!", help="Prefix for invoking commands")
-        channels = config.option_list(str, example=["#cs-york-dev"], help="Channels to join")
-        plugins = config.option_list(str, example=["logger", "linkinfo"], help="Plugins to load")
+        channels = config.option(config.WordList, example=["#cs-york-dev"], help="Channels to join")
+        plugins = config.option(config.WordList, example=["logger", "linkinfo"], help="Plugins to load")
         use_notice = config.option(int, default=True, help="Use NOTICE instead of PRIVMSG to send messages")
         client_ping = config.option(int, default=0, help="Send PING if no messages for this many seconds (0=disabled)")
         bind_addr = config.option(str, example="192.168.1.111", help="Bind to specific local address")
@@ -43,10 +41,9 @@ class Bot(SpecialPlugin, IRCClient):
     _WHO_IDENTIFY = ('1', '%na')
 
     def __init__(self, config=None, loop=None):
-        # Load configuration
-        self.config_root = {}
-        if config is not None:
-            self.config_root = toml.load(config)
+        self.config_root = config
+        if self.config_root is None:
+            self.config_root = {}
 
         # Initialise plugin
         SpecialPlugin.__init__(self, self)
