@@ -2,6 +2,7 @@
 ircv3 = true
 nickname = "Mathison"
 auth_method = "sasl_plain"
+irc_host = "irc.freenode.net"
 channels = [
     "#cs-york",
     "#cs-york-dev",
