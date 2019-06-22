@@ -505,15 +505,21 @@ def test_config_option_wordlist():
         b = config.option(config.WordList, help="")
         c = config.option(config.WordList, default="foo bar baz", help="")
         d = config.option(config.WordList, default=["ab", "cd", "ef"], help="")
+        e = config.option_list(config.WordList, help="")
+        f = config.option_map(config.WordList, help="")
 
     c = config.structure({
         "a": "foo bar baz",
         "b": ["ab", "cd", "ef"],
+        "e": ["foo bar baz", ["ab", "cd", "ef"]],
+        "f": {"x": "foo bar baz", "y": ["ab", "cd", "ef"]},
     }, Config)
     assert c.a == ["foo", "bar", "baz"]
     assert c.b == ["ab", "cd", "ef"]
     assert c.c == ["foo", "bar", "baz"]
     assert c.d == ["ab", "cd", "ef"]
+    assert c.e == [["foo", "bar", "baz"], ["ab", "cd", "ef"]]
+    assert c.f == {"x": ["foo", "bar", "baz"], "y": ["ab", "cd", "ef"]}
 
 
 def assert_valid_toml(s):

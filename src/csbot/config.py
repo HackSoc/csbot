@@ -74,6 +74,7 @@ class WordList(types.ListType):
         return super().convert(value, context)
 
 
+_T = TypeVar("_T")
 # Mapping of Python types to Schematics field types
 _TYPE_MAP = {
     str: types.StringType,
@@ -83,18 +84,13 @@ _TYPE_MAP = {
     WordList: WordList,
 }
 # Basic option types available to the developer
-_B = TypeVar("_B", Config, str, int, float, bool)
-# All internal option types, including lists and dicts
-_O = TypeVar("_O",
-             Config, str, int, float, bool,
-             List[Config], List[str], List[int], List[float], List[bool],
-             Dict[str, Config], Dict[str, str], Dict[str, int], Dict[str, float], Dict[str, bool])
+_B = TypeVar("_B", Config, str, int, float, bool, WordList)
 # Type of default value for an option
-_DefaultValue = Union[None, _O]
+_DefaultValue = Union[None, _T]
 # Type of callable to create a default value for an option
-_DefaultCall = Callable[[], _DefaultValue[_O]]
+_DefaultCall = Callable[[], _DefaultValue[_T]]
 # Type of a "default" or "example" argument
-_DefaultArg = Union[_DefaultValue[_O], _DefaultCall[_O]]
+_DefaultArg = Union[_DefaultValue[_T], _DefaultCall[_T]]
 
 
 def is_config(obj: Any) -> bool:
@@ -142,7 +138,7 @@ def dump(obj: Config, f: TextIO):
     return toml.dump(unstructure(obj), f)
 
 
-class _Default(Generic[_O]):
+class _Default(Generic[_T]):
     """A callable to get a default or example value.
 
     Both *default* and *example* can be either a value or a callable that returns a value.
@@ -160,21 +156,21 @@ class _Default(Generic[_O]):
         self._example: _DefaultCall = example if callable(example) else lambda: example
         self._env: List[str] = env or []
 
-    def __call__(self) -> Union[str, _DefaultValue[_O]]:
+    def __call__(self) -> Union[str, _DefaultValue[_T]]:
         global _example_mode
         if _example_mode:
             return self._get_example()
         else:
             return self._get_default()
 
-    def _get_default(self, use_env: bool = True) -> Union[str, _DefaultValue[_O]]:
+    def _get_default(self, use_env: bool = True) -> Union[str, _DefaultValue[_T]]:
         if use_env:
             for var in self._env:
                 if var in os.environ:
                     return os.environ[var]
         return self._default()
 
-    def _get_example(self) -> Union[str, _DefaultValue[_O]]:
+    def _get_example(self) -> Union[str, _DefaultValue[_T]]:
         example = self._example()
         if example is None:
             example = self._get_default(use_env=False)
