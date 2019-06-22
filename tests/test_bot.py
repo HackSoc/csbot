@@ -1,7 +1,6 @@
 import unittest.mock as mock
 import asyncio
 import inspect
-import io
 import logging
 
 import pytest
@@ -30,37 +29,37 @@ class TestDependency:
         """Check that an exception happens if a plugin's dependencies are not met."""
         with pytest.raises(PluginDependencyUnmet):
             Bot(plugins=[self.MockPlugin2, self.MockPlugin3],
-                config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2"]"""))
+                config={"@bot": {"plugins": ["mockplugin2"]}})
 
     def test_single_dependency_met(self, event_loop, config_example_mode):
         """Check that plugin loads correctly if dependencies are met."""
         bot = Bot(plugins=[self.MockPlugin2, self.MockPlugin3],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin3", "mockplugin2"]"""))
+                  config={"@bot": {"plugins": ["mockplugin3", "mockplugin2"]}})
         assert isinstance(bot.plugins["mockplugin2"], self.MockPlugin2)
 
     def test_multiple_dependency_partially_met(self, event_loop, config_example_mode):
         """Check that plugin fails to load if only *some* dependencies are met."""
         with pytest.raises(PluginDependencyUnmet):
             Bot(plugins=[self.MockPlugin1, self.MockPlugin2, self.MockPlugin3],
-                config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin1"]"""))
+                config={"@bot": {"plugins": ["mockplugin2", "mockplugin1"]}})
 
     def test_multiple_dependency_met(self, event_loop, config_example_mode):
         """Check that plugin loads correctly if *all* dependencies are met."""
         bot = Bot(plugins=[self.MockPlugin1, self.MockPlugin2, self.MockPlugin3],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin3", "mockplugin2", "mockplugin1"]"""))
+                  config={"@bot": {"plugins": ["mockplugin3", "mockplugin2", "mockplugin1"]}})
         assert isinstance(bot.plugins["mockplugin1"], self.MockPlugin1)
 
     def test_dependency_order(self, event_loop, config_example_mode):
         """Check that plugin dependencies can be satisfied regardless of order in config."""
         bot = Bot(plugins=[self.MockPlugin2, self.MockPlugin3],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin3"]"""))
+                  config={"@bot": {"plugins": ["mockplugin2", "mockplugin3"]}})
         assert isinstance(bot.plugins["mockplugin2"], self.MockPlugin2)
 
     def test_dependency_cycle(self, event_loop, config_example_mode):
         """Check that plugin dependency cycles are handled."""
         with pytest.raises(ValueError):
             Bot(plugins=[self.MockPlugin4, self.MockPlugin5],
-                config=io.StringIO("""["@bot"]\nplugins = ["mockplugin4", "mockplugin5"]"""))
+                config={"@bot": {"plugins": ["mockplugin4", "mockplugin5"]}})
 
 
 class TestHook:
@@ -96,10 +95,11 @@ class TestHook:
         def quit(self, event):
             self.handler_mock('quit', event['user'])
 
-    CONFIG = f"""\
-    ["@bot"]
-    plugins = ["mockplugin"]
-    """
+    CONFIG = {
+        "@bot": {
+            "plugins": ["mockplugin"],
+        },
+    }
 
     pytestmark = pytest.mark.bot(plugins=[MockPlugin], config=CONFIG)
 
@@ -341,12 +341,12 @@ class TestUse:
         """Check that an error happens when loading a plugin that use()s a non-loaded plugin."""
         with pytest.raises(PluginDependencyUnmet):
             Bot(plugins=[self.MockPlugin1, self.MockPlugin2],
-                config=io.StringIO("""["@bot"]\nplugins = ["mockplugin1"]"""))
+                config={"@bot": {"plugins": ["mockplugin1"]}})
 
     def test_use_called_provide(self, event_loop, config_example_mode):
         """Check that provide() method is called during setup()."""
         bot = Bot(plugins=[self.MockPlugin1, self.MockPlugin2],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin1"]"""))
+                  config={"@bot": {"plugins": ["mockplugin2", "mockplugin1"]}})
         assert bot.plugins["mockplugin2"].handler_mock.mock_calls == []
 
         # Setup bot, access provided value, assert provide() was called
@@ -359,7 +359,7 @@ class TestUse:
     def test_provide_called_only_once(self, event_loop, config_example_mode):
         """Check that provide() method is only called once for each plugin."""
         bot = Bot(plugins=[self.MockPlugin1, self.MockPlugin2],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin2", "mockplugin1"]"""))
+                  config={"@bot": {"plugins": ["mockplugin2", "mockplugin1"]}})
         assert bot.plugins["mockplugin2"].handler_mock.mock_calls == []
 
         # Setup bot, access provided value, assert provide() was called
@@ -377,6 +377,6 @@ class TestUse:
     def test_no_provide_method(self, event_loop, config_example_mode):
         """Check that an error happens when target plugin doesn't implement provide()."""
         bot = Bot(plugins=[self.MockPlugin3, self.MockPlugin4],
-                  config=io.StringIO("""["@bot"]\nplugins = ["mockplugin4", "mockplugin3"]"""))
+                  config={"@bot": {"plugins": ["mockplugin4", "mockplugin3"]}})
         with pytest.raises(PluginFeatureError):
             bot.bot_setup()
