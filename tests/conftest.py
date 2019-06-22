@@ -58,7 +58,10 @@ async def irc_client(request, event_loop, config_example_mode, irc_client_class,
     bot_marker = request.node.get_closest_marker('bot')
     if bot_marker is not None:
         cls = bot_marker.kwargs.get('cls', Bot)
-        client = cls(config=toml.loads(dedent(bot_marker.kwargs['config'])), loop=event_loop)
+        config_ = bot_marker.kwargs['config']
+        if isinstance(config_, str):
+            config_ = toml.loads(dedent(config_))
+        client = cls(config=config_, loop=event_loop)
     else:
         client = irc_client_class(loop=event_loop, **irc_client_config)
     # Connect fake stream reader/writer (for tests that don't need the read loop)

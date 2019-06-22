@@ -44,6 +44,8 @@ class Bot(SpecialPlugin, IRCClient):
         self.config_root = config
         if self.config_root is None:
             self.config_root = {}
+        if not isinstance(self.config_root, collections.abc.Mapping):
+            raise TypeError("expected 'config' to be a dict-like object")
 
         # Initialise plugin
         SpecialPlugin.__init__(self, self)
