@@ -352,3 +352,18 @@ async def maybe_future_result(result, **kwargs):
         return await future
     else:
         return result
+
+
+def truncate_utf8(b: bytes, maxlen: int, ellipsis: bytes = b"...") -> bytes:
+    """Trim *b* to a maximum of *maxlen* bytes (including *ellipsis* if longer), without breaking UTF-8 sequences."""
+    if len(b) <= maxlen:
+        return b
+    # Cut down to 1 byte more than we need
+    b = b[:maxlen - len(ellipsis) + 1]
+    # Find the last non-continuation byte
+    for i in range(len(b) - 1, -1, -1):
+        if not 0x80 <= b[i] <= 0xBF:
+            # Break the string to exclude the last UTF-8 sequence
+            b = b[:i]
+            break
+    return b + ellipsis

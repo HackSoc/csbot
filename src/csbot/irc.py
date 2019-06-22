@@ -9,6 +9,7 @@ import types
 from typing import Callable, Tuple, Any, Iterable, Awaitable
 
 from ._rfc import NUMERIC_REPLIES
+from . import util
 
 
 LOG = logging.getLogger('csbot.irc')
@@ -220,7 +221,6 @@ class IRCClient:
     .. _Twisted: http://twistedmatrix.com/documents/14.0.0/api/twisted.words.protocols.irc.IRCClient.html
 
     * TODO: limit send rate
-    * TODO: limit PRIVMSG/NOTICE send length
     * TODO: NAMES
     * TODO: MODE
     * TODO: More sophisticated CTCP? (see Twisted_)
@@ -401,11 +401,16 @@ class IRCClient:
     def send_line(self, data):
         """Send a raw IRC message to the server.
 
-        Encodes, terminates and sends *data* to the server.
+        Encodes, terminates and sends *data* to the server. If the line would be longer than the
+        maximum allowed by the IRC specification, it is trimmed to fit (without breaking UTF-8
+        sequences).
         """
-        LOG.debug('<<< %s', data)
-        data = self.codec.encode(data) + b'\r\n'
-        self.writer.write(data)
+        encoded = self.codec.encode(data)
+        trimmed = util.truncate_utf8(encoded, 510)  # RFC line length is 512 including \r\n
+        if len(trimmed) < len(encoded):
+            LOG.warning(f"message trimmed from {len(encoded)} to {len(trimmed)} bytes")
+        LOG.debug('<<< %s', trimmed)
+        self.writer.write(trimmed + b"\r\n")
 
     def send(self, msg):
         """Send an :class:`IRCMessage`."""

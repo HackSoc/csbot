@@ -58,3 +58,12 @@ async def test_maybe_future_result_coroutine():
 
     result = await util.maybe_future_result(foo())
     assert result == "bar"
+
+
+def test_truncate_utf8():
+    assert util.truncate_utf8(b"0123456789", 20) == b"0123456789"
+    assert util.truncate_utf8(b"0123456789", 10) == b"0123456789"
+    assert util.truncate_utf8(b"0123456789", 9) == b"012345..."
+    assert util.truncate_utf8(b"0123456789", 9, b"?") == b"01234567?"
+    assert util.truncate_utf8(b"\xE2\x98\xBA\xE2\x98\xBA\xE2\x98\xBA", 8, b"?") == b"\xE2\x98\xBA\xE2\x98\xBA?"
+    assert util.truncate_utf8(b"\xE2\x98\xBA\xE2\x98\xBA\xE2\x98\xBA", 8) == b"\xE2\x98\xBA..."
