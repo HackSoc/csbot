@@ -214,8 +214,8 @@ class Bot(SpecialPlugin, IRCClient):
         await super().connection_lost(exc)
         self.emit_new('core.raw.disconnected', {'reason': repr(exc)})
 
-    def send_line(self, line):
-        super().send_line(line)
+    def line_sent(self, line: str):
+        super().line_sent(line)
         self.emit_new('core.raw.sent', {'message': line})
 
     def line_received(self, line):

@@ -386,12 +386,20 @@ class IRCClient:
         self.reader, self.writer = None, None
         self._stop_client_pings()
 
-    def line_received(self, line):
+    def line_received(self, line: str):
         """Callback for received raw IRC message."""
         self._last_message_received = self.loop.time()
         msg = IRCMessage.parse(line)
         LOG.debug('>>> %s', msg.pretty)
         self.message_received(msg)
+
+    def line_sent(self, line: str):
+        """Callback for sent raw IRC message.
+
+        Subclasses can implement this to get access to the actual message that was sent (which may
+        have been truncated from what was passed to :meth:`send_line`).
+        """
+        pass
 
     def message_received(self, msg):
         """Callback for received parsed IRC message."""
@@ -408,9 +416,10 @@ class IRCClient:
         encoded = self.codec.encode(data)
         trimmed = util.truncate_utf8(encoded, 510)  # RFC line length is 512 including \r\n
         if len(trimmed) < len(encoded):
-            LOG.warning(f"message trimmed from {len(encoded)} to {len(trimmed)} bytes")
+            LOG.warning(f"outgoing message trimmed from {len(encoded)} to {len(trimmed)} bytes")
         LOG.debug('<<< %s', trimmed)
         self.writer.write(trimmed + b"\r\n")
+        self.line_sent(self.codec.decode(trimmed))
 
     def send(self, msg):
         """Send an :class:`IRCMessage`."""
