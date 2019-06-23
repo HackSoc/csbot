@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import logging.config
 import signal
@@ -132,15 +133,62 @@ def main(config,
         client.loop.run_until_complete(github_report_deploy(github_token, github_repo, env_name, revision))
 
     # Run the client
-    def stop():
-        client.disconnect()
-        client.loop.call_soon(client.loop.stop)
-    client.loop.add_signal_handler(signal.SIGINT, stop)
-    client.loop.run_until_complete(client.run())
-    client.loop.close()
+    async def graceful_shutdown(future):
+        LOG.info("Calling quit() and waiting for disconnect...")
+        client.quit()
+        try:
+            await asyncio.wait_for(client.disconnected.wait(), 2)
+            return
+        except asyncio.TimeoutError:
+            pass
 
-    # When the loop ends, run teardown
+        LOG.warning("Still connected after 2 seconds, calling disconnect()...")
+        client.disconnect()
+        try:
+            await asyncio.wait_for(client.disconnected.wait(), 2)
+            return
+        except asyncio.TimeoutError:
+            pass
+
+        LOG.warning("Still connected after 2 seconds, forcing exit...")
+        future.cancel()
+
+    def stop(future):
+        # Next ctrl+c should ignore our handler
+        client.loop.remove_signal_handler(signal.SIGINT)
+        LOG.info("Interrupt received, attempting graceful shutdown... (press ^c again to force exit)")
+        asyncio.ensure_future(graceful_shutdown(future), loop=client.loop)
+
+    # Run the client until it exits or gets SIGINT
+    client_future = asyncio.ensure_future(client.run(), loop=client.loop)
+    client.loop.add_signal_handler(signal.SIGINT, stop, client_future)
+    try:
+        client.loop.run_until_complete(client_future)
+    except asyncio.CancelledError:
+        LOG.error("client.run() task cancelled")
+
+    # Run teardown before disposing of the event loop, in case teardown code needs asyncio
     client.bot_teardown()
+
+    # Cancel all pending tasks (taken from asyncio.run() in python 3.7)
+    to_cancel = asyncio.all_tasks(client.loop)
+    for task in to_cancel:
+        task.cancel()
+    client.loop.run_until_complete(asyncio.gather(*to_cancel, loop=client.loop, return_exceptions=True))
+    for task in to_cancel:
+        if task.cancelled():
+            continue
+        if task.exception() is not None:
+            client.loop.call_exception_handler({
+                "message": "unhandled exception during shutdown",
+                "exception": task.exception(),
+                "future": task,
+            })
+    # Cancel async generators (taken from asyncio.run() in python 3.7)
+    client.loop.run_until_complete(client.loop.shutdown_asyncgens())
+
+    client.loop.close()
+    LOG.info("Exited")
 
 
 async def rollbar_report_deploy(rollbar_token, env_name, revision):
