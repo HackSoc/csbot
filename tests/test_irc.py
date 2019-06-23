@@ -161,6 +161,7 @@ class TestClientPing:
         ]
         # Disconnect, advance time, test that no more pings were sent
         run_client.client.disconnect()
+        await run_client.client.disconnected.wait()
         await fast_forward(12)
         assert run_client.client.send_line.mock_calls == [
             mock.call('PING 1'),
@@ -197,6 +198,7 @@ class TestClientPing:
         ]
         # Disconnect, advance time, test that no more pings were sent
         run_client.client.disconnect()
+        await run_client.client.disconnected.wait()
         await fast_forward(12)
         assert run_client.client.send_line.mock_calls == [
             mock.call('PING 1'),

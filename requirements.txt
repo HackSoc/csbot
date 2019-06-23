@@ -6,7 +6,7 @@ pytest-aiohttp==0.3.0
 git+https://github.com/alanbriolat/aioresponses.git@callback-coroutines#egg=aioresponses
 pytest-cov
 asynctest==0.12.2
-aiofastforward==0.0.17
+aiofastforward==0.0.24
 responses
 mongomock
 
