@@ -259,3 +259,15 @@ class TestRateLimited:
             rl.start()
 
         rl.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_returns_cancelled_calls(self, event_loop):
+        f = mock.Mock(spec=callable)
+        # Test with 2 calls per 2 seconds
+        rl = util.RateLimited(f, period=2.0, count=2, loop=event_loop)
+
+        rl.start()
+        await asyncio.wait([rl(1), rl(2), rl(3), rl(4)], timeout=0)
+        assert f.mock_calls == [mock.call(1), mock.call(2)]
+        cancelled = rl.stop()
+        assert cancelled == [((3,), {}), ((4,), {})]

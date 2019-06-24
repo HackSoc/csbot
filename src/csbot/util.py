@@ -431,11 +431,14 @@ class RateLimited:
 
         If *clear* is True (the default), any pending calls not yet processed have their futures cancelled. If it's
         False, then those pending calls will still be queued when :meth:`start` is called again.
+
+        Returns list of ``(args, kwargs)`` pairs of cancelled calls.
         """
         if self._task is None:
             return
         self._task.cancel()
         self._task = None
+        cancelled = []
         if clear:
             self._call_history.clear()
             while True:
@@ -443,5 +446,7 @@ class RateLimited:
                     args, kwargs, future = self._call_queue.get_nowait()
                     future.cancel()
                     self._call_queue.task_done()
+                    cancelled.append((args, kwargs))
                 except asyncio.QueueEmpty:
                     break
+        return cancelled
