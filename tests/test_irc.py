@@ -81,6 +81,14 @@ def test_encode(irc_client_helper):
     irc_client_helper.assert_bytes_sent(b'PRIVMSG #channel :\xe0\xb2\xa0_\xe0\xb2\xa0\r\n')
 
 
+def test_truncate(irc_client_helper):
+    """Check that outgoing lines are trimmed to the RFC specified length."""
+    data = "abcdefghijklmnopqrstuvwxyz" * 20
+    expected = b"PRIVMSG #channel :" + data.encode("utf-8")[:489] + b"...\r\n"
+    irc_client_helper.client.send_line("PRIVMSG #channel :" + data)
+    irc_client_helper.assert_bytes_sent(expected)
+
+
 # Test IRC client behaviour
 
 @pytest.mark.asyncio
