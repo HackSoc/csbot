@@ -36,6 +36,8 @@ class Bot(SpecialPlugin, IRCClient):
         'command_prefix': '!',
         'use_notice': True,
         'client_ping': 0,
+        'rate_limit_period': 0,
+        'rate_limit_count': 0,
         'channels': ' '.join([
             '#cs-york-dev',
         ]),
@@ -81,6 +83,10 @@ class Bot(SpecialPlugin, IRCClient):
             bind_addr=self.config_get('bind_addr'),
             client_ping_enabled=(int(self.config_get('client_ping')) > 0),
             client_ping_interval=int(self.config_get('client_ping')),
+            rate_limit_enabled=(int(self.config_get('rate_limit_period')) > 0 and
+                                int(self.config_get('rate_limit_period')) > 0),
+            rate_limit_period=int(self.config_get('rate_limit_period')),
+            rate_limit_count=int(self.config_get('rate_limit_count')),
         )
 
         self._recent_messages = collections.deque(maxlen=10)

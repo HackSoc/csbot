@@ -375,13 +375,14 @@ class RateLimited:
     Calling the rate limiter returns a future that completes with the result of calling *f* with the same arguments.
     :meth:`start` and :meth:`stop` control whether or not calls are actually processed.
     """
-    def __init__(self, f, *, period: float = 2.0, count: int = 5, loop=None):
+    def __init__(self, f, *, period: float = 2.0, count: int = 5, loop=None, log=LOG):
         assert period > 0.0
         assert count > 0
         self.f = f
         self._period = period
         self._count = count
         self._loop = loop or asyncio.get_event_loop()
+        self._log = log
         self._call_queue = asyncio.Queue()
         self._call_history = deque()
         self._task = None
@@ -409,10 +410,9 @@ class RateLimited:
         while True:
             delay = self.get_delay()
             if delay > 0.0:
-                LOG.debug(f"waiting {delay} seconds until next call")
+                self._log.debug(f"waiting {delay} seconds until next call to {self.f}")
                 await asyncio.sleep(delay)
             args, kwargs, future = await self._call_queue.get()
-            LOG.debug(f"got call for {args} {kwargs}")
             try:
                 result = self.f(*args, **kwargs)
                 future.set_result(result)

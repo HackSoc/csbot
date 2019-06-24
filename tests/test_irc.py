@@ -132,6 +132,63 @@ async def test_disconnect(run_client):
         assert not m.called
 
 
+class TestRateLimit:
+    @pytest.fixture
+    def irc_client_config(self):
+        return {
+            'rate_limit_enabled': True,
+            'rate_limit_period': 3,
+            'rate_limit_count': 2,
+        }
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_applied(self, fast_forward, run_client):
+        # Make sure startup messages don't contribute to the test
+        await fast_forward(10)
+        run_client.reset_mock()
+        # Send a burst of messages
+        run_client.client.send_line("PRIVMSG #channel :1")
+        run_client.client.send_line("PRIVMSG #channel :2")
+        run_client.client.send_line("PRIVMSG #channel :3")
+        run_client.client.send_line("PRIVMSG #channel :4")
+        await asyncio.sleep(0)  # Let client do some work
+        # Check that only rate_limit_count messages were sent
+        run_client.assert_bytes_sent(b"PRIVMSG #channel :1\r\n"
+                                     b"PRIVMSG #channel :2\r\n")
+        # More time passes, check that the rest of the messages are sent
+        await fast_forward(3)
+        run_client.assert_bytes_sent(b"PRIVMSG #channel :3\r\n"
+                                     b"PRIVMSG #channel :4\r\n")
+
+    @pytest.mark.asyncio
+    async def test_cancel_on_disconnect(self, fast_forward, run_client):
+        with mock_open_connection_paused() as m:
+            # Make sure startup messages don't contribute to the test
+            await fast_forward(10)
+            run_client.reset_mock()
+            # Send a burst of messages
+            run_client.client.send_line("PRIVMSG #channel :1")
+            run_client.client.send_line("PRIVMSG #channel :2")
+            run_client.client.send_line("PRIVMSG #channel :3")
+            run_client.client.send_line("PRIVMSG #channel :4")
+            await asyncio.sleep(0)  # Let client do some work
+            # Check that only rate_limit_count messages were sent
+            run_client.assert_bytes_sent(b"PRIVMSG #channel :1\r\n"
+                                         b"PRIVMSG #channel :2\r\n")
+            # Cause disconnect
+            run_client.client.reader.feed_eof()
+            await asyncio.wait_for(run_client.client.disconnected.wait(), 0.1)
+            # Allow open_connection() to proceed
+            m.resume()
+            # Send another message and allow some time to pass
+            run_client.client.send_line("PRIVMSG #channel :5")
+            await fast_forward(20)
+            # Check that new message was sent, but old messages weren't
+            assert mock.call(b"PRIVMSG #channel :3\r\n") not in run_client.client.writer.write.call_args_list
+            assert mock.call(b"PRIVMSG #channel :4\r\n") not in run_client.client.writer.write.call_args_list
+            assert mock.call(b"PRIVMSG #channel :5\r\n") in run_client.client.writer.write.call_args_list
+
+
 class TestClientPing:
     @pytest.fixture
     def irc_client_config(self):
