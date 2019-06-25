@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -170,6 +171,18 @@ class TestXKCDLinkInfoIntegration:
         result = await bot_helper['linkinfo'].get_link_info(url)
         assert title in result.text
         assert alt in result.text
+
+    @pytest.mark.usefixtures("populate_responses")
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
+                             ids=[_[1] for _ in json_test_cases])
+    async def test_command(self, bot_helper, num, url, content_type, fixture, expected):
+        _, title, alt = expected
+        incoming = f":nick!user@host PRIVMSG #channel :!xkcd {num}"
+        await asyncio.wait(bot_helper.receive(incoming))
+        _, (outgoing,), _ = bot_helper.client.send_line.mock_calls[-1]
+        assert title in outgoing
+        assert alt in outgoing
 
     @pytest.mark.usefixtures("populate_responses")
     @pytest.mark.asyncio
