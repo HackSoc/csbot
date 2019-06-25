@@ -114,10 +114,11 @@ class xkcd(Plugin):
                                   page_handler, exclusive=True)
 
     @Plugin.command('xkcd')
-    def randall_is_awesome(self, e):
+    async def randall_is_awesome(self, e):
         """Well, Randall sucks at unicode actually :(
         """
         try:
-            e.reply("{} [{} - \"{}\"]".format(*self._xkcd(e["data"])))
+            result = await self._xkcd(e["data"])
+            e.reply("{} [{} - \"{}\"]".format(*result))
         except self.XKCDError as ex:
             e.reply(str(ex))
