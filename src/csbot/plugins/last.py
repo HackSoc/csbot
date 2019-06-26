@@ -53,7 +53,7 @@ class Last(Plugin):
             return
 
         # Check if this is a command
-        if event['message'].startswith(self.bot.config_get('command_prefix')):
+        if event['message'].startswith(self.bot.config.command_prefix):
             return
 
         self.record(event,
@@ -66,7 +66,7 @@ class Last(Plugin):
     def record_command(self, event):
         """Record the receipt of a new command.
         """
-        if not event['message'].startswith(self.bot.config_get('command_prefix')):
+        if not event['message'].startswith(self.bot.config.command_prefix):
             return
 
         self.record(event,
