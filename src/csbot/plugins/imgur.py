@@ -43,10 +43,10 @@ class Imgur(Plugin):
             else:
                 nsfw, title = False, None
         except ImgurError as e:
-            return LinkInfoResult(url, str(e), is_error=True)
+            return LinkInfoResult(url.geturl(), str(e), is_error=True)
 
         if title:
-            return LinkInfoResult(url, title, nsfw=nsfw)
+            return LinkInfoResult(url.geturl(), title, nsfw=nsfw)
         else:
             return None
 

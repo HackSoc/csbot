@@ -2,7 +2,6 @@ import asyncio
 import logging
 import signal
 import re
-from collections import namedtuple
 import codecs
 import base64
 import types
@@ -11,9 +10,13 @@ from typing import (
     Awaitable,
     Callable,
     Iterable,
+    List,
+    Optional,
     Set,
     Tuple,
 )
+
+import attr
 
 from ._rfc import NUMERIC_REPLIES
 from . import util
@@ -26,16 +29,18 @@ class IRCParseError(Exception):
     """Raised by :meth:`IRCMessage.parse` when a message can't be parsed."""
 
 
-class IRCMessage(namedtuple('_IRCMessage',
-                            'prefix command params command_name raw')):
+@attr.s(frozen=True, slots=True)
+class IRCMessage:
     """Represents an IRC message.
 
     The IRC message format, paraphrased and simplified from RFC2812, is::
 
         message = [":" prefix " "] command {" " parameter} [" :" trailing]
 
-    This is represented as a :class:`namedtuple` with the following attributes:
+    Has the following attributes:
 
+    :param raw: The raw IRC message
+    :type raw: str
     :param prefix: Prefix part of the message, usually the origin
     :type prefix: str or None
     :param command: IRC command
@@ -44,13 +49,16 @@ class IRCMessage(namedtuple('_IRCMessage',
     :type params: list of str
     :param command_name: Name of IRC command (see below)
     :type command_name: str
-    :param raw: The raw IRC message
-    :type raw: str
 
     The *command_name* attribute is intended to be the "readable" form of the
     *command*.  Usually it will be the same as *command*, but numeric replies
     recognised in RFC2812 will have their corresponding name instead.
     """
+    raw: str = attr.ib(validator=util.type_validator)
+    prefix: Optional[str] = attr.ib(validator=util.type_validator)
+    command: str = attr.ib(validator=util.type_validator)
+    params: List[str] = attr.ib(validator=attr.validators.deep_iterable(attr.validators.instance_of(str), None))
+    command_name: str = attr.ib(validator=util.type_validator)
 
     #: Regular expression to extract message components from a message.
     REGEX = re.compile(r'(:(?P<prefix>\S+) )?(?P<command>\S+)'
@@ -144,7 +152,8 @@ class IRCMessage(namedtuple('_IRCMessage',
         return raw
 
 
-class IRCUser(namedtuple('_IRCUser', 'raw nick user host')):
+@attr.s(frozen=True, slots=True)
+class IRCUser:
     """Provide access to the parts of an IRC user string.
 
     The following parts of the user string are available, set to *None* if that
@@ -155,14 +164,14 @@ class IRCUser(namedtuple('_IRCUser', 'raw nick user host')):
     :param user: Username of the user (excluding leading ``~``)
     :param host: Hostname of the user
 
-    >>> u = IRCUser.parse('my_nick!some_user@host.name')
-    >>> u.nick
-    'my_nick'
-    >>> u.user
-    'some_user'
-    >>> u.host
-    'host.name'
+    >>> IRCUser.parse('my_nick!some_user@host.name')
+    IRCUser(raw='my_nick!some_user@host.name', nick='my_nick', user='some_user', host='host.name')
     """
+    raw: str = attr.ib(validator=util.type_validator)
+    nick: str = attr.ib(validator=util.type_validator)
+    user: Optional[str] = attr.ib(validator=util.type_validator)
+    host: Optional[str] = attr.ib(validator=util.type_validator)
+
     #: Username parsing regex.  Stripping out the "~" might be a
     #: Freenode peculiarity...
     REGEX = re.compile(r'(?P<raw>(?P<nick>[^!]+)(!~*(?P<user>[^@]+))?(@(?P<host>.+))?)')
