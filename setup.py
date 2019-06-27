@@ -23,7 +23,7 @@ setuptools.setup(
         'isodate>=0.5.1',
         'aiohttp>=3.5.1,<4.0',
         'async_generator',
-        'attrs',
+        'attrs>=19.1,<20',
         'toml',
         'schematics',
         'rollbar',

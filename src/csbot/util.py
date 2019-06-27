@@ -3,6 +3,7 @@ from itertools import tee
 from collections import OrderedDict
 import asyncio
 import logging
+import typing
 from typing import (
     Dict,
     Iterator,
@@ -11,9 +12,10 @@ from typing import (
     TypeVar,
 )
 
-import requests
-from async_generator import asynccontextmanager
+import attr
 import aiohttp
+from async_generator import asynccontextmanager
+import requests
 
 
 LOG = logging.getLogger(__name__)
@@ -397,3 +399,16 @@ def topological_sort(data: Dict[T, Set[T]]) -> Iterator[Set[T]]:
     # Any remaining data means circular dependencies
     if data:
         raise ValueError(f"circular dependencies detected: {data!r}")
+
+
+def type_validator(_obj, attrib: attr.Attribute, value):
+    """An attrs validator that inspects the attribute type."""
+    if attrib.type is None:
+        raise TypeError(f"'{attrib.name}' has no type to check")
+    elif getattr(attrib.type, "__origin__", None) is typing.Union:
+        if any(isinstance(value, t) for t in attrib.type.__args__):
+            return True
+    elif isinstance(value, attrib.type):
+        return True
+    raise TypeError(f"'{attrib.name}' must be {attrib.type} (got {value} that is a {type(value)}",
+                    attrib, value)
