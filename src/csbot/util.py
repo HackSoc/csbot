@@ -1,13 +1,11 @@
 import shlex
 from itertools import tee
-from collections import OrderedDict
 import asyncio
 import logging
 import typing
 from typing import (
     Dict,
     Iterator,
-    List,
     Set,
     TypeVar,
 )
@@ -206,131 +204,6 @@ def is_ascii(s):
     """Returns true if all characters in a string can be represented in ASCII.
     """
     return all(ord(c) < 128 for c in s)
-
-
-class NamedObject(object):
-    """Make objects that have specific :meth:`__repr__` text.
-
-    This is mostly useful for singleton objects that you want to give a
-    useful description for auto-generated documentation purposes.
-    """
-    def __init__(self, name):
-        self.name = name
-
-    def __repr__(self):
-        return self.name
-
-
-class StructMeta(type):
-    """A metaclass for :class:`Struct` to turn class attributes into fields.
-    """
-
-    @classmethod
-    def __prepare__(mcs, name, bases):
-        """Use :class:`collections.OrderedDict` to preserve attribute order.
-        """
-        return OrderedDict()
-
-    def __new__(mcs, name, bases, attrs):
-        # Don't molest the base class, there are no fields on it
-        if bases == (object,):
-            return type.__new__(mcs, name, bases, attrs)
-
-        # Find fields in base classes
-        attrs['_fields'] = []
-        for b in bases:
-            attrs['_fields'] += getattr(b, '_fields', [])
-        # Find attributes in this class that should be fields
-        attrs['_fields'] += [k for k, v in attrs.items()
-                             if not k.startswith('_') and not callable(v)]
-        # Build new class
-        return type.__new__(mcs, name, bases, attrs)
-
-
-class Struct(object, metaclass=StructMeta):
-    """A mutable alternative to :func:`collections.namedtuple`.
-
-    To use this class, create a subclass of it.  Any non-callable, non-"hidden"
-    class attributes in the subclass will become struct fields.  Setting of
-    attribute values is limited to attributes recognised as fields.  The class
-    attribute value is effectively the field's default value.
-
-    A struct constructor allows both positional arguments (based on field
-    order) and keyword arguments (based on field name).  If a field's default
-    value is :attr:`REQUIRED`, then an exception will be raised unless its
-    value was set by the constructor.
-
-    Examples:
-
-    >>> class Foo(Struct):
-    ...     a = Struct.REQUIRED
-    ...     b = 12
-    ...     c = None
-    ...
-    >>> Foo()
-    Traceback (most recent call last):
-        ...
-    ValueError: value required for attribute: a
-    >>> Foo(123)
-    Foo(a=123, b=12, c=None)
-    >>> Foo(123, c='Hello, world')
-    Foo(a=123, b=12, c='Hello, world')
-    >>> Foo(bar=False)
-    Traceback (most recent call last):
-        ...
-    AttributeError: struct field does not exist: bar
-    >>> x = Foo(123)
-    >>> x.b
-    12
-    >>> x.b = 21
-    >>> x
-    Foo(a=123, b=21, c=None)
-    >>> x.bar = False
-    Traceback (most recent call last):
-        ...
-    AttributeError: struct field does not exist: bar
-    """
-    #: Singleton object to signify an attribute that *must* be set
-    REQUIRED = NamedObject('Struct.REQUIRED')
-
-    #: Field names of the struct, in order (populated by :class:`StructMeta`)
-    _fields: List[str]
-
-    def __init__(self, *args, **kwargs):
-        values = OrderedDict()
-        # Allow positional arguments, but not too many
-        if len(args) > len(self._fields):
-            raise TypeError('__init__ takes at most {} arguments ({} given)'
-                            .format(len(self._fields), len(args)))
-        # Apply positional arguments
-        values.update(zip(self._fields, args))
-
-        # Apply keyword arguments
-        values.update(kwargs)
-
-        # Set attribute values - those that don't exist will raise errors
-        for k, v in values.items():
-            setattr(self, k, v)
-
-        # Check that required attributes were set
-        for k in self._fields:
-            if getattr(self, k) is Struct.REQUIRED:
-                raise ValueError('value required for attribute: ' + k)
-
-    def __setattr__(self, key, value):
-        """Prevent setting of non-field attributes.
-        """
-        if key not in self._fields:
-            raise AttributeError('struct field does not exist: {}'.format(key))
-        else:
-            object.__setattr__(self, key, value)
-
-    def __repr__(self):
-        """Give a useful representation for the struct object.
-        """
-        return '{}({})'.format(self.__class__.__name__,
-                               ', '.join('{}={!r}'.format(k, getattr(self, k))
-                                         for k in self._fields))
 
 
 def maybe_future(result, *, on_error=None, log=LOG, loop=None):
