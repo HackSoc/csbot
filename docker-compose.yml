@@ -4,14 +4,14 @@ services:
   bot:
     image: alanbriolat/csbot:latest
     volumes:
-      - ${CSBOT_CONFIG_LOCAL:-./csbot.cfg}:/app/csbot.cfg
+      - ${CSBOT_CONFIG_LOCAL:-./csbot.toml}:/app/csbot.toml
     links:
       - mongodb
     env_file:
       - ./deploy.env
     environment:
       MONGODB_URI: mongodb://mongodb:27017/csbot
-    command: csbot ${CSBOT_CONFIG:-csbot.cfg}
+    command: csbot ${CSBOT_CONFIG:-csbot.toml}
     ports:
       - "127.0.0.1:8180:8000"
     labels:
