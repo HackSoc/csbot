@@ -8,6 +8,7 @@
 !requirements.txt
 !pytest.ini
 !csbot.*.cfg
+!csbot.*.toml
 
 # Exclude Python temp files
 **/__pycache__
