@@ -12,6 +12,7 @@ import lxml.html
 
 from ..plugin import Plugin
 from ..util import Struct, simple_http_get_async, maybe_future_result
+from .. import config
 
 
 LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
@@ -37,23 +38,17 @@ class LinkInfoResult(Struct):
 
 
 class LinkInfo(Plugin):
-    CONFIG_DEFAULTS = {
-        # Maximum number of parts of a PRIVMSG to scan for URLs.
-        'scan_limit': 1,
-        # Minimum slug length in "title in URL" filter
-        'minimum_slug_length': 10,
-        # Maximum file extension length (including the dot) for "title in URL"
-        'max_file_ext_length': 6,
-        # Minimum match (fraction) between path component and title for title
-        # to be considered present in the URL
-        'minimum_path_match': 0.5,
-        # Number of seconds for rolling rate limiting period
-        'rate_limit_time': 60,
-        # Maximum rate of URL responses over rate limiting period
-        'rate_limit_count': 5,
-        # Maximum response size
-        'max_response_size': 1048576,  # 1MB
-    }
+    class Config(config.Config):
+        scan_limit = config.option(int, default=1, help="Maximum number of parts of a PRIVMSG to scan for URLs")
+        minimum_slug_length = config.option(int, default=10, help="Minimum slug length in 'title in URL' filter")
+        max_file_ext_length = config.option(
+            int, default=6, help="Maximum file extension length (including the dot) for 'title in URL' filter")
+        minimum_path_match = config.option(
+            float, default=0.5,
+            help="Minimum match (fraction) between path component and title to be considered 'title in URL'")
+        rate_limit_time = config.option(int, default=60, help="Number of seconds for rolling rate limit period")
+        rate_limit_count = config.option(int, default=5, help="maximum rate of URL responses over rate limiting period")
+        max_response_size = config.option(int, default=1048576, help="Maximum HTTP response size (in bytes)")
 
     def __init__(self, *args, **kwargs):
         super(LinkInfo, self).__init__(*args, **kwargs)
@@ -137,11 +132,11 @@ class LinkInfo(Plugin):
         # Don't want to be scanning URLs inside commands,
         # especially because we'd show information twice when the "link"
         # command is invoked...
-        if e['message'].startswith(self.bot.config_get('command_prefix')):
+        if e['message'].startswith(self.bot.config.command_prefix):
             return
 
         parts = e['message'].split()
-        for i, part in enumerate(parts[:int(self.config_get('scan_limit'))]):
+        for i, part in enumerate(parts[:self.config.scan_limit]):
             # Skip parts that don't look like URLs
             if '://' not in part:
                 continue
@@ -229,11 +224,10 @@ class LinkInfo(Plugin):
                                   .format(r.headers['Content-Type']))
             # Don't try to process massive responses
             if 'Content-Length' in r.headers:
-                max_size = int(self.config_get('max_response_size'))
+                max_size = self.config.max_response_size
                 if int(r.headers['Content-Length']) > max_size:
                     return make_error('Content-Length too large: {} bytes, >{}'
-                                      .format(r.headers['Content-Length'],
-                                              self.config_get('max_response_size')))
+                                      .format(r.headers['Content-Length'], max_size))
 
             # Get the correct parser
             # If present, charset attribute in HTTP Content-Type header takes
@@ -251,9 +245,9 @@ class LinkInfo(Plugin):
             # because chunk-encoded responses iterate over chunks rather than
             # the size we request...
             chunk = b''
-            async for next_chunk in r.content.iter_chunked(self.config_get('max_response_size')):
+            async for next_chunk in r.content.iter_chunked(self.config.max_response_size):
                 chunk += next_chunk
-                if len(chunk) >= self.config_get('max_response_size'):
+                if len(chunk) >= self.config.max_response_size:
                     break
             # Try to trim chunk to a tag end to help the HTML parser out
             try:
@@ -292,7 +286,7 @@ class LinkInfo(Plugin):
         # Strip file extension if present
         if not path.endswith('/'):
             path_noext, ext = os.path.splitext(path)
-            if len(ext) <= int(self.config_get('max_file_ext_length')):
+            if len(ext) <= self.config.max_file_ext_length:
                 path = path_noext
         # Strip characters that are unlikely to end up in a slugified URL
         strip_pattern = r'[^a-z/]'
@@ -311,11 +305,11 @@ class LinkInfo(Plugin):
             return True
 
         # Attempt 2: is some part of the URL path the start of the title?
-        slug_length = int(self.config_get('minimum_slug_length'))
+        slug_length = self.config.minimum_slug_length
         for part in path.split('/'):
             ratio = float(len(part)) / float(len(title))
             if (len(part) >= slug_length and title.startswith(part) and
-                    ratio >= float(self.config_get('minimum_path_match'))):
+                    ratio >= self.config.minimum_path_match):
                 self.log.debug('path part "{}" matches title "{}"'.format(
                     part, title))
                 return True
@@ -338,8 +332,8 @@ class LinkInfo(Plugin):
         """
         now = datetime.datetime.now()
         delta = datetime.timedelta(
-            seconds=int(self.config_get('rate_limit_time')))
-        count = int(self.config_get('rate_limit_count'))
+            seconds=self.config.rate_limit_time)
+        count = self.config.rate_limit_count
 
         if len(self.rate_limit_list) < count:
             self.rate_limit_list.append(now)

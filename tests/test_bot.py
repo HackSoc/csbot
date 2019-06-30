@@ -7,30 +7,31 @@ from csbot import core
 from csbot.plugin import Plugin
 
 
+class MockPlugin(Plugin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.handler_mock = mock.Mock(spec=callable)
+
+    @Plugin.hook('core.message.privmsg')
+    async def privmsg(self, event):
+        await asyncio.sleep(0.5)
+        self.handler_mock('privmsg', event['message'])
+
+    @Plugin.hook('core.user.quit')
+    def quit(self, event):
+        self.handler_mock('quit', event['user'])
+
+
 class TestHookOrdering:
     class Bot(core.Bot):
-        class MockPlugin(Plugin):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self.handler_mock = mock.Mock(spec=callable)
-
-            @Plugin.hook('core.message.privmsg')
-            async def privmsg(self, event):
-                await asyncio.sleep(0.5)
-                self.handler_mock('privmsg', event['message'])
-
-            @Plugin.hook('core.user.quit')
-            def quit(self, event):
-                self.handler_mock('quit', event['user'])
-
         available_plugins = core.Bot.available_plugins.copy()
         available_plugins.update(
             mockplugin=MockPlugin,
         )
 
     CONFIG = f"""\
-    [@bot]
-    plugins = mockplugin
+    ["@bot"]
+    plugins = ["mockplugin"]
     """
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 

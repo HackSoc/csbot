@@ -21,8 +21,8 @@ def bot_helper_class(bot_helper_class):
 
 pytestmark = [
     pytest.mark.bot(config="""\
-        [@bot]
-        plugins = usertrack
+        ["@bot"]
+        plugins = ["usertrack"]
         """),
     pytest.mark.usefixtures("run_client"),
     pytest.mark.asyncio,

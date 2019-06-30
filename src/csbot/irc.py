@@ -6,7 +6,14 @@ from collections import namedtuple
 import codecs
 import base64
 import types
-from typing import Callable, Tuple, Any, Iterable, Awaitable
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Iterable,
+    Set,
+    Tuple,
+)
 
 from ._rfc import NUMERIC_REPLIES
 from . import util
@@ -246,9 +253,9 @@ class IRCClient:
     ))
 
     #: Available client capabilities
-    available_capabilities = None
+    available_capabilities: Set[str]
     #: Enabled client capabilities
-    enabled_capabilities = None
+    enabled_capabilities: Set[str]
 
     def __init__(self, *, loop=None, **kwargs):
         self.loop = loop or asyncio.get_event_loop()
@@ -458,16 +465,14 @@ class IRCClient:
                 # Wait until interval has elapsed since last message
                 delay = remaining
 
-
     class Waiter:
-        predicate = None
-        future = None
+        PredicateType = Callable[[IRCMessage], Tuple[bool, Any]]
 
-        def __init__(self, predicate, future):
+        def __init__(self, predicate: PredicateType, future: asyncio.Future):
             self.predicate = predicate
             self.future = future
 
-    def wait_for_message(self, predicate: Callable[[IRCMessage], Tuple[bool, Any]]) -> asyncio.Future:
+    def wait_for_message(self, predicate: Waiter.PredicateType) -> asyncio.Future:
         """Wait for a message that matches *predicate*.
 
         *predicate* should return a `(did_match, result)` tuple, where *did_match* is a boolean

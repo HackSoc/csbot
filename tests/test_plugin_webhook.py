@@ -27,11 +27,11 @@ class TestWebhookPlugin:
     SECRET = 'foobar'
     BOT_CLASS = Bot
     CONFIG = f"""\
-    [@bot]
-    plugins = webserver webhook webhookexample
+    ["@bot"]
+    plugins = ["webserver", "webhook", "webhookexample"]
 
     [webhook]
-    url_secret = {SECRET}
+    url_secret = "{SECRET}"
     """
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
 

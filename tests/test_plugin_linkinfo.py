@@ -131,8 +131,8 @@ error_test_cases = [
 
 
 pytestmark = pytest.mark.bot(config="""\
-    [@bot]
-    plugins = linkinfo
+    ["@bot"]
+    plugins = ["linkinfo"]
     """)
 
 
@@ -201,7 +201,7 @@ def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
     many URL-like strings and not enough (zero) time passing.
     """
     linkinfo = bot_helper['linkinfo']
-    count = int(linkinfo.config_get('rate_limit_count'))
+    count = linkinfo.config.rate_limit_count
     for i in range(count):
         with asynctest.mock.patch.object(linkinfo, 'get_link_info', ) as get_link_info:
             yield from bot_helper.client.line_received(
@@ -232,8 +232,8 @@ class TestNonBlocking:
         fire_command = Plugin.hook('core.command')(csbot.core.Bot.fire_command)
 
     CONFIG = f"""\
-    [@bot]
-    plugins = mockplugin linkinfo
+    ["@bot"]
+    plugins = ["mockplugin", "linkinfo"]
     """
 
     pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)

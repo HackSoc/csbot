@@ -3,6 +3,9 @@ from itertools import tee
 from collections import OrderedDict
 import asyncio
 import logging
+from typing import (
+    List,
+)
 
 import requests
 from async_generator import asynccontextmanager
@@ -283,7 +286,7 @@ class Struct(object, metaclass=StructMeta):
     REQUIRED = NamedObject('Struct.REQUIRED')
 
     #: Field names of the struct, in order (populated by :class:`StructMeta`)
-    _fields = []
+    _fields: List[str]
 
     def __init__(self, *args, **kwargs):
         values = OrderedDict()

@@ -2,7 +2,26 @@ import collections
 from collections import abc
 import logging
 import os
-from typing import List, Callable
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
+
+import straight.plugin
+
+from . import config
+
+
+def find_plugins():
+    """Find available plugins.
+
+    Returns a list of discovered plugin classes.
+    """
+    return list(straight.plugin.load('csbot.plugins', subclasses=Plugin))
 
 
 def build_plugin_dict(plugins):
@@ -42,6 +61,10 @@ class PluginFeatureError(Exception):
     pass
 
 
+class PluginConfigError(Exception):
+    pass
+
+
 class PluginManager(abc.Mapping):
     """A simple plugin manager and proxy.
 
@@ -64,7 +87,7 @@ class PluginManager(abc.Mapping):
     """
 
     #: Loaded plugins.
-    plugins = {}
+    plugins: MutableMapping[str, "Plugin"]
 
     def __init__(self, loaded, available, plugins, args):
         self.log = logging.getLogger(__name__)
@@ -157,16 +180,18 @@ class Plugin(object, metaclass=PluginMeta):
     """
 
     #: Default configuration values, used automatically by :meth:`config_get`.
-    CONFIG_DEFAULTS = {}
+    CONFIG_DEFAULTS: Mapping[str, Any] = {}
     #: Configuration environment variables, used automatically by
     #: :meth:`config_get`.
-    CONFIG_ENVVARS = {}
+    CONFIG_ENVVARS: Mapping[str, Sequence[str]] = {}
     #: Plugins that :meth:`missing_dependencies` should check for.
-    PLUGIN_DEPENDS = []
+    PLUGIN_DEPENDS: Sequence[str] = []
 
     #: The plugin's logger, created by default using the plugin class'
     #: containing module name as the logger name.
     log = None
+
+    plugin_hooks: Mapping[str, Sequence[str]]
 
     def __init__(self, bot):
         # Get the logger for the module the actual plugin is defined in, not
@@ -175,6 +200,7 @@ class Plugin(object, metaclass=PluginMeta):
         self.log = logging.getLogger(self.__class__.__module__)
         self.bot = bot
         self._db = None
+        self.__config = self._get_config(bot)
 
     @classmethod
     def plugin_name(cls):
@@ -311,6 +337,25 @@ class Plugin(object, metaclass=PluginMeta):
         """
         self.bot.unregister_commands(tag=self)
 
+    @classmethod
+    def _get_config(cls, bot):
+        # Get dict-like access to config
+        plugin = cls.plugin_name()
+        if plugin in bot.config_root:
+            cfg = bot.config_root[plugin]
+        else:
+            cfg = {}
+
+        # Upgrade to structure-based config if defined
+        config_cls = getattr(cls, 'Config', None)
+        if config.is_config(config_cls):
+            try:
+                cfg = config.structure(cfg, config_cls)
+            except config.ConfigError as e:
+                raise PluginConfigError(f"error in config for plugin '{cls.plugin_name()}': {e}") from e
+
+        return cfg
+
     @property
     def config(self):
         """Get the configuration section for this plugin.
@@ -320,10 +365,9 @@ class Plugin(object, metaclass=PluginMeta):
 
         .. seealso:: :mod:`configparser`
         """
-        plugin = self.plugin_name()
-        if plugin not in self.bot.config_root:
-            self.bot.config_root[plugin] = {}
-        return self.bot.config_root[plugin]
+        if self.__config is None:
+            self.__config = self._get_config(self.bot)
+        return self.__config
 
     def subconfig(self, subsection):
         """Get a configuration subsection for this plugin.
@@ -331,6 +375,9 @@ class Plugin(object, metaclass=PluginMeta):
         Uses the ``[plugin_name/subsection]`` section of the configuration file,
         creating an empty section if it doesn't exist.
         """
+        if config.is_config(self.config):
+            raise PluginFeatureError("subconfig() incompatible with plugin.Config, "
+                                     "use config.option_map()")
         section = self.plugin_name() + '/' + subsection
         if section not in self.bot.config_root:
             self.bot.config_root[section] = {}
@@ -348,6 +395,10 @@ class Plugin(object, metaclass=PluginMeta):
 
         :exc:`KeyError` is raised if none of the methods succeed.
         """
+        if config.is_config(self.config):
+            raise PluginFeatureError("config_get('<key>') incompatible with plugin.Config, "
+                                     "use self.config.<key>")
+
         if key in self.config:
             return self.config[key]
 
@@ -361,10 +412,23 @@ class Plugin(object, metaclass=PluginMeta):
     def config_getboolean(self, key):
         """Identical to :meth:`config_get`, but proxying ``getboolean``.
         """
+        if config.is_config(self.config):
+            raise PluginFeatureError("config_getboolean('<key>') incompatible with plugin.Config, "
+                                     "use self.config.<key>")
+
         if key in self.CONFIG_DEFAULTS:
-            return self.config.getboolean(key, self.CONFIG_DEFAULTS[key])
+            value = self.config.get(key, self.CONFIG_DEFAULTS[key])
         else:
-            return self.config.getboolean(key)
+            value = self.config[key]
+
+        if isinstance(value, bool):
+            return value
+        elif value.lower() in {"true", "yes", "1"}:
+            return True
+        elif value.lower() in {"false", "no", "0"}:
+            return False
+        else:
+            raise ValueError("unrecognised boolean: %s" % (value,))
 
 
 class SpecialPlugin(Plugin):
