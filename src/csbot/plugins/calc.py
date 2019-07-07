@@ -127,14 +127,20 @@ class CalcEval(ast.NodeVisitor):
         right = self.visit(node.right)
         if node.op.__class__ in (ast.Mod, ast.Div, ast.FloorDiv) and right == 0:
             raise CalcError("division by zero")
-        operator = operators[node.op.__class__]
+        try:
+            operator = operators[node.op.__class__]
+        except KeyError:
+            raise CalcError("invalid operator")
         try:
             return operator(left, right)
         except TypeError:
             raise CalcError("invalid arguments")
 
     def visit_UnaryOp(self, node):
-        operator = operators[node.op.__class__]
+        try:
+            operator = operators[node.op.__class__]
+        except KeyError:
+            raise CalcError("invalid operator")
         operand = self.visit(node.operand)
         return operator(operand)
 
@@ -171,6 +177,15 @@ class CalcEval(ast.NodeVisitor):
     def visit_Str(self, node):
         raise CalcError("invalid argument")
 
+    def generic_visit(self, node):
+        """Fallback visitor which always raises an exception.
+
+        We evaluate expressions by using return values of node visitors, and :meth:`generic_visit`
+        returns None, therefore if it's called we know this is an expression we don't support and
+        should give an error.
+        """
+        raise CalcError("invalid calculation")
+
 
 class CalcError(Exception):
     pass
@@ -189,13 +204,19 @@ class Calc(Plugin):
             return "You want to calculate something? Type in an expression then!"
 
         try:
-            res = CalcEval().visit(ast.parse(calc_str))
+            try:
+                parsed = ast.parse(calc_str)
+            except SyntaxError:
+                raise CalcError("invalid syntax")
+            except MemoryError:
+                raise CalcError("unable to parse")
+            res = CalcEval().visit(parsed)
             if res is None:
                 raise CalcError("invalid calculation")
             if is_too_long(res):
                 raise CalcError("result too long to be printed")
             return str(res)
-        except (CalcError, SyntaxError) as ex:
+        except CalcError as ex:
             return "Error, {}".format(str(ex))
 
     @Plugin.command('calc', help='For calculating, not interpreting')
