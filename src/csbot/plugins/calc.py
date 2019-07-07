@@ -189,13 +189,19 @@ class Calc(Plugin):
             return "You want to calculate something? Type in an expression then!"
 
         try:
-            res = CalcEval().visit(ast.parse(calc_str))
+            try:
+                parsed = ast.parse(calc_str)
+            except SyntaxError:
+                raise CalcError("invalid syntax")
+            except MemoryError:
+                raise CalcError("unable to parse")
+            res = CalcEval().visit(parsed)
             if res is None:
                 raise CalcError("invalid calculation")
             if is_too_long(res):
                 raise CalcError("result too long to be printed")
             return str(res)
-        except (CalcError, SyntaxError) as ex:
+        except CalcError as ex:
             return "Error, {}".format(str(ex))
 
     @Plugin.command('calc', help='For calculating, not interpreting')

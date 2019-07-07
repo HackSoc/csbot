@@ -52,3 +52,4 @@ def test_error(bot_helper):
     assert calc._calc("e ^ pi") == "Error, invalid arguments"
     assert calc._calc("factorial(-42)") == "Error, factorial() not defined for negative values"
     assert calc._calc("factorial(4.2)") == "Error, factorial() only accepts integral values"
+    assert calc._calc("(" * 200 + ")" * 200) == "Error, unable to parse"
