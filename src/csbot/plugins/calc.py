@@ -127,14 +127,20 @@ class CalcEval(ast.NodeVisitor):
         right = self.visit(node.right)
         if node.op.__class__ in (ast.Mod, ast.Div, ast.FloorDiv) and right == 0:
             raise CalcError("division by zero")
-        operator = operators[node.op.__class__]
+        try:
+            operator = operators[node.op.__class__]
+        except KeyError:
+            raise CalcError("invalid operator")
         try:
             return operator(left, right)
         except TypeError:
             raise CalcError("invalid arguments")
 
     def visit_UnaryOp(self, node):
-        operator = operators[node.op.__class__]
+        try:
+            operator = operators[node.op.__class__]
+        except KeyError:
+            raise CalcError("invalid operator")
         operand = self.visit(node.operand)
         return operator(operand)
 

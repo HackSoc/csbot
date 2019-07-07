@@ -54,3 +54,4 @@ def test_error(bot_helper):
     assert calc._calc("factorial(4.2)") == "Error, factorial() only accepts integral values"
     assert calc._calc("not await 1") == "Error, invalid calculation"
     assert calc._calc("(" * 200 + ")" * 200) == "Error, unable to parse"
+    assert calc._calc("1@2") == "Error, invalid operator"
