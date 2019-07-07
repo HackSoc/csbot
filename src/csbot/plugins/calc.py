@@ -171,6 +171,15 @@ class CalcEval(ast.NodeVisitor):
     def visit_Str(self, node):
         raise CalcError("invalid argument")
 
+    def generic_visit(self, node):
+        """Fallback visitor which always raises an exception.
+
+        We evaluate expressions by using return values of node visitors, and :meth:`generic_visit`
+        returns None, therefore if it's called we know this is an expression we don't support and
+        should give an error.
+        """
+        raise CalcError("invalid calculation")
+
 
 class CalcError(Exception):
     pass
