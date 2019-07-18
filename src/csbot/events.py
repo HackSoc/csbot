@@ -253,7 +253,7 @@ class HybridEventRunner:
         """
         try:
             await future
-        except Exception as e:
+        except Exception:
             self._handle_exception(future=future, csbot_event=event)
 
     async def _run(self):

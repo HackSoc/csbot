@@ -23,11 +23,15 @@ setuptools.setup(
         'isodate>=0.5.1',
         'aiohttp>=3.5.1,<4.0',
         'async_generator',
+        'attrs',
+        'toml',
+        'schematics',
         'rollbar',
     ],
     entry_points={
         'console_scripts': [
             'csbot = csbot:main',
+            'csbot_util = csbot.cli:util',
         ],
     },
 )

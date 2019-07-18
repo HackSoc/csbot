@@ -8,8 +8,7 @@ import asynctest.mock
 import aiohttp
 from aioresponses import CallbackResult
 
-from csbot.plugin import Plugin
-import csbot.core
+from csbot.plugin import Plugin, find_plugins
 
 
 #: Test encoding handling; tests are (url, content-type, body, expected_title)
@@ -131,8 +130,8 @@ error_test_cases = [
 
 
 pytestmark = pytest.mark.bot(config="""\
-    [@bot]
-    plugins = linkinfo
+    ["@bot"]
+    plugins = ["linkinfo"]
     """)
 
 
@@ -201,7 +200,7 @@ def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
     many URL-like strings and not enough (zero) time passing.
     """
     linkinfo = bot_helper['linkinfo']
-    count = int(linkinfo.config_get('rate_limit_count'))
+    count = linkinfo.config.rate_limit_count
     for i in range(count):
         with asynctest.mock.patch.object(linkinfo, 'get_link_info', ) as get_link_info:
             yield from bot_helper.client.line_received(
@@ -212,31 +211,22 @@ def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
         assert not get_link_info.called
 
 
-class MockPlugin(Plugin):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.handler_mock = mock.Mock(spec=callable)
-
-    @Plugin.hook('core.message.privmsg')
-    def privmsg(self, event):
-        self.handler_mock(event['message'])
-
-
 class TestNonBlocking:
-    class Bot(csbot.core.Bot):
-        available_plugins = csbot.core.Bot.available_plugins.copy()
-        available_plugins.update(mockplugin=MockPlugin)
+    class MockPlugin(Plugin):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.handler_mock = mock.Mock(spec=callable)
 
-        # TODO: this is ugly, need to improve (a) subclassing behaviour and/or (b) test utilities
-        privmsg = Plugin.hook('core.message.privmsg')(csbot.core.Bot.privmsg)
-        fire_command = Plugin.hook('core.command')(csbot.core.Bot.fire_command)
+        @Plugin.hook('core.message.privmsg')
+        def privmsg(self, event):
+            self.handler_mock(event['message'])
 
     CONFIG = f"""\
-    [@bot]
-    plugins = mockplugin linkinfo
+    ["@bot"]
+    plugins = ["mockplugin", "linkinfo"]
     """
 
-    pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
+    pytestmark = pytest.mark.bot(plugins=find_plugins() + [MockPlugin], config=CONFIG)
 
     @pytest.mark.asyncio
     async def test_non_blocking_privmsg(self, event_loop, bot_helper, aioresponses):

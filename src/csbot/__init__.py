@@ -1,4 +1,6 @@
 import asyncio
+import configparser
+import json
 import logging
 import logging.config
 import signal
@@ -7,6 +9,7 @@ import os
 import click
 import aiohttp
 import rollbar
+import toml
 
 from .core import Bot
 
@@ -47,6 +50,8 @@ LOG = logging.getLogger(__name__)
               help='GitHub repository to report deployments to.')
 @click.option('--env-name', default='development',
               help='Deployment environment name. [default: development]')
+@click.option('--config-format', type=click.Choice(("ini", "json", "toml")),
+              help='Configuration file format. [default: based on file extension]')
 @click.argument('config', type=click.File('r'))
 def main(config,
          debug,
@@ -58,7 +63,8 @@ def main(config,
          rollbar_token,
          github_token,
          github_repo,
-         env_name):
+         env_name,
+         config_format):
     """Run an IRC bot from a configuration file.
     """
     revision = os.environ.get('SOURCE_COMMIT', None)
@@ -105,7 +111,20 @@ def main(config,
     })
 
     # Create and initialise the bot
-    client = Bot(config)
+    _, ext = os.path.splitext(config.name)
+    if config_format == "ini" or ext.lower() in {".ini", ".cfg"}:
+        LOG.debug("Reading configuration with ConfigParser")
+        config_data = load_ini(config)
+    elif config_format == "json" or ext.lower() in {".json"}:
+        LOG.debug("Reading configuration as JSON")
+        config_data = load_json(config)
+    elif config_format == "toml" or ext.lower() in {".toml"}:
+        LOG.debug("Reading configuration as TOML")
+        config_data = load_toml(config)
+    else:
+        raise click.BadArgumentUsage('config file extension not in {".ini", ".cfg", ".json", ".toml"} '
+                                     'and no --config-format specified, unsure how to load config')
+    client = Bot(config_data)
     client.bot_setup()
 
     # Configure Rollbar for exception reporting, report deployment
@@ -191,6 +210,26 @@ def main(config,
     LOG.info("Exited")
 
 
+def load_ini(f):
+    parser = configparser.ConfigParser(interpolation=None, allow_no_value=True)
+    parser.optionxform = str    # Preserve case
+    parser.read_file(f)
+    config = {}
+    for name, parser_section in parser.items():
+        config[name] = section = {}
+        for key, value in parser_section.items():
+            section[key] = value
+    return config
+
+
+def load_json(f):
+    return json.load(f)
+
+
+def load_toml(f):
+    return toml.load(f)
+
+
 async def rollbar_report_deploy(rollbar_token, env_name, revision):
     async with aiohttp.ClientSession() as session:
         request = session.post(
@@ -246,7 +285,7 @@ async def github_report_deploy(github_token, github_repo, env_name, revision):
                           create_response.status, create_response.reason, await create_response.text())
                 return
 
-            status = await status_response.json()
+            await status_response.json()
 
         LOG.info('Reported deploy to GitHub: env=%s revision=%s deploy_id=%s',
                  env_name, revision, deploy["id"])

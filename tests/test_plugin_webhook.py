@@ -2,12 +2,12 @@ import unittest.mock as mock
 
 import pytest
 
-from csbot import core
 from csbot.plugin import Plugin
+from csbot.plugins.webhook import Webhook
 from .test_plugin_webserver import WebServer
 
 
-class WebhookTest(Plugin):
+class WebhookExample(Plugin):
     handler_mock = mock.Mock(spec=callable)
 
     @Plugin.hook('webhook.example')
@@ -15,25 +15,19 @@ class WebhookTest(Plugin):
         self.handler_mock(*args, **kwargs)
 
 
-class Bot(core.Bot):
-    available_plugins = core.Bot.available_plugins.copy()
-    available_plugins.update(
-        webserver=WebServer,
-        webhookexample=WebhookTest,
-    )
+PLUGINS = [WebServer, Webhook, WebhookExample]
 
 
 class TestWebhookPlugin:
     SECRET = 'foobar'
-    BOT_CLASS = Bot
     CONFIG = f"""\
-    [@bot]
-    plugins = webserver webhook webhookexample
+    ["@bot"]
+    plugins = ["webserver", "webhook", "webhookexample"]
 
     [webhook]
-    url_secret = {SECRET}
+    url_secret = "{SECRET}"
     """
-    pytestmark = pytest.mark.bot(cls=Bot, config=CONFIG)
+    pytestmark = pytest.mark.bot(plugins=PLUGINS, config=CONFIG)
 
     @pytest.fixture
     def loop(self, event_loop):

@@ -3,6 +3,13 @@ from itertools import tee
 from collections import deque, OrderedDict
 import asyncio
 import logging
+from typing import (
+    Dict,
+    Iterator,
+    List,
+    Set,
+    TypeVar,
+)
 
 import requests
 from async_generator import asynccontextmanager
@@ -10,6 +17,8 @@ import aiohttp
 
 
 LOG = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class User(object):
@@ -283,7 +292,7 @@ class Struct(object, metaclass=StructMeta):
     REQUIRED = NamedObject('Struct.REQUIRED')
 
     #: Field names of the struct, in order (populated by :class:`StructMeta`)
-    _fields = []
+    _fields: List[str]
 
     def __init__(self, *args, **kwargs):
         values = OrderedDict()
@@ -367,6 +376,27 @@ def truncate_utf8(b: bytes, maxlen: int, ellipsis: bytes = b"...") -> bytes:
             b = b[:i]
             break
     return b + ellipsis
+
+
+def topological_sort(data: Dict[T, Set[T]]) -> Iterator[Set[T]]:
+    """Get topological ordering from dependency data.
+
+    Generates sets of items with equal ordering position.
+    """
+    data = data.copy()
+    while True:
+        # Find keys with no more dependencies
+        resolved = set(k for k, deps in data.items() if not deps)
+        # Finished when no more dependencies got resolved
+        if not resolved:
+            break
+        else:
+            yield resolved
+        # Remove resolved dependencies from remaining items
+        data = {k: deps - resolved for k, deps in data.items() if k not in resolved}
+    # Any remaining data means circular dependencies
+    if data:
+        raise ValueError(f"circular dependencies detected: {data!r}")
 
 
 class RateLimited:

@@ -155,12 +155,12 @@ nsfw_test_cases = [
 
 
 pytestmark = pytest.mark.bot(config="""\
-    [@bot]
-    plugins = linkinfo imgur
+    ["@bot"]
+    plugins = ["linkinfo", "imgur"]
 
     [imgur]
-    client_id = abc
-    client_secret = def
+    client_id = "abc"
+    client_secret = "def"
     """)
 
 

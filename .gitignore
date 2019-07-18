@@ -29,6 +29,7 @@ cabal-dev
 dist
 build/
 eggs
+.eggs
 parts
 bin
 var
@@ -46,6 +47,7 @@ nosetests.xml
 _trial_temp/
 htmlcov
 .pytest_cache/
+.mypy_cache/
 
 #Translations
 *.mo

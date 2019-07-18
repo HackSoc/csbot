@@ -1,7 +1,6 @@
 import pytest
 from aiohttp import web
 
-from csbot import core
 from csbot.plugin import Plugin
 from csbot.plugins import webserver
 
@@ -24,17 +23,9 @@ class WebServerExample(Plugin):
         return web.Response(text='Hello, world')
 
 
-class Bot(core.Bot):
-    available_plugins = core.Bot.available_plugins.copy()
-    available_plugins.update(
-        webserver=WebServer,
-        webserverexample=WebServerExample,
-    )
-
-
-pytestmark = pytest.mark.bot(cls=Bot, config="""\
-    [@bot]
-    plugins = webserver webserverexample
+pytestmark = pytest.mark.bot(plugins=[WebServer, WebServerExample], config="""\
+    ["@bot"]
+    plugins = ["webserver", "webserverexample"]
     """)
 
 
