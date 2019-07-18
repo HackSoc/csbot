@@ -1,6 +1,6 @@
 import shlex
 from itertools import tee
-from collections import OrderedDict
+from collections import deque, OrderedDict
 import asyncio
 import logging
 from typing import (
@@ -397,3 +397,86 @@ def topological_sort(data: Dict[T, Set[T]]) -> Iterator[Set[T]]:
     # Any remaining data means circular dependencies
     if data:
         raise ValueError(f"circular dependencies detected: {data!r}")
+
+
+class RateLimited:
+    """An asynchronous wrapper around calling *f* that is rate limited to *count* calls per *period* seconds.
+
+    Calling the rate limiter returns a future that completes with the result of calling *f* with the same arguments.
+    :meth:`start` and :meth:`stop` control whether or not calls are actually processed.
+    """
+    def __init__(self, f, *, period: float = 2.0, count: int = 5, loop=None, log=LOG):
+        assert period > 0.0
+        assert count > 0
+        self.f = f
+        self._period = period
+        self._count = count
+        self._loop = loop or asyncio.get_event_loop()
+        self._log = log
+        self._call_queue = asyncio.Queue()
+        self._call_history = deque()
+        self._task = None
+
+    def __call__(self, *args, **kwargs):
+        future = self._loop.create_future()
+        self._call_queue.put_nowait((args, kwargs, future))
+        return future
+
+    def get_delay(self) -> float:
+        """Get number of seconds to wait before processing the next call."""
+        now = self._loop.time()
+        # Prune call history to the relevant period
+        queue_start = now - self._period
+        while len(self._call_history) > 0 and self._call_history[0] <= queue_start:
+            self._call_history.popleft()
+        # If we still have space, then can call immediately
+        if len(self._call_history) < self._count:
+            return 0.0
+        # Otherwise, we can call when the first item will drop out of the relevant period
+        next_call = self._call_history[0] + self._period
+        return next_call - now
+
+    async def run(self):
+        while True:
+            delay = self.get_delay()
+            if delay > 0.0:
+                self._log.debug(f"waiting {delay} seconds until next call to {self.f}")
+                await asyncio.sleep(delay)
+            args, kwargs, future = await self._call_queue.get()
+            try:
+                result = self.f(*args, **kwargs)
+                future.set_result(result)
+            except Exception as e:
+                future.set_exception(e)
+            self._call_queue.task_done()
+            self._call_history.append(self._loop.time())
+
+    def start(self):
+        """Start async task to process calls."""
+        assert self._task is None
+        self._task = asyncio.ensure_future(self.run(), loop=self._loop)
+
+    def stop(self, clear=True):
+        """Stop async call processing.
+
+        If *clear* is True (the default), any pending calls not yet processed have their futures cancelled. If it's
+        False, then those pending calls will still be queued when :meth:`start` is called again.
+
+        Returns list of ``(args, kwargs)`` pairs of cancelled calls.
+        """
+        if self._task is None:
+            return
+        self._task.cancel()
+        self._task = None
+        cancelled = []
+        if clear:
+            self._call_history.clear()
+            while True:
+                try:
+                    args, kwargs, future = self._call_queue.get_nowait()
+                    future.cancel()
+                    self._call_queue.task_done()
+                    cancelled.append((args, kwargs))
+                except asyncio.QueueEmpty:
+                    break
+        return cancelled

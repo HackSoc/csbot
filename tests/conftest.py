@@ -27,7 +27,13 @@ def event_loop(request, event_loop):
 @pytest.fixture
 def fast_forward(event_loop):
     with aiofastforward.FastForward(event_loop) as forward:
-        yield forward
+        async def f(n):
+            # The wait_for() prevents forward(n) from blocking if there isn't enough async work to do
+            try:
+                await asyncio.wait_for(forward(n), n, loop=event_loop)
+            except asyncio.TimeoutError:
+                pass
+        yield f
 
 
 @pytest.fixture

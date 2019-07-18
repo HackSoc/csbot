@@ -35,6 +35,8 @@ class Bot(SpecialPlugin, IRCClient):
         use_notice = config.option(int, default=True, help="Use NOTICE instead of PRIVMSG to send messages")
         client_ping = config.option(int, default=0, help="Send PING if no messages for this many seconds (0=disabled)")
         bind_addr = config.option(str, example="192.168.1.111", help="Bind to specific local address")
+        rate_limit_period = config.option(int, default=0, help="Period (in seconds) to consider for rate limit")
+        rate_limit_count = config.option(int, default=0, help="Maximum number of messages to send in rate limit period")
 
     #: Dictionary containing available plugins for loading, using
     #: straight.plugin to discover plugin classes under a namespace.
@@ -73,6 +75,10 @@ class Bot(SpecialPlugin, IRCClient):
             bind_addr=self.config.bind_addr,
             client_ping_enabled=(self.config.client_ping > 0),
             client_ping_interval=self.config.client_ping,
+            rate_limit_enabled=(self.config.rate_limit_period > 0 and
+                                self.config.rate_limit_count > 0),
+            rate_limit_period=self.config.rate_limit_period,
+            rate_limit_count=self.config.rate_limit_count,
         )
 
         self._recent_messages = collections.deque(maxlen=10)
