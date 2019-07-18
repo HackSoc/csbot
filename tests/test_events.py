@@ -180,11 +180,11 @@ class TestAsyncEventRunner:
         yield from async_runner.runner.post_event(f1)
         assert async_runner.exception_handler.call_count == 1
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2)])
-        #self.assertEqual(set(self.handled_events), {f1, f2})
+        # self.assertEqual(set(self.handled_events), {f1, f2})
         yield from async_runner.runner.post_event(f3)
         assert async_runner.exception_handler.call_count == 1
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2), mock.call(f3), mock.call(f4)])
-        #self.assertEqual(set(self.handled_events), {f1, f2, f3, f4})
+        # self.assertEqual(set(self.handled_events), {f1, f2, f3, f4})
 
 
 @pytest.mark.asyncio

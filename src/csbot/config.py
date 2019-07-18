@@ -322,6 +322,7 @@ def make_example(cls: Type[Config]) -> Config:
 
 class TomlExampleGenerator:
     _BARE_KEY_REGEX = re.compile(r"^[A-Za-z0-9_-]+$")
+    _LIST_LINE_LENGTH_THRESHOLD = 120
 
     def __init__(self, *, commented=False):
         self._stream = None
@@ -419,7 +420,13 @@ class TomlExampleGenerator:
         """
         Generate <relative_path> = toml(<example>)
         """
-        return self._generate_simple(example, relative_path)
+        key = self._make_key(relative_path)
+        items = [str(self._encoder.dump_value(x)) for x in example]
+        output = f"{key} = [{', '.join(items)}]\n"
+        if len(items) > 0 and len(output) > self._LIST_LINE_LENGTH_THRESHOLD:
+            output = ",\n  ".join(items) + ","
+            output = f"{key} = [\n  {output}\n]\n"
+        self._write(output)
 
     def _generate_simple_map(self, example: Dict[str, Any], relative_path: List[str]):
         """

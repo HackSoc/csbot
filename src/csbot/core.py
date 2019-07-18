@@ -1,5 +1,6 @@
 import collections
 import itertools
+from typing import Mapping, Sequence, Type
 
 from csbot.plugin import Plugin, SpecialPlugin, find_plugins
 from csbot.plugin import build_plugin_dict, PluginManager, PluginConfigError
@@ -29,18 +30,26 @@ class Bot(SpecialPlugin, IRCClient):
         irc_port = config.option(int, default=6667, help="IRC server port")
         command_prefix = config.option(str, default="!", help="Prefix for invoking commands")
         channels = config.option(config.WordList, example=["#cs-york-dev"], help="Channels to join")
-        plugins = config.option(config.WordList, example=["logger", "linkinfo"], help="Plugins to load")
+        plugins = config.option(config.WordList, example=lambda: sorted(p.plugin_name() for p in find_plugins()),
+                                help="Plugins to load")
         use_notice = config.option(int, default=True, help="Use NOTICE instead of PRIVMSG to send messages")
         client_ping = config.option(int, default=0, help="Send PING if no messages for this many seconds (0=disabled)")
         bind_addr = config.option(str, example="192.168.1.111", help="Bind to specific local address")
 
     #: Dictionary containing available plugins for loading, using
     #: straight.plugin to discover plugin classes under a namespace.
-    available_plugins = build_plugin_dict(find_plugins())
+    available_plugins: Mapping[str, Type[Plugin]]
 
     _WHO_IDENTIFY = ('1', '%na')
 
-    def __init__(self, config=None, loop=None):
+    def __init__(self, config=None, *, plugins: Sequence[Type[Plugin]] = None, loop=None):
+        # Record available plugins
+        if plugins is None:
+            self.available_plugins = build_plugin_dict(find_plugins())
+        else:
+            self.available_plugins = build_plugin_dict(plugins)
+
+        # Load configuration
         self.config_root = config
         if self.config_root is None:
             self.config_root = {}
@@ -370,11 +379,14 @@ class Bot(SpecialPlugin, IRCClient):
         raise NotImplementedError
 
     @classmethod
-    def write_example_config(cls, f, commented=False):
-        plugins = [cls]
-        plugins.extend(cls.available_plugins[k] for k in sorted(cls.available_plugins.keys()))
+    def write_example_config(cls, f, plugins=None, commented=False):
+        plugins_ = [cls]
+        if plugins is None:
+            plugins_.extend(sorted(find_plugins(), key=lambda p: p.plugin_name()))
+        else:
+            plugins_.extend(plugins)
         generator = config.TomlExampleGenerator(commented=commented)
-        for P in plugins:
+        for P in plugins_:
             config_cls = getattr(P, 'Config', None)
             if config.is_config(config_cls):
                 try:

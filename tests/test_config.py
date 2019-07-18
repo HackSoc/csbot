@@ -21,12 +21,10 @@ class MockPlugin(csbot.plugin.Plugin):
     }
 
 
-class MockBot(csbot.core.Bot):
-    available_plugins = csbot.plugin.build_plugin_dict([MockPlugin])
-
+PLUGINS = csbot.plugin.find_plugins() + [MockPlugin]
 
 base_config = """
-["@mockbot"]
+["@bot"]
 plugins = ["mockplugin"]
 """
 
@@ -38,7 +36,7 @@ env_only = "config3"
 """
 
 
-@pytest.mark.bot(cls=MockBot, config=base_config)
+@pytest.mark.bot(plugins=PLUGINS, config=base_config)
 def test_without_plugin_section(bot_helper):
     bot = bot_helper.bot
     # Check the test plugin was loaded
@@ -67,7 +65,7 @@ def test_without_plugin_section(bot_helper):
             assert plugin.config_get('multiple_env') == 'highest priority'
 
 
-@pytest.mark.bot(cls=MockBot, config=base_config + plugin_config)
+@pytest.mark.bot(plugins=PLUGINS, config=base_config + plugin_config)
 def test_with_plugin_section(bot_helper):
     bot = bot_helper.bot
     assert 'mockplugin' in bot.plugins
@@ -568,7 +566,7 @@ def _test_config_generator_simple_list():
 
     return Config, [
         "## list of ints with default value",
-        "a = [ 1, 2, 3,]",
+        "a = [1, 2, 3]",
         "## list of ints with no default value",
         "b = []",
     ]
@@ -745,6 +743,30 @@ def _test_config_generator_quoted_key():
     ]
 
 
+@CONFIG_GENERATOR_TESTS.append
+def _test_config_generator_list_wrap():
+    """Check that long lists are split onto multiple lines."""
+    class Config(config.Config):
+        a = config.option_list(str, default=["abcdefghijklmnopqrstuvwxyz" for _ in range(2)], help="")
+        b = config.option_list(str, default=["abcdefghijklmnopqrstuvwxyz" for _ in range(5)], help="")
+        abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = config.option_list(str, help="")
+
+    return Config, [
+        # Shorter than threshold, don't split
+        'a = ["abcdefghijklmnopqrstuvwxyz", "abcdefghijklmnopqrstuvwxyz"]',
+        # Longer than threshold, split
+        'b = [',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        '  "abcdefghijklmnopqrstuvwxyz",',
+        ']',
+        # Key longer than threshold, but no items, don't split
+        'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = []',
+    ]
+
+
 @pytest.mark.parametrize("test_factory", CONFIG_GENERATOR_TESTS)
 def test_config_generator(test_factory):
     cls, expected = test_factory()
@@ -787,30 +809,14 @@ def test_config_generator_commented():
     assert_toml_equal(output, expected)
 
 
-class TestExampleConfig:
-    @pytest.fixture(params=csbot.plugin.find_plugins())
-    def plugin_cls(self, request):
-        """Generates a test for each available plugin."""
-        if not config.is_config(getattr(request.param, "Config", None)):
-            pytest.skip("plugin does not have Config class")
-        return request.param
-
-    @pytest.fixture
-    def irc_client_class(self, plugin_cls):
-        """Generate a bot class that contains only the plugin under test."""
-        class Bot(csbot.core.Bot):
-            available_plugins = csbot.plugin.build_plugin_dict([plugin_cls])
-        return Bot
-
-    @pytest.fixture
-    def config_file(self, irc_client_class):
-        """Generate an example config for the bot class which contains only the plugin under test."""
-        cfg = io.StringIO()
-        irc_client_class.write_example_config(cfg)
-        cfg.seek(0)
-        return cfg
-
-    def test_example_config_is_valid(self, event_loop, irc_client_class, config_file, plugin_cls):
-        """Test that the generated config can be loaded by the plugin under test."""
-        bot = irc_client_class(config=toml.load(config_file), loop=event_loop)
-        plugin_cls(bot)
+@pytest.mark.parametrize("plugin", csbot.plugin.find_plugins())
+@pytest.mark.bot
+def test_example_config_is_valid(event_loop, plugin):
+    """Test that the example config for each plugin can be loaded by that plugin."""
+    if not config.is_config(getattr(plugin, "Config", None)):
+        pytest.skip("plugin does not have Config class")
+    cfg = io.StringIO()
+    csbot.core.Bot.write_example_config(cfg, plugins=[plugin])
+    cfg.seek(0)
+    bot = csbot.core.Bot(config=toml.load(cfg), plugins=[plugin], loop=event_loop)
+    plugin(bot)
