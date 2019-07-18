@@ -236,7 +236,6 @@ class IRCClient:
     .. _irc3: https://github.com/gawel/irc3
     .. _Twisted: http://twistedmatrix.com/documents/14.0.0/api/twisted.words.protocols.irc.IRCClient.html
 
-    * TODO: limit send rate
     * TODO: NAMES
     * TODO: MODE
     * TODO: More sophisticated CTCP? (see Twisted_)
@@ -259,6 +258,9 @@ class IRCClient:
         bind_addr=None,
         client_ping_enabled=False,
         client_ping_interval=60,
+        rate_limit_enabled=False,
+        rate_limit_period=5,
+        rate_limit_count=5,
     ))
 
     #: Available client capabilities
@@ -281,6 +283,12 @@ class IRCClient:
         self._last_message_received = self.loop.time()
         self._client_ping = None
         self._client_ping_counter = 0
+        if self.__config['rate_limit_enabled']:
+            self._send_line = util.RateLimited(self._send_line,
+                                               period=self.__config['rate_limit_period'],
+                                               count=self.__config['rate_limit_count'],
+                                               loop=self.loop,
+                                               log=LOG)
 
         self._message_waiters = set()
 
@@ -348,6 +356,8 @@ class IRCClient:
         Register with the IRC server.
         """
         LOG.debug('connection made')
+        if self.__config['rate_limit_enabled']:
+            self._send_line.start()
 
         nick = self.__config['nick']
         username = self.__config['username'] or nick
@@ -399,6 +409,10 @@ class IRCClient:
         :meth:`close` was called).
         """
         LOG.debug('connection lost: %r', exc)
+        if self.__config['rate_limit_enabled']:
+            cancelled = self._send_line.stop()
+            if cancelled:
+                LOG.warning(f"{len(cancelled)} outgoing message(s) discarded")
         self.reader, self.writer = None, None
         self._stop_client_pings()
 
@@ -415,27 +429,32 @@ class IRCClient:
         Subclasses can implement this to get access to the actual message that was sent (which may
         have been truncated from what was passed to :meth:`send_line`).
         """
-        pass
+        LOG.debug('<<< %s', line)
 
     def message_received(self, msg):
         """Callback for received parsed IRC message."""
         self.process_wait_for_message(msg)
         self._dispatch_method('irc_' + msg.command_name, msg)
 
-    def send_line(self, data):
+    def send_line(self, data: str):
         """Send a raw IRC message to the server.
 
         Encodes, terminates and sends *data* to the server. If the line would be longer than the
         maximum allowed by the IRC specification, it is trimmed to fit (without breaking UTF-8
         sequences).
+
+        If rate limiting is enabled, the message may not be sent immediately.
         """
         encoded = self.codec.encode(data)
         trimmed = util.truncate_utf8(encoded, 510)  # RFC line length is 512 including \r\n
         if len(trimmed) < len(encoded):
             LOG.warning(f"outgoing message trimmed from {len(encoded)} to {len(trimmed)} bytes")
-        LOG.debug('<<< %s', trimmed)
-        self.writer.write(trimmed + b"\r\n")
-        self.line_sent(self.codec.decode(trimmed))
+        self._send_line(trimmed)
+
+    def _send_line(self, data: bytes):
+        """Actually send the message to the server."""
+        self.writer.write(data + b"\r\n")
+        self.line_sent(self.codec.decode(data))
 
     def send(self, msg):
         """Send an :class:`IRCMessage`."""
