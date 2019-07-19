@@ -15,7 +15,6 @@ setuptools.setup(
     ],
     install_requires=[
         'click>=6.2,<7.0',
-        'straight.plugin==1.4.0-post-1',
         'pymongo>=3.6.0',
         'requests>=2.9.1,<3.0.0',
         'lxml>=2.3.5',
