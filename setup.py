@@ -29,7 +29,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'csbot = csbot:main',
+            'csbot = csbot.cli:main',
             'csbot_util = csbot.cli:util',
         ],
     },
