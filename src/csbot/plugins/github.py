@@ -1,3 +1,109 @@
+"""
+GitHub Deployment Tracking
+==========================
+
+GitHub's `Deployments API <https://developer.github.com/v3/repos/deployments/>`_ allows a repository to track deployment
+activity. For example, deployments of the main instance of csbot can be seen at
+https://github.com/HackSoc/csbot/deployments.
+
+Getting csbot to report deployments to your repository during bot startup requires the following:
+
+* ``SOURCE_COMMIT`` environment variable set to the current git revision (the
+  `Docker image <https://hub.docker.com/r/alanbriolat/csbot>`_ has this baked in)
+* ``--env-name`` command-line option (defaults to ``development``)
+* ``--github-repo`` command-line option with the repository to report deployments to (e.g. ``HackSoc/csbot``)
+* ``--github-token`` command-line option with a GitHub "personal access token" that has ``repo_deployment`` scope
+
+.. note:: Deployments API functionality is implemented in :mod:`csbot.cli`, not here.
+
+GitHub Webhooks
+===============
+
+The GitHub plugin provides a webhook endpoint that will turn incoming events into messages that are sent to IRC
+channels. To use the GitHub webhook, the :mod:`~csbot.plugins.webserver` and :mod:`~csbot.plugins.webhook` plugins must
+be enabled in addition to this one, and the csbot webserver must be exposed to the internet somehow.
+
+Follow the `GitHub documentation <https://developer.github.com/webhooks/creating/>`_ to create a webhook on the desired
+repository, with the following settings:
+
+* **Payload URL**: see :mod:`~csbot.plugins.webhook` for how webhook URL routing works
+* **Content type**: ``application/json``
+* **Secret**: the same value as chosen for the ``secret`` plugin option, for signing payloads
+* **Which events ...**: Configure for whichever events you want to handle
+
+Configuration
+-------------
+
+The following configuration options are supported in the ``[github]`` config section:
+
+==================  ===========
+Setting             Description
+==================  ===========
+``secret``          The secret used when creating the GitHub webhook. **Optional**, will not verify payload signatures if unset.
+``notify``          Space-separated list of IRC channels to send messages to.
+``fmt/[...]``       Format strings to use for particular events, for turning an event into an IRC message. See below.
+``fmt.[...]``       Re-usable format string fragments. See below.
+==================  ===========
+
+``secret`` and ``notify`` can be overridden on a per-repository basis, in a ``[github/{repo}]`` config section, e.g.
+``[github/HackSoc/csbot]``.
+
+Event format strings
+--------------------
+
+When writing format strings to handle GitHub webhook events, it's essential to refer to the
+`GitHub Event Types & Payloads <https://developer.github.com/v3/activity/events/types>`_ documentation.
+
+Each event ``event_type``, and possibly an ``event_subtype``. The ``event_type`` always corresponds to the "Webhook
+event name" defined by GitHub's documentation, e.g. ``release`` for *ReleaseEvent*. The ``event_subtype`` is generally
+the ``action`` from the payload, if that event type has one (but see below for exceptions).
+
+The plugin will attempt to find the most specific config option that exists to supply a format string:
+
+* For an event with ``event_type`` and ``event_subtype``, will try ``fmt/event_type/event_subtype``,
+  ``fmt/event_type/*`` and ``fmt/*``
+* For an event with no ``event_subtype``, will try ``fmt/event_type`` and ``fmt/*``
+
+The first config option that exists will be used, and if that format string is empty (zero-length string, None, False)
+then no message will be sent. This means it's possible to set a useful format string for ``fmt/issues/*``, but then set
+an empty format for ``fmt/issues/labeled`` and ``fmt/issues/unlabeled`` to ignore some unwanted noise.
+
+The string is formatted with the context of the entire webhook payload, plus additional keys for ``event_type``,
+``event_subtype`` and ``event_name`` (which is ``{event_type}/{event_subtype}`` if there is an ``event_subtype``,
+otherwise ``{event_type}``. (But see below for exceptions where additional context exists.)
+
+Re-usable format strings
+------------------------
+
+There are a lot of recurring structures in the GitHub webhook payloads, and those will usually want to be formatted in
+similar ways in resulting messages. For example, it might be desirable to start every message with the repository name
+and user that caused the event. Instead of duplicating the same fragment of format string for each event type, which
+makes the format strings long and hard to maintain, a format string fragment can be defined as a ``fmt.name`` config
+option, and referenced in another format string as ``{fmt.name}``. These fragments will get formatted with the same
+context as the top-level format string.
+
+Customised event handling
+-------------------------
+
+To represent certain events more clearly, additional processing is required, either to extend the string format context
+or to introduce an ``event_subtype`` where there is no ``action`` in the payload. This is the approach needed when
+thinking "I wish string formatting had conditionals". Implementing such handling is done by creating a
+``handle_{event_type}`` method, which should ultimately call ``generic_handler`` with appropriate arguments.
+
+There is already customised handling for the following:
+
+* ``push``
+    * Sets ``event_subtype``: ``forced`` for forced update of a ref, and ``pushed`` for regular pushes
+    * Sets ``count``: number of commits pushed to the ref
+    * Sets ``short_ref``: only the final element of the long ref name, e.g. ``v1.0`` from ``refs/tags/v1.0``
+* ``pull_request``
+    * Overrides ``event_subtype`` with ``merged`` if PR was ``closed`` due to a merge
+* ``pull_request_review``
+    * Sets ``review_state`` to a human-readable version of the review state
+
+Module contents
+===============
+"""
 import hmac
 import datetime
 import json
