@@ -31,6 +31,6 @@ Module contents
 ---------------
 
 .. automodule:: csbot.plugins
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:

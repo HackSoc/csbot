@@ -6,13 +6,15 @@ Subpackages
 
 .. toctree::
 
-    csbot.plugins
+   csbot.plugins
 
 Submodules
 ----------
 
 .. toctree::
 
+   csbot.cli
+   csbot.config
    csbot.core
    csbot.events
    csbot.irc
@@ -23,6 +25,6 @@ Module contents
 ---------------
 
 .. automodule:: csbot
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:

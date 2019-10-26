@@ -1,7 +1,7 @@
-csbot.events module
+csbot.config module
 ===================
 
-.. automodule:: csbot.events
+.. automodule:: csbot.config
    :members:
    :undoc-members:
    :show-inheritance:

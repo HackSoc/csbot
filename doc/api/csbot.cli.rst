@@ -1,7 +1,7 @@
-csbot.irc module
+csbot.cli module
 ================
 
-.. automodule:: csbot.irc
+.. automodule:: csbot.cli
    :members:
    :undoc-members:
    :show-inheritance:
