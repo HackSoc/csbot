@@ -1,13 +1,11 @@
 # Requirements for unit testing
-pytest==4.2.0
+pytest>=5.2.2,<6.0
 pytest-asyncio==0.10.0
 pytest-aiohttp==0.3.0
-#aioresponses==0.6.0
-git+https://github.com/alanbriolat/aioresponses.git@callback-coroutines#egg=aioresponses
+aioresponses==0.6.1
 pytest-cov
-asynctest==0.12.2
+asynctest==0.13.0
 aiofastforward==0.0.24
-responses
 mongomock
 
 # Requirements for documentation
