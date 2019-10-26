@@ -4,7 +4,6 @@ from unittest import mock
 
 import pytest
 import aiofastforward
-import responses as responses_
 from aioresponses import aioresponses as aioresponses_
 import toml
 
@@ -188,12 +187,6 @@ class BotHelper(IRCClientHelper):
     @property
     def bot(self):
         return self.client
-
-
-@pytest.fixture
-def responses():
-    with responses_.RequestsMock() as rsps:
-        yield rsps
 
 
 @pytest.fixture
