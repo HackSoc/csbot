@@ -76,9 +76,6 @@ We're also using Travis-CI for continuous integration and continuous deployment.
 .. image:: https://travis-ci.org/HackSoc/csbot.svg?branch=master
     :target: https://travis-ci.org/HackSoc/csbot
 
-.. image:: https://coveralls.io/repos/HackSoc/csbot/badge.png
-    :target: https://coveralls.io/r/HackSoc/csbot
-
 
 .. [1] csbot depends on lxml_, which is a compiled extension module based on
     libxml2 and libxslt.  Make sure you have the appropriate libraries and
