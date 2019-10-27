@@ -12,4 +12,4 @@ jobs:
     - name: Install tox
       run: pip install tox
     - name: Run tests with tox
-      run: python -m tox
+      run: tox
