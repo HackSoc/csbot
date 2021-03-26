@@ -1,17 +1,46 @@
 name: CI
 
-on: [push]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7]
+        include:
+          - python-version: 3.6
+            toxenv: py36
+          - python-version: 3.7
+            toxenv: py37-coveralls-flake8
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Run a one-line script
-      run: echo Hello, world!
-    - name: Run a multi-line script
-      run: |
-        echo Add other actions to build,
-        echo test, and deploy your project.
+      # Pretend to be a different CI service so Coveralls can comment on PRs
+      - name: Environment aliases for Coveralls
+        run: |
+          echo "::set-env name=JENKINS_HOME::/dev/null"
+          echo "::set-env name=BUILD_NUMBER::$RUNNER_TRACKING_ID"
+          echo "::set-env name=CI_PULL_REQUEST::${{ github.event.pull_request.number }}"
+          echo "::set-env name=BRANCH_NAME::$GITHUB_REF"
+      - name: examine environment
+        run: env
+      - uses: actions/checkout@v1
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install tox
+      - name: Test with tox
+        run: python -m tox
+        env:
+          TOXENV: ${{ matrix.toxenv }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          COVERALLS_SERVICE_NAME: github-actions
