@@ -22,7 +22,8 @@ jobs:
             toxenv: py38
           - python-version: 3.9
             toxenv: py39-flake8
-
+    env:
+      PYTHON: ${{ matrix.python-version }}
     steps:
       - name: examine environment
         run: env
@@ -41,7 +42,7 @@ jobs:
           TOXENV: ${{ matrix.toxenv }}
       - uses: codecov/codecov-action@v1
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: PYTHON
 
   docker:
     runs-on: ubuntu-latest
