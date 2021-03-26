@@ -42,6 +42,7 @@ pip-log.txt
 
 # Unit test / coverage reports
 .coverage
+coverage*.xml
 .tox
 nosetests.xml
 _trial_temp/

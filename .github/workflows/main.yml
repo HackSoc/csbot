@@ -17,16 +17,9 @@ jobs:
           - python-version: 3.6
             toxenv: py36
           - python-version: 3.7
-            toxenv: py37-coveralls-flake8
+            toxenv: py37-flake8
 
     steps:
-      # Pretend to be a different CI service so Coveralls can comment on PRs
-      - name: Environment aliases for Coveralls
-        run: |
-          echo "::set-env name=JENKINS_HOME::/dev/null"
-          echo "::set-env name=BUILD_NUMBER::$RUNNER_TRACKING_ID"
-          echo "::set-env name=CI_PULL_REQUEST::${{ github.event.pull_request.number }}"
-          echo "::set-env name=BRANCH_NAME::$GITHUB_REF"
       - name: examine environment
         run: env
       - uses: actions/checkout@v1
@@ -42,5 +35,6 @@ jobs:
         run: python -m tox
         env:
           TOXENV: ${{ matrix.toxenv }}
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-          COVERALLS_SERVICE_NAME: github-actions
+      - uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
