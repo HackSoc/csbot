@@ -51,6 +51,20 @@ jobs:
         with:
           load: true
           push: false
-          tags: alanbriolat/csbot:latest
+          tags: csbot:latest
       - name: Run tests inside Docker
-        run: docker run --rm alanbriolat/csbot:latest pytest
+        run: docker run --rm csbot:latest pytest
+      - name: Login to GitHub Packages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: docker/login-action@v1
+        with:
+          registry: docker.pkg.github.com
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: |
+            docker.pkg.github.com/hacksoc/csbot/csbot:latest
