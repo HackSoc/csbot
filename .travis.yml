@@ -10,6 +10,10 @@ matrix:
       env: TOXENV=py36-coveralls
     - python: '3.7'
       env: TOXENV=py37-coveralls-flake8
+    - python: '3.8'
+      env: TOXENV=py38-coveralls
+    - python: '3.9'
+      env: TOXENV=py39-coveralls
 
 script: tox
 
