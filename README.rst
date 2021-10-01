@@ -75,7 +75,7 @@ We're also using GitHub Actions for continuous integration and continuous deploy
 
 .. image:: https://github.com/HackSoc/csbot/actions/workflows/main.yml/badge.svg
 
-.. image:: https://codecov.io/gh/HackSoc/csbot/branch/master/graph/badge.svg?token=oMJcY9E9lj
+.. image:: https://codecov.io/gh/HackSoc/csbot/branch/main/graph/badge.svg?token=oMJcY9E9lj
     :target: https://codecov.io/gh/HackSoc/csbot
 
 
