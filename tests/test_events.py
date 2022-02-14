@@ -138,16 +138,13 @@ class TestAsyncEventRunner:
     @pytest.mark.asyncio
     def test_event_chain(self, async_runner):
         """Check that chains of events get handled."""
-        @asyncio.coroutine
-        def f1():
+        async def f1():
             async_runner.runner.post_event(f2)
 
-        @asyncio.coroutine
-        def f2():
+        async def f2():
             async_runner.runner.post_event(f3)
 
-        @asyncio.coroutine
-        def f3():
+        async def f3():
             pass
 
         yield from async_runner.runner.post_event(f1)
@@ -159,21 +156,17 @@ class TestAsyncEventRunner:
         """Check that exceptions are handled but don't block other tasks or
         leave the runner in a broken state.
         """
-        @asyncio.coroutine
-        def f1():
+        async def f1():
             async_runner.runner.post_event(f2)
             raise Exception()
 
-        @asyncio.coroutine
-        def f2():
+        async def f2():
             pass
 
-        @asyncio.coroutine
-        def f3():
+        async def f3():
             async_runner.runner.post_event(f4)
 
-        @asyncio.coroutine
-        def f4():
+        async def f4():
             pass
 
         assert async_runner.exception_handler.call_count == 0

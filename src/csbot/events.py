@@ -116,8 +116,7 @@ class AsyncEventRunner(object):
         self.pending_event.clear()
         return pending
 
-    @asyncio.coroutine
-    def _run(self):
+    async def _run(self):
         # Use self as context manager so an escaping exception doesn't break
         # the event runner instance permanently (i.e. we clean up the future)
         with self:
