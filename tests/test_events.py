@@ -123,20 +123,18 @@ def async_runner(event_loop):
 
 
 class TestAsyncEventRunner:
-    @pytest.mark.asyncio
-    def test_values(self, async_runner):
+    async def test_values(self, async_runner):
         """Check that basic values are passed through the event queue
         unmolested."""
         # Test that things actually get through
-        yield from async_runner.runner.post_event('foo')
+        await async_runner.runner.post_event('foo')
         assert async_runner.handle_event.call_args_list == [mock.call('foo')]
         # The event runner doesn't care what it's passing through
         for x in ['bar', 1.3, None, object]:
-            yield from async_runner.runner.post_event(x)
+            await async_runner.runner.post_event(x)
             assert async_runner.handle_event.call_args[0][0] is x
 
-    @pytest.mark.asyncio
-    def test_event_chain(self, async_runner):
+    async def test_event_chain(self, async_runner):
         """Check that chains of events get handled."""
         async def f1():
             async_runner.runner.post_event(f2)
@@ -147,12 +145,12 @@ class TestAsyncEventRunner:
         async def f3():
             pass
 
-        yield from async_runner.runner.post_event(f1)
+        await async_runner.runner.post_event(f1)
         assert async_runner.handle_event.call_count == 3
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2), mock.call(f3)])
 
     @pytest.mark.asyncio(allow_unhandled_exception=True)
-    def test_exception_recovery(self, async_runner):
+    async def test_exception_recovery(self, async_runner):
         """Check that exceptions are handled but don't block other tasks or
         leave the runner in a broken state.
         """
@@ -170,17 +168,16 @@ class TestAsyncEventRunner:
             pass
 
         assert async_runner.exception_handler.call_count == 0
-        yield from async_runner.runner.post_event(f1)
+        await async_runner.runner.post_event(f1)
         assert async_runner.exception_handler.call_count == 1
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2)])
         # self.assertEqual(set(self.handled_events), {f1, f2})
-        yield from async_runner.runner.post_event(f3)
+        await async_runner.runner.post_event(f3)
         assert async_runner.exception_handler.call_count == 1
         async_runner.handle_event.assert_has_calls([mock.call(f1), mock.call(f2), mock.call(f3), mock.call(f4)])
         # self.assertEqual(set(self.handled_events), {f1, f2, f3, f4})
 
 
-@pytest.mark.asyncio
 class TestHybridEventRunner:
     class EventHandler:
         def __init__(self):

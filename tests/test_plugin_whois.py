@@ -95,7 +95,6 @@ class TestWhoisAPI:
 
 
 @pytest.mark.usefixtures("run_client")
-@pytest.mark.asyncio
 class TestWhoisBehaviour:
     async def test_client_reply_whois_after_set(self, bot_helper):
         await bot_helper.recv_privmsg('Nick!~user@host', '#First', '!whois.set test1')

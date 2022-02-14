@@ -149,7 +149,6 @@ async def run_client(event_loop, irc_client_helper):
     point it should yield control to allow the client to progress.
 
     >>> @pytest.mark.usefixtures("run_client")
-    ... @pytest.mark.asyncio
     ... async def test_something(irc_client_helper):
     ...     await irc_client_helper.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
     ...     irc_client_helper.assert_sent('PRIVMSG #channel :what do you mean, hello?')

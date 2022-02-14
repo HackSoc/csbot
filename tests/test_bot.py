@@ -103,7 +103,6 @@ class TestHook:
 
     pytestmark = pytest.mark.bot(plugins=[MockPlugin], config=CONFIG)
 
-    @pytest.mark.asyncio
     async def test_hooks(self, bot_helper):
         """Check that hooks fire in the expected way."""
         bot = bot_helper.bot
@@ -136,7 +135,6 @@ class TestHook:
             mock.call('test3', {}),
         ]
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize('n', list(range(1, 10)))
     async def test_burst_in_order(self, bot_helper, n):
         """Check that a plugin always gets messages in receive order."""
@@ -146,7 +144,6 @@ class TestHook:
         await asyncio.wait(bot_helper.receive(messages))
         assert plugin.handler_mock.mock_calls == [mock.call('quit', user) for user in users]
 
-    @pytest.mark.asyncio
     async def test_non_blocking(self, bot_helper):
         """Check that long-running hooks don't block other events from being processed."""
         plugin = bot_helper['mockplugin']
@@ -195,7 +192,6 @@ class TestCommand:
     """
 
     @pytest.mark.bot(plugins=[MockPlugin1], config=CONFIG_A)
-    @pytest.mark.asyncio
     async def test_command_help(self, bot_helper):
         """Check that commands fire in the expected way."""
         await asyncio.wait(bot_helper.receive([':nick!user@host PRIVMSG #channel :&plugins']))
@@ -214,7 +210,6 @@ class TestCommand:
         bot_helper.assert_sent('NOTICE #channel :This command has help')
 
     @pytest.mark.bot(plugins=[MockPlugin1], config=CONFIG_A)
-    @pytest.mark.asyncio
     async def test_command_fired(self, bot_helper):
         """Check that commands fire in the expected way."""
         plugin = bot_helper['mockplugin1']
@@ -255,7 +250,6 @@ class TestCommand:
     """
 
     @pytest.mark.bot(plugins=[MockPlugin1, MockPlugin2], config=CONFIG_B)
-    @pytest.mark.asyncio
     async def test_command_single_handler(self, caplog, bot_helper):
         count = 0
         for r in caplog.get_records("setup"):
