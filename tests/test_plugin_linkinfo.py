@@ -221,7 +221,7 @@ class TestNonBlocking:
         def privmsg(self, event):
             self.handler_mock(event['message'])
 
-    CONFIG = f"""\
+    CONFIG = """\
     ["@bot"]
     plugins = ["mockplugin", "linkinfo"]
     """

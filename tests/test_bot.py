@@ -188,7 +188,7 @@ class TestCommand:
         def command_cd(self, *args, **kwargs):
             self.handler_mock(inspect.currentframe().f_code.co_name)
 
-    CONFIG_A = f"""\
+    CONFIG_A = """\
     ["@bot"]
     command_prefix = "&"
     plugins = ["mockplugin1"]
@@ -248,7 +248,7 @@ class TestCommand:
         def command_a(self, *args, **kwargs):
             self.handler_mock(inspect.currentframe().f_code.co_name)
 
-    CONFIG_B = f"""\
+    CONFIG_B = """\
     ["@bot"]
     command_prefix = "&"
     plugins = ["mockplugin1", "mockplugin2"]

@@ -122,7 +122,7 @@ class IRCClientHelper:
         """Shortcut to push a series of lines to the client."""
         if isinstance(lines, str):
             lines = [lines]
-        return [self.client.line_received(l) for l in lines]
+        return [self.client.line_received(line) for line in lines]
 
     def assert_sent(self, lines):
         """Check that a list of (unicode) strings have been sent.
@@ -132,7 +132,7 @@ class IRCClientHelper:
         """
         if isinstance(lines, str):
             lines = [lines]
-        self.client.send_line.assert_has_calls([mock.call(l) for l in lines])
+        self.client.send_line.assert_has_calls([mock.call(line) for line in lines])
         self.client.send_line.reset_mock()
 
 

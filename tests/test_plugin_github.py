@@ -67,8 +67,8 @@ class TestGitHubPlugin:
 
     ["github/alanbriolat/csbot-webhook-test"]
     notify = "#mychannel"
-    """
-    URL = f'/webhook/github/foobar'
+    """  # noqa: E501
+    URL = '/webhook/github/foobar'
     pytestmark = pytest.mark.bot(plugins=PLUGINS, config=CONFIG)
 
     TEST_CASES = [

@@ -350,8 +350,8 @@ class TomlExampleGenerator:
         """Write *s* to the current stream; if *raw* is True, don't apply comment filter."""
         if not raw and self._commented:
             lines = s.split("\n")
-            modified = [f"# {l}" if l and not l.startswith("#") else l
-                        for l in lines]
+            modified = [f"# {line}" if line and not line.startswith("#") else line
+                        for line in lines]
             s = "\n".join(modified)
         self._stream.write(s)
         self._at_start = False
