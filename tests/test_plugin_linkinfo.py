@@ -232,7 +232,7 @@ class TestNonBlocking:
     async def test_non_blocking_privmsg(self, event_loop, bot_helper, aioresponses):
         bot_helper.reset_mock()
 
-        event = asyncio.Event(loop=event_loop)
+        event = asyncio.Event()
 
         async def handler(url, **kwargs):
             await event.wait()
@@ -245,7 +245,7 @@ class TestNonBlocking:
             ':nick!user@host PRIVMSG #channel :http://example.com/',
             ':nick!user@host PRIVMSG #channel :b',
         ])
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert bot_helper['mockplugin'].handler_mock.mock_calls == [
             mock.call('a'),
             mock.call('http://example.com/'),
@@ -254,7 +254,7 @@ class TestNonBlocking:
         bot_helper.client.send_line.assert_not_called()
 
         event.set()
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert all(f.done() for f in futures)
         bot_helper.client.send_line.assert_has_calls([
             mock.call('NOTICE #channel :foo'),
@@ -264,7 +264,7 @@ class TestNonBlocking:
     async def test_non_blocking_command(self, event_loop, bot_helper, aioresponses):
         bot_helper.reset_mock()
 
-        event = asyncio.Event(loop=event_loop)
+        event = asyncio.Event()
 
         async def handler(url, **kwargs):
             await event.wait()
@@ -278,7 +278,7 @@ class TestNonBlocking:
             ':nick!user@host PRIVMSG #channel :!link http://example.com/',
             ':nick!user@host PRIVMSG #channel :b',
         ])
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert bot_helper['mockplugin'].handler_mock.mock_calls == [
             mock.call('a'),
             mock.call('!link http://example.com/'),
@@ -287,7 +287,7 @@ class TestNonBlocking:
         bot_helper.client.send_line.assert_not_called()
 
         event.set()
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert all(f.done() for f in futures)
         bot_helper.client.send_line.assert_has_calls([
             mock.call('NOTICE #channel :Error: Content-Type not HTML-ish: '

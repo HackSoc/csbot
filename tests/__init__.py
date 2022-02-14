@@ -12,10 +12,10 @@ class MockStreamWriter(asyncio.StreamWriter):
         self._reader.feed_eof()
 
 
-def paused(f, *, loop=None):
+def paused(f):
     """Wrap a coroutine function so it waits until explicitly enabled.
     """
-    event = asyncio.Event(loop=loop)
+    event = asyncio.Event()
     resume = event.set
 
     async def _f(*args, **kwargs):

@@ -78,7 +78,7 @@ class AsyncEventRunner(object):
         self.loop = loop
 
         self.pending = set()
-        self.pending_event = asyncio.Event(loop=self.loop)
+        self.pending_event = asyncio.Event()
         self.pending_event.clear()
         self.future = None
 
@@ -134,7 +134,6 @@ class AsyncEventRunner(object):
                     break
                 # Run until 1 or more tasks complete (or more tasks are added)
                 done, not_done = yield from asyncio.wait(not_done,
-                                                         loop=self.loop,
                                                          return_when=asyncio.FIRST_COMPLETED)
                 # Handle exceptions raised by tasks
                 for f in done:
@@ -181,7 +180,7 @@ class HybridEventRunner:
         self.loop = loop
 
         self.events = deque()
-        self.new_events = asyncio.Event(loop=self.loop)
+        self.new_events = asyncio.Event()
         self.futures = set()
         self.future = None
 
@@ -242,7 +241,6 @@ class HybridEventRunner:
         future = maybe_future(
             result,
             log=LOG,
-            loop=self.loop,
         )
         if future:
             future = asyncio.ensure_future(self._finish_async_handler(future, event), loop=self.loop)
@@ -278,7 +276,6 @@ class HybridEventRunner:
                 new_events = self.loop.create_task(self.new_events.wait())
                 LOG.debug('waiting on %s futures', len(self.futures))
                 done, pending = await asyncio.wait(self.futures | {new_events},
-                                                   loop=self.loop,
                                                    return_when=asyncio.FIRST_COMPLETED)
                 # Remove done futures from the set of futures being waited on
                 done_futures = done - {new_events}

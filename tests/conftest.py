@@ -29,7 +29,7 @@ def fast_forward(event_loop):
         async def f(n):
             # The wait_for() prevents forward(n) from blocking if there isn't enough async work to do
             try:
-                await asyncio.wait_for(forward(n), n, loop=event_loop)
+                await asyncio.wait_for(forward(n), n)
             except asyncio.TimeoutError:
                 pass
         yield f

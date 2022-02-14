@@ -287,7 +287,7 @@ class TestHybridEventRunner:
         Any events that occur during an event handler should be processed before the initial
         `post_event()` future has a result.
         """
-        events = [asyncio.Event(loop=event_loop) for _ in range(2)]
+        events = [asyncio.Event() for _ in range(2)]
         complete = []
 
         @event_runner.add_handler('a')
@@ -333,7 +333,7 @@ class TestHybridEventRunner:
         # - should have a post_event('a') call
         # - a1 should complete, a2 is blocked on events[0]
         future = event_runner.runner.post_event('a')
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert not future.done()
         assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
@@ -349,7 +349,7 @@ class TestHybridEventRunner:
         # - post_event('f') should be called (by c)
         # - d should complete
         events[0].set()
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert not future.done()
         assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
@@ -366,7 +366,7 @@ class TestHybridEventRunner:
         # - e should complete
         # - future should complete, because no events or tasks remain pending
         events[1].set()
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert future.done()
         assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
@@ -385,7 +385,7 @@ class TestHybridEventRunner:
         event all run before synchronous handlers for the next event, but asynchronous handers can
         run out-of-order.
         """
-        events = [asyncio.Event(loop=event_loop) for _ in range(2)]
+        events = [asyncio.Event() for _ in range(2)]
         complete = []
 
         @event_runner.add_handler('a')
@@ -429,7 +429,7 @@ class TestHybridEventRunner:
         # - post_event('a') should be called (initial)
         # - a1 should complete, a2 is blocked on events[0]
         future = event_runner.runner.post_event('a')
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert not future.done()
         assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
@@ -444,7 +444,7 @@ class TestHybridEventRunner:
         # - d2 should complete (synchronous phase)
         # - d1 should complete (asynchronous phase)
         events[0].set()
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert not future.done()
         assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
@@ -460,7 +460,7 @@ class TestHybridEventRunner:
         # - c2 should complete (asynchronous phase)
         # - future should complete, because no events or tasks remain pending
         events[1].set()
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert future.done()
         assert event_runner.get_handlers.mock_calls == [
             mock.call('a'),
@@ -472,7 +472,7 @@ class TestHybridEventRunner:
 
     async def test_overlapping_root_events(self, event_loop, event_runner):
         """Check that overlapping events get the same future."""
-        events = [asyncio.Event(loop=event_loop) for _ in range(1)]
+        events = [asyncio.Event() for _ in range(1)]
         complete = []
 
         @event_runner.add_handler('a')
@@ -487,7 +487,7 @@ class TestHybridEventRunner:
         # Post the first event and allow tasks to run:
         # - a is blocked on events[0]
         f1 = event_runner.runner.post_event('a')
-        await asyncio.wait({f1}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({f1}, timeout=0.1)
         assert not f1.done()
         assert complete == []
 
@@ -496,7 +496,7 @@ class TestHybridEventRunner:
         # - a is still blocked on events[0]
         # - f1 and f2 are not done, because they're for the same run loop, and a is still blocked
         f2 = event_runner.runner.post_event('b')
-        await asyncio.wait({f2}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({f2}, timeout=0.1)
         assert not f2.done()
         assert not f1.done()
         assert complete == ['b']
@@ -505,7 +505,7 @@ class TestHybridEventRunner:
         # - a completes
         # - f1 and f2 are both done, because the run loop has finished
         events[0].set()
-        await asyncio.wait([f1, f2], loop=event_loop, timeout=0.1)
+        await asyncio.wait([f1, f2], timeout=0.1)
         assert f1.done()
         assert f2.done()
         assert complete == ['b', 'a']
@@ -526,14 +526,14 @@ class TestHybridEventRunner:
             complete.append('b')
 
         f1 = event_runner.runner.post_event('a')
-        await asyncio.wait({f1}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({f1}, timeout=0.1)
         assert f1.done()
         assert complete == ['a']
 
         f2 = event_runner.runner.post_event('b')
         assert not f2.done()
         assert f2 is not f1
-        await asyncio.wait({f2}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({f2}, timeout=0.1)
         assert f2.done()
         assert complete == ['a', 'b']
 
@@ -571,7 +571,7 @@ class TestHybridEventRunner:
 
         assert event_runner.exception_handler.call_count == 0
         future = event_runner.runner.post_event('a')
-        await asyncio.wait({future}, loop=event_loop, timeout=0.1)
+        await asyncio.wait({future}, timeout=0.1)
         assert future.done()
         assert future.exception() is None
         assert event_runner.runner.get_handlers.mock_calls == [
