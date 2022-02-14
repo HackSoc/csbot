@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9, 3.10]
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
         include:
-          - python-version: 3.7
+          - python-version: "3.7"
             toxenv: py37
-          - python-version: 3.8
+          - python-version: "3.8"
             toxenv: py38
-          - python-version: 3.9
+          - python-version: "3.9"
             toxenv: py39
-          - python-version: 3.10
+          - python-version: "3.10"
             toxenv: py310-flake8
     env:
       PYTHON: ${{ matrix.python-version }}
