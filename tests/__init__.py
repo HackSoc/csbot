@@ -27,9 +27,10 @@ def paused(f):
     return _f, resume
 
 
-async def open_mock_connection(*args, loop=None, **kwargs):
+async def open_mock_connection(*args, **kwargs):
     """Create a mock reader and writer pair.
     """
+    loop = asyncio.get_running_loop()
     reader = MockStreamReader(loop=loop)
     writer = MockStreamWriter(None, None, reader, loop)
     writer.write = mock.Mock()
