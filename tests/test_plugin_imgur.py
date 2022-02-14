@@ -164,7 +164,6 @@ pytestmark = pytest.mark.bot(config="""\
     """)
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", test_cases)
 async def test_integration(bot_helper, aioresponses, url, api_url, status, content_type, fixture, title):
     aioresponses.get(api_url, status=status,
@@ -178,7 +177,6 @@ async def test_integration(bot_helper, aioresponses, url, api_url, status, conte
         assert title == result.text
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("url, api_url, status, content_type, fixture, title", nsfw_test_cases)
 async def test_integration_nsfw(bot_helper, aioresponses, url, api_url, status, content_type, fixture, title):
     aioresponses.get(api_url, status=status,
@@ -192,7 +190,6 @@ async def test_integration_nsfw(bot_helper, aioresponses, url, api_url, status, 
         assert title == result.text
 
 
-@pytest.mark.asyncio
 async def test_invalid_URL(bot_helper, aioresponses):
     """Test that an unrecognised URL never even results in a request."""
     result = await bot_helper['linkinfo'].get_link_info('http://imgur.com/invalid/url')

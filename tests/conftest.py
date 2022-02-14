@@ -29,7 +29,7 @@ def fast_forward(event_loop):
         async def f(n):
             # The wait_for() prevents forward(n) from blocking if there isn't enough async work to do
             try:
-                await asyncio.wait_for(forward(n), n, loop=event_loop)
+                await asyncio.wait_for(forward(n), n)
             except asyncio.TimeoutError:
                 pass
         yield f
@@ -122,7 +122,7 @@ class IRCClientHelper:
         """Shortcut to push a series of lines to the client."""
         if isinstance(lines, str):
             lines = [lines]
-        return [self.client.line_received(l) for l in lines]
+        return [self.client.line_received(line) for line in lines]
 
     def assert_sent(self, lines):
         """Check that a list of (unicode) strings have been sent.
@@ -132,7 +132,7 @@ class IRCClientHelper:
         """
         if isinstance(lines, str):
             lines = [lines]
-        self.client.send_line.assert_has_calls([mock.call(l) for l in lines])
+        self.client.send_line.assert_has_calls([mock.call(line) for line in lines])
         self.client.send_line.reset_mock()
 
 
@@ -149,7 +149,6 @@ async def run_client(event_loop, irc_client_helper):
     point it should yield control to allow the client to progress.
 
     >>> @pytest.mark.usefixtures("run_client")
-    ... @pytest.mark.asyncio
     ... async def test_something(irc_client_helper):
     ...     await irc_client_helper.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
     ...     irc_client_helper.assert_sent('PRIVMSG #channel :what do you mean, hello?')

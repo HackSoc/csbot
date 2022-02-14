@@ -78,7 +78,7 @@ class AsyncEventRunner(object):
         self.loop = loop
 
         self.pending = set()
-        self.pending_event = asyncio.Event(loop=self.loop)
+        self.pending_event = asyncio.Event()
         self.pending_event.clear()
         self.future = None
 
@@ -116,8 +116,7 @@ class AsyncEventRunner(object):
         self.pending_event.clear()
         return pending
 
-    @asyncio.coroutine
-    def _run(self):
+    async def _run(self):
         # Use self as context manager so an escaping exception doesn't break
         # the event runner instance permanently (i.e. we clean up the future)
         with self:
@@ -133,9 +132,7 @@ class AsyncEventRunner(object):
                     new_pending.cancel()
                     break
                 # Run until 1 or more tasks complete (or more tasks are added)
-                done, not_done = yield from asyncio.wait(not_done,
-                                                         loop=self.loop,
-                                                         return_when=asyncio.FIRST_COMPLETED)
+                done, not_done = await asyncio.wait(not_done, return_when=asyncio.FIRST_COMPLETED)
                 # Handle exceptions raised by tasks
                 for f in done:
                     e = f.exception()
@@ -181,7 +178,7 @@ class HybridEventRunner:
         self.loop = loop
 
         self.events = deque()
-        self.new_events = asyncio.Event(loop=self.loop)
+        self.new_events = asyncio.Event()
         self.futures = set()
         self.future = None
 
@@ -239,11 +236,7 @@ class HybridEventRunner:
             result = handler(event)
         except Exception as e:
             self._handle_exception(exception=e, csbot_event=event)
-        future = maybe_future(
-            result,
-            log=LOG,
-            loop=self.loop,
-        )
+        future = maybe_future(result, log=LOG)
         if future:
             future = asyncio.ensure_future(self._finish_async_handler(future, event), loop=self.loop)
         return future
@@ -277,9 +270,7 @@ class HybridEventRunner:
                 # Run until one or more futures complete (or new events are added)
                 new_events = self.loop.create_task(self.new_events.wait())
                 LOG.debug('waiting on %s futures', len(self.futures))
-                done, pending = await asyncio.wait(self.futures | {new_events},
-                                                   loop=self.loop,
-                                                   return_when=asyncio.FIRST_COMPLETED)
+                done, pending = await asyncio.wait(self.futures | {new_events}, return_when=asyncio.FIRST_COMPLETED)
                 # Remove done futures from the set of futures being waited on
                 done_futures = done - {new_events}
                 LOG.debug('%s of %s futures done', len(done_futures), len(self.futures))

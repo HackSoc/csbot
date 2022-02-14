@@ -94,7 +94,6 @@ def pre_irc_client(aioresponses):
     api_key = "abc"
     """)
 class TestYoutubePlugin:
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("vid_id, status, fixture, expected", json_test_cases)
     async def test_ids(self, bot_helper, aioresponses, vid_id, status, fixture, expected):
         pattern = re.compile(rf'https://www.googleapis.com/youtube/v3/videos\?.*\bid={vid_id}\b.*')
@@ -127,7 +126,6 @@ class TestYoutubeLinkInfoIntegration:
             })
         return bot_helper
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("vid_id, status, fixture, response", json_test_cases)
     @pytest.mark.parametrize("url", [
         "https://www.youtube.com/watch?v={}",

@@ -749,7 +749,7 @@ def _test_config_generator_list_wrap():
     class Config(config.Config):
         a = config.option_list(str, default=["abcdefghijklmnopqrstuvwxyz" for _ in range(2)], help="")
         b = config.option_list(str, default=["abcdefghijklmnopqrstuvwxyz" for _ in range(5)], help="")
-        abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = config.option_list(str, help="")
+        abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = config.option_list(str, help="")  # noqa: E501
 
     return Config, [
         # Shorter than threshold, don't split
@@ -763,7 +763,7 @@ def _test_config_generator_list_wrap():
         '  "abcdefghijklmnopqrstuvwxyz",',
         ']',
         # Key longer than threshold, but no items, don't split
-        'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = []',
+        'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz = []',  # noqa: E501
     ]
 
 

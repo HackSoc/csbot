@@ -267,9 +267,9 @@ class IRCClient:
 
         self.reader, self.writer = None, None
         self._exiting = False
-        self.connected = asyncio.Event(loop=self.loop)
+        self.connected = asyncio.Event()
         self.connected.clear()
-        self.disconnected = asyncio.Event(loop=self.loop)
+        self.disconnected = asyncio.Event()
         self.disconnected.set()
         self._last_message_received = self.loop.time()
         self._client_ping = None
