@@ -2,7 +2,7 @@
 ircv3 = true
 nickname = "Mathison"
 auth_method = "sasl_plain"
-irc_host = "irc.freenode.net"
+irc_host = "irc.libera.chat"
 channels = [
     "#cs-york",
     "#cs-york-dev",
@@ -39,15 +39,15 @@ scan_limit = 2
 [auth]
 "@everything" = "* *:*"
 Alan = "@everything"
-hjmills = "@everything"
+#hjmills = "@everything"
 barrucadu = "#cs-york:topic"
 Helzibah = "#cs-york:topic"
-DinCahill = "#cs-york:topic"
-jalada = "#cs-york:topic"
-kyubiko = "#cs-york:topic #hacksoc:*"
-eep = "#cs-york:topic #hacksoc:*"
+#DinCahill = "#cs-york:topic"
+#jalada = "#cs-york:topic"
+#kyubiko = "#cs-york:topic #hacksoc:*"
+#eep = "#cs-york:topic #hacksoc:*"
 fromankyra = "#hacksoc-bottest:*"
-ldm = "#hacksoc:* #hacksoc-bottest:*" 
+luke = "#hacksoc:* #hacksoc-bottest:*"
 
 "*" = "#compsoc-uk:topic"
 
