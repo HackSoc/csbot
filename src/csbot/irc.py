@@ -316,7 +316,6 @@ class IRCClient:
 
         self.reader, self.writer = await asyncio.open_connection(self.__config['host'],
                                                                  self.__config['port'],
-                                                                 loop=self.loop,
                                                                  local_addr=local_addr)
 
     def disconnect(self):
