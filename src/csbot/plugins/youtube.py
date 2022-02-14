@@ -56,7 +56,7 @@ class Youtube(Plugin):
         'api_key': ['YOUTUBE_DATA_API_KEY'],
     }
 
-    RESPONSE = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views} [{likes}]'
+    RESPONSE = '"{title}" [{duration}] (by {uploader} at {uploaded}) | Views: {views}'
     CMD_RESPONSE = RESPONSE + ' | {link}'
 
     async def get_video_json(self, id):
@@ -129,13 +129,6 @@ class Youtube(Plugin):
             vid_info["views"] = "{:,}".format(views)
         except KeyError:
             vid_info["views"] = "N/A"
-
-        try:
-            likes = int(json["statistics"]["likeCount"])
-            dislikes = int(json["statistics"]["dislikeCount"])
-            vid_info["likes"] = "+{:,}/-{:,}".format(likes, dislikes)
-        except KeyError:
-            vid_info["likes"] = "N/A"
 
         return vid_info
 
