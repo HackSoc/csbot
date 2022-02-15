@@ -24,7 +24,9 @@ class Last(Plugin):
         if msgtype is not None:
             search['type'] = msgtype
 
-        return self.db.find_one(search, sort=[('when', pymongo.DESCENDING)])
+        # Additional sorting by _id to make sort order stable for messages that arrive in the same millisecond
+        # (which sometimes happens during tests).
+        return self.db.find_one(search, sort=[('when', pymongo.DESCENDING), ('_id', pymongo.DESCENDING)])
 
     def last_message(self, nick, channel=None):
         """Get the last message sent by a nick, optionally filtering
