@@ -249,9 +249,7 @@ class TestNonBlocking:
         event.set()
         await asyncio.wait(futures, timeout=0.1)
         assert all(f.done() for f in futures)
-        bot_helper.client.send_line.assert_has_calls([
-            mock.call('NOTICE #channel :foo'),
-        ])
+        bot_helper.assert_sent('NOTICE #channel :foo')
 
     async def test_non_blocking_command(self, event_loop, bot_helper, aioresponses):
         bot_helper.reset_mock()
@@ -281,7 +279,5 @@ class TestNonBlocking:
         event.set()
         await asyncio.wait(futures, timeout=0.1)
         assert all(f.done() for f in futures)
-        bot_helper.client.send_line.assert_has_calls([
-            mock.call('NOTICE #channel :Error: Content-Type not HTML-ish: '
-                      'application/octet-stream (http://example.com/)'),
-        ])
+        bot_helper.assert_sent('NOTICE #channel :Error: Content-Type not HTML-ish: '
+                               'application/octet-stream (http://example.com/)')

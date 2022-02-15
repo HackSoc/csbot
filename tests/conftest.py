@@ -124,16 +124,51 @@ class IRCClientHelper:
             lines = [lines]
         return [self.client.line_received(line) for line in lines]
 
-    def assert_sent(self, lines):
+    def assert_sent(self, matchers, *, any_order=False, reset_mock=True):
         """Check that a list of (unicode) strings have been sent.
 
         Resets the mock so the next call will not contain what was checked by
         this call.
         """
-        if isinstance(lines, str):
-            lines = [lines]
-        self.client.send_line.assert_has_calls([mock.call(line) for line in lines])
-        self.client.send_line.reset_mock()
+        sent_lines = [args[0] for name, args, kwargs in self.client.send_line.mock_calls]
+
+        if callable(matchers) or isinstance(matchers, str):
+            matchers = [matchers]
+        matchers = [LineMatcher.equals(matcher) if not callable(matcher) else matcher
+                    for matcher in matchers]
+
+        if not matchers:
+            pass
+        elif any_order:
+            for matcher in matchers:
+                assert any(matcher(line) for line in sent_lines), f"sent line not found: {matcher}"
+        else:
+            # Find the start of the matching run of sent messages
+            start = 0
+            while start < len(sent_lines) and not matchers[0](sent_lines[start]):
+                start += 1
+            for i, matcher in enumerate(matchers):
+                assert start + i < len(sent_lines), f"no line matching {matcher} in {sent_lines}"
+                assert matcher(sent_lines[start + i]), f"expected {sent_lines[start + i]!r} to match {matcher}"
+
+        if reset_mock:
+            self.client.send_line.reset_mock()
+
+
+class LineMatcher:
+    def __init__(self, f, description):
+        self.f = f
+        self.description = description
+
+    def __call__(self, line):
+        return self.f(line)
+
+    def __repr__(self):
+        return self.description
+
+    @classmethod
+    def equals(cls, other):
+        return cls(lambda line: line == other, f"`line == {other!r}`")
 
 
 @pytest.fixture
