@@ -106,8 +106,7 @@ class Last(Plugin):
 
     @Plugin.hook('last.update')
     def _apply_update(self, e):
-        self.db.remove(e['query'])
-        self.db.insert(e['update'])
+        self.db.replace_one(e['query'], e['update'], upsert=True)
 
     @Plugin.command('seen', help=('seen nick [type]: show the last thing'
                                   ' said by a nick in this channel, optionally'
