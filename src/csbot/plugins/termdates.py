@@ -196,8 +196,16 @@ class TermDates(Plugin):
         # Save to the database. As we don't touch the _id attribute in this
         # method, this will cause `save` to override the previously-loaded
         # entry (if there is one).
-        self.db_terms.save(self.terms)
-        self.db_weeks.save(self.weeks)
+        if '_id' in self.terms:
+            self.db_terms.replace_one({'_id': self.terms['_id']}, self.terms, upsert=True)
+        else:
+            res = self.db_terms.insert_one(self.terms)
+            self.terms['_id'] = res.inserted_id
+        if '_id' in self.weeks:
+            self.db_weeks.replace_one({'_id': self.weeks['_id']}, self.weeks, upsert=True)
+        else:
+            res = self.db_weeks.insert_one(self.weeks)
+            self.weeks['_id'] = res.inserted_id
 
         # Finally, we're initialised!
         self.initialised = True

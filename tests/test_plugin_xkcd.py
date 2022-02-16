@@ -173,9 +173,7 @@ class TestXKCDLinkInfoIntegration:
         _, title, alt = expected
         incoming = f":nick!user@host PRIVMSG #channel :!xkcd {num}"
         await asyncio.wait(bot_helper.receive(incoming))
-        _, (outgoing,), _ = bot_helper.client.send_line.mock_calls[-1]
-        assert title in outgoing
-        assert alt in outgoing
+        bot_helper.assert_sent(lambda line: title in line and alt in line)
 
     @pytest.mark.usefixtures("populate_responses")
     async def test_integration_error(self, bot_helper):

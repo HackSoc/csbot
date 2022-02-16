@@ -6,6 +6,7 @@ aioresponses==0.7.3
 pytest-cov
 asynctest==0.13.0
 aiofastforward==0.0.24
+time-machine==2.6.0
 mongomock
 
 # Requirements for documentation

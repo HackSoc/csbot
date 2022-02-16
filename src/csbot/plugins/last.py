@@ -24,7 +24,9 @@ class Last(Plugin):
         if msgtype is not None:
             search['type'] = msgtype
 
-        return self.db.find_one(search, sort=[('when', pymongo.DESCENDING)])
+        # Additional sorting by _id to make sort order stable for messages that arrive in the same millisecond
+        # (which sometimes happens during tests).
+        return self.db.find_one(search, sort=[('when', pymongo.DESCENDING), ('_id', pymongo.DESCENDING)])
 
     def last_message(self, nick, channel=None):
         """Get the last message sent by a nick, optionally filtering
@@ -104,8 +106,7 @@ class Last(Plugin):
 
     @Plugin.hook('last.update')
     def _apply_update(self, e):
-        self.db.remove(e['query'])
-        self.db.insert(e['update'])
+        self.db.replace_one(e['query'], e['update'], upsert=True)
 
     @Plugin.command('seen', help=('seen nick [type]: show the last thing'
                                   ' said by a nick in this channel, optionally'
