@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 from textwrap import dedent
 from unittest import mock
@@ -205,7 +206,7 @@ def bot_helper_class():
 
 
 @pytest.fixture
-def bot_helper(irc_client, bot_helper_class):
+def bot_helper(irc_client, bot_helper_class) -> BotHelper:
     irc_client.bot_setup()
     return bot_helper_class(irc_client)
 
