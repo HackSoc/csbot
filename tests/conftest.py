@@ -81,6 +81,30 @@ async def irc_client(request, event_loop, config_example_mode, irc_client_class,
     return client
 
 
+class LineMatcher:
+    def __init__(self, f, description):
+        self.f = f
+        self.description = description
+
+    def __call__(self, line):
+        return self.f(line)
+
+    def __repr__(self):
+        return self.description
+
+    @classmethod
+    def equals(cls, other):
+        return cls(lambda line: line == other, f"`line == {other!r}`")
+
+    @classmethod
+    def contains(cls, other):
+        return cls(lambda line: other in line, f"`{other!r} in line`")
+
+    @classmethod
+    def endswith(cls, other):
+        return cls(lambda line: line.endswith(other), f"`line.endswith({other!r})`")
+
+
 class IRCClientHelper:
     def __init__(self, irc_client):
         self.client = irc_client
@@ -155,21 +179,7 @@ class IRCClientHelper:
         if reset_mock:
             self.client.send_line.reset_mock()
 
-
-class LineMatcher:
-    def __init__(self, f, description):
-        self.f = f
-        self.description = description
-
-    def __call__(self, line):
-        return self.f(line)
-
-    def __repr__(self):
-        return self.description
-
-    @classmethod
-    def equals(cls, other):
-        return cls(lambda line: line == other, f"`line == {other!r}`")
+    match_line = LineMatcher
 
 
 @pytest.fixture
