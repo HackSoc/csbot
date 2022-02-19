@@ -8,7 +8,7 @@ import pymongo
 import requests
 
 from csbot.plugin import Plugin
-from csbot.util import nick, subdict
+from csbot.util import nick
 
 
 @attr.s
@@ -50,6 +50,7 @@ class QuoteRecord:
                    nick=udict['nick'],
                    message=udict['message'],
                    )
+
 
 class QuoteDB:
     def __init__(self, *args, **kwargs):
@@ -151,7 +152,8 @@ class Quote(Plugin, QuoteDB):
                 return q
         return None
 
-    @Plugin.command('remember', help=("remember <nick> [<pattern>]: adds last quote that matches <pattern> to the database"))
+    @Plugin.command('remember',
+                    help="remember <nick> [<pattern>]: adds last quote that matches <pattern> to the database")
     def remember(self, e):
         """ Remembers the last matching quote from a user
         """
@@ -175,7 +177,7 @@ class Quote(Plugin, QuoteDB):
             if pattern is not None:
                 e.reply(f'No data for {nick} found matching "{pattern}"')
             else:
-                e.reply( f'No data for {nick}')
+                e.reply(f'No data for {nick}')
         else:
             self.bot.reply(user, 'remembered "{}"'.format(quote.format(show_id=False)))
 
@@ -236,7 +238,9 @@ class Quote(Plugin, QuoteDB):
             if just_channel:
                 return self.reply_with_summary(nick_, just_channel.group('channel'), None)
             elif channel_and_pat:
-                return self.reply_with_summary(nick_, channel_and_pat.group('channel'), channel_and_pat.group('pattern'))
+                return self.reply_with_summary(nick_,
+                                               channel_and_pat.group('channel'),
+                                               channel_and_pat.group('pattern'))
 
             return e.reply('Invalid command. Syntax in privmsg is !quote.list <channel> [<pattern>]')
         else:
@@ -330,6 +334,7 @@ class Quote(Plugin, QuoteDB):
         user = nick(e['user'])
         quote = QuoteRecord(None, channel, user, msg)
         self.channel_logs[channel].appendleft(quote)
+
 
 def message_matches(msg, pattern=None):
     """ Check whether the given message matches the given pattern

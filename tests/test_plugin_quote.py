@@ -32,11 +32,11 @@ class TestQuotePlugin:
         pytest.mark.bot(config="""
             ["@bot"]
             plugins = ["mongodb", "usertrack", "auth", "quote"]
-            
+
             [auth]
             nickaccount  = "#First:quote"
             otheraccount = "#Second:quote"
-            
+
             [mongodb]
             mode = "mock"
         """),
@@ -96,7 +96,7 @@ class TestQuotePlugin:
 
     async def test_client_quotes_not_exist(self):
         await self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'No data for Nick'))
+        self.bot_helper.assert_sent('NOTICE #First :No data for Nick')
 
     async def test_client_quote_add_multi(self):
         await self._recv_privmsg('Nick!~user@host', '#First', 'test data')
@@ -110,10 +110,10 @@ class TestQuotePlugin:
         await self._recv_privmsg('Nick!~user@host', '#First', 'other data')
 
         await self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'No data for Nick'))
+        self.bot_helper.assert_sent('NOTICE #Second :No data for Nick')
 
         await self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#Second', 'No data for Nick'))
+        self.bot_helper.assert_sent('NOTICE #Second :No data for Nick')
 
     async def test_client_quote_channel_specific_quotes(self):
         await self._recv_privmsg('Nick!~user@host', '#First', 'test data')
@@ -129,8 +129,8 @@ class TestQuotePlugin:
 
     async def test_client_quote_channel_fill_logs(self):
         for i in range(150):
-            await self._recv_privmsg('Nick!~user@host', '#First', 'test data#{}'.format(i))
-            await self._recv_privmsg('Nick!~user@host', '#Second', 'other data#{}'.format(i))
+            await self._recv_privmsg('Nick!~user@host', '#First', f'test data#{i}')
+            await self._recv_privmsg('Nick!~user@host', '#Second', f'other data#{i}')
 
         await self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick data#135')
         await self._recv_privmsg('Other!~user@host', '#Second', '!quote Nick')
@@ -154,7 +154,7 @@ class TestQuotePlugin:
         await self._recv_line(":Other!~other@otherhost ACCOUNT otheraccount")
 
         # stick some quotes in a thing
-        data = ['test data#{}'.format(i) for i in range(10)]
+        data = [f'test data#{i}' for i in range(10)]
         for msg in data:
             await self._recv_privmsg('Nick!~user@host', '#Second', msg)
             await self._recv_privmsg('Other!~user@host', '#Second', '!remember Nick')
@@ -187,7 +187,7 @@ class TestQuotePlugin:
         await self._recv_privmsg('Nick!~user@host', '#First', '!quote.remove 0')
 
         await self._recv_privmsg('Nick!~user@host', '#First', '!quote Nick')
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'No data for Nick'))
+        self.bot_helper.assert_sent('NOTICE #First :No data for Nick')
 
     async def test_client_quote_remove_no_permission(self):
         await self._recv_line(":Other!~other@otherhost ACCOUNT otheraccount")
@@ -196,13 +196,13 @@ class TestQuotePlugin:
         await self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
         await self._recv_privmsg('Other!~user@host', '#First', '!quote.remove -1')
 
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'error: otheraccount not authorised for #First:quote'))
+        self.bot_helper.assert_sent('NOTICE #First :error: otheraccount not authorised for #First:quote')
 
     async def test_client_quote_remove_no_quotes(self):
         await self._recv_line(":Nick!~user@host ACCOUNT nickaccount")
         await self._recv_privmsg('Nick!~user@host', '#First', '!quote.remove -1')
 
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'Error: could not remove quote(s) with ID: -1'))
+        self.bot_helper.assert_sent('NOTICE #First :Error: could not remove quote(s) with ID: -1')
 
     async def test_client_quote_list_no_permission(self):
         await self._recv_line(":Other!~other@otherhost ACCOUNT otheraccount")
@@ -211,7 +211,7 @@ class TestQuotePlugin:
         await self._recv_privmsg('Other!~user@host', '#First', '!remember Nick')
         await self._recv_privmsg('Other!~user@host', '#First', '!quote.list')
 
-        self.bot_helper.assert_sent('NOTICE {} :{}'.format('#First', 'error: otheraccount not authorised for #First:quote'))
+        self.bot_helper.assert_sent('NOTICE #First :error: otheraccount not authorised for #First:quote')
 
     async def test_client_quote_channelwide(self):
         await self._recv_privmsg('Nick!~user@host', '#First', 'test data!')
