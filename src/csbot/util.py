@@ -189,6 +189,18 @@ def ordinal(value):
     return ordval
 
 
+def subdict(d1, d2):
+    """returns True if d1 is a "subset" of d2
+    i.e. if forall keys k in d1, k in d2 and d1[k] == d2[k]
+    """
+    for k1 in d1:
+        if k1 not in d2:
+            return False
+        if d1[k1] != d2[k1]:
+            return False
+    return True
+
+
 def pluralize(n, singular, plural):
     return '{0} {1}'.format(n, singular if n == 1 else plural)
 
