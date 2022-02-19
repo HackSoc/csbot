@@ -94,7 +94,6 @@ class TestXKCDPlugin:
             aioresponses.add(url, body=read_fixture_file(fixture),
                              content_type=content_type)
 
-    @pytest.mark.asyncio
     @pytest.mark.usefixtures("populate_responses")
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
@@ -102,14 +101,12 @@ class TestXKCDPlugin:
         result = await bot_helper['xkcd']._xkcd(num)
         assert result == expected
 
-    @pytest.mark.asyncio
     @pytest.mark.usefixtures("populate_responses")
     async def test_latest_success(self, bot_helper):
         # Also test the empty string
         num, url, content_type, fixture, expected = json_test_cases[0]
         assert await bot_helper['xkcd']._xkcd("") == expected
 
-    @pytest.mark.asyncio
     @pytest.mark.usefixtures("populate_responses")
     async def test_random(self, bot_helper):
         # !xkcd 221
@@ -117,7 +114,6 @@ class TestXKCDPlugin:
         with patch("random.randint", return_value=1):
             assert await bot_helper['xkcd']._xkcd("rand") == expected
 
-    @pytest.mark.asyncio
     async def test_error_1(self, bot_helper, aioresponses):
         num, url, content_type, fixture, _ = json_test_cases[0]  # Latest
         # Test if the comics are unavailable by making the latest return a 404
@@ -126,7 +122,6 @@ class TestXKCDPlugin:
         with pytest.raises(bot_helper['xkcd'].XKCDError):
             await bot_helper['xkcd']._xkcd("")
 
-    @pytest.mark.asyncio
     async def test_error_2(self, bot_helper, aioresponses):
         num, url, content_type, fixture, _ = json_test_cases[0]  # Latest
         # Now override the actual 404 page and the latest "properly"
@@ -162,7 +157,6 @@ class TestXKCDLinkInfoIntegration:
                              content_type=content_type)
 
     @pytest.mark.usefixtures("populate_responses")
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
     async def test_integration(self, bot_helper, num, url, content_type, fixture, expected):
@@ -173,19 +167,15 @@ class TestXKCDLinkInfoIntegration:
         assert alt in result.text
 
     @pytest.mark.usefixtures("populate_responses")
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("num, url, content_type, fixture, expected", json_test_cases,
                              ids=[_[1] for _ in json_test_cases])
     async def test_command(self, bot_helper, num, url, content_type, fixture, expected):
         _, title, alt = expected
         incoming = f":nick!user@host PRIVMSG #channel :!xkcd {num}"
         await asyncio.wait(bot_helper.receive(incoming))
-        _, (outgoing,), _ = bot_helper.client.send_line.mock_calls[-1]
-        assert title in outgoing
-        assert alt in outgoing
+        bot_helper.assert_sent(lambda line: title in line and alt in line)
 
     @pytest.mark.usefixtures("populate_responses")
-    @pytest.mark.asyncio
     async def test_integration_error(self, bot_helper):
         # Error case
         result = await bot_helper['linkinfo'].get_link_info("http://xkcd.com/flibble")

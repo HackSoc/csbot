@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 from textwrap import dedent
 from unittest import mock
@@ -29,7 +30,7 @@ def fast_forward(event_loop):
         async def f(n):
             # The wait_for() prevents forward(n) from blocking if there isn't enough async work to do
             try:
-                await asyncio.wait_for(forward(n), n, loop=event_loop)
+                await asyncio.wait_for(forward(n), n)
             except asyncio.TimeoutError:
                 pass
         yield f
@@ -80,6 +81,30 @@ async def irc_client(request, event_loop, config_example_mode, irc_client_class,
     return client
 
 
+class LineMatcher:
+    def __init__(self, f, description):
+        self.f = f
+        self.description = description
+
+    def __call__(self, line):
+        return self.f(line)
+
+    def __repr__(self):
+        return self.description
+
+    @classmethod
+    def equals(cls, other):
+        return cls(lambda line: line == other, f"`line == {other!r}`")
+
+    @classmethod
+    def contains(cls, other):
+        return cls(lambda line: other in line, f"`{other!r} in line`")
+
+    @classmethod
+    def endswith(cls, other):
+        return cls(lambda line: line.endswith(other), f"`line.endswith({other!r})`")
+
+
 class IRCClientHelper:
     def __init__(self, irc_client):
         self.client = irc_client
@@ -122,18 +147,39 @@ class IRCClientHelper:
         """Shortcut to push a series of lines to the client."""
         if isinstance(lines, str):
             lines = [lines]
-        return [self.client.line_received(l) for l in lines]
+        return [self.client.line_received(line) for line in lines]
 
-    def assert_sent(self, lines):
+    def assert_sent(self, matchers, *, any_order=False, reset_mock=True):
         """Check that a list of (unicode) strings have been sent.
 
         Resets the mock so the next call will not contain what was checked by
         this call.
         """
-        if isinstance(lines, str):
-            lines = [lines]
-        self.client.send_line.assert_has_calls([mock.call(l) for l in lines])
-        self.client.send_line.reset_mock()
+        sent_lines = [args[0] for name, args, kwargs in self.client.send_line.mock_calls]
+
+        if callable(matchers) or isinstance(matchers, str):
+            matchers = [matchers]
+        matchers = [LineMatcher.equals(matcher) if not callable(matcher) else matcher
+                    for matcher in matchers]
+
+        if not matchers:
+            pass
+        elif any_order:
+            for matcher in matchers:
+                assert any(matcher(line) for line in sent_lines), f"sent line not found: {matcher}"
+        else:
+            # Find the start of the matching run of sent messages
+            start = 0
+            while start < len(sent_lines) and not matchers[0](sent_lines[start]):
+                start += 1
+            for i, matcher in enumerate(matchers):
+                assert start + i < len(sent_lines), f"no line matching {matcher} in {sent_lines}"
+                assert matcher(sent_lines[start + i]), f"expected {sent_lines[start + i]!r} to match {matcher}"
+
+        if reset_mock:
+            self.client.send_line.reset_mock()
+
+    match_line = LineMatcher
 
 
 @pytest.fixture
@@ -149,7 +195,6 @@ async def run_client(event_loop, irc_client_helper):
     point it should yield control to allow the client to progress.
 
     >>> @pytest.mark.usefixtures("run_client")
-    ... @pytest.mark.asyncio
     ... async def test_something(irc_client_helper):
     ...     await irc_client_helper.receive_bytes(b":nick!user@host PRIVMSG #channel :hello\r\n")
     ...     irc_client_helper.assert_sent('PRIVMSG #channel :what do you mean, hello?')
@@ -171,7 +216,7 @@ def bot_helper_class():
 
 
 @pytest.fixture
-def bot_helper(irc_client, bot_helper_class):
+def bot_helper(irc_client, bot_helper_class) -> BotHelper:
     irc_client.bot_setup()
     return bot_helper_class(irc_client)
 

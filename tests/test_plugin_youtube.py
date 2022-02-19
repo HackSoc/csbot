@@ -18,7 +18,7 @@ json_test_cases = [
         "youtube_fItlK6L-khc.json",
         {'link': 'http://youtu.be/fItlK6L-khc', 'uploader': 'BruceWillakers',
          'uploaded': '2014-08-29', 'views': '28,843', 'duration': '21:00',
-         'likes': '+1,192/-13', 'title': 'Trouble In Terrorist Town | Hiding in Fire'}
+         'title': 'Trouble In Terrorist Town | Hiding in Fire'}
     ),
 
     # Unicode
@@ -26,7 +26,7 @@ json_test_cases = [
         "vZ_YpOvRd3o",
         200,
         "youtube_vZ_YpOvRd3o.json",
-        {'title': "Oh! it's just me! / Фух! Это всего лишь я!", 'likes': '+12,571/-155',
+        {'title': "Oh! it's just me! / Фух! Это всего лишь я!",
          'duration': '00:24', 'uploader': 'ignoramusky', 'uploaded': '2014-08-26',
          'views': '6,054,406', 'link': 'http://youtu.be/vZ_YpOvRd3o'}
     ),
@@ -36,7 +36,7 @@ json_test_cases = [
         "sw4hmqVPe0E",
         200,
         "youtube_sw4hmqVPe0E.json",
-        {'title': "Sky News Live", 'likes': '+2,195/-586',
+        {'title': "Sky News Live",
          'duration': 'LIVE', 'uploader': 'Sky News', 'uploaded': '2015-03-24',
          'views': '2,271,999', 'link': 'http://youtu.be/sw4hmqVPe0E'}
     ),
@@ -46,7 +46,7 @@ json_test_cases = [
         "539OnO-YImk",
         200,
         "youtube_539OnO-YImk.json",
-        {'title': 'sharpest Underwear kitchen knife in the world', 'likes': '+52,212/-2,209',
+        {'title': 'sharpest Underwear kitchen knife in the world',
          'duration': '12:24', 'uploader': '圧倒的不審者の極み!', 'uploaded': '2018-07-14',
          'views': '2,710,723', 'link': 'http://youtu.be/539OnO-YImk'}
     ),
@@ -94,7 +94,6 @@ def pre_irc_client(aioresponses):
     api_key = "abc"
     """)
 class TestYoutubePlugin:
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("vid_id, status, fixture, expected", json_test_cases)
     async def test_ids(self, bot_helper, aioresponses, vid_id, status, fixture, expected):
         pattern = re.compile(rf'https://www.googleapis.com/youtube/v3/videos\?.*\bid={vid_id}\b.*')
@@ -127,7 +126,6 @@ class TestYoutubeLinkInfoIntegration:
             })
         return bot_helper
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("vid_id, status, fixture, response", json_test_cases)
     @pytest.mark.parametrize("url", [
         "https://www.youtube.com/watch?v={}",

@@ -9,7 +9,6 @@ from csbot.irc import IRCMessage, IRCParseError, IRCUser
 
 # Test IRC client line protocol
 
-@pytest.mark.asyncio
 async def test_buffer(run_client):
     """Check that incoming data is converted to a line-oriented protocol."""
     with run_client.patch('line_received') as m:
@@ -34,7 +33,6 @@ async def test_buffer(run_client):
         ])
 
 
-@pytest.mark.asyncio
 async def test_decode_ascii(run_client):
     """Check that plain ASCII ends up as a (unicode) string."""
     with run_client.patch('line_received') as m:
@@ -42,7 +40,6 @@ async def test_decode_ascii(run_client):
         m.assert_called_once_with(':nick!user@host PRIVMSG #channel :hello')
 
 
-@pytest.mark.asyncio
 async def test_decode_utf8(run_client):
     """Check that incoming UTF-8 is properly decoded."""
     with run_client.patch('line_received') as m:
@@ -50,7 +47,6 @@ async def test_decode_utf8(run_client):
         m.assert_called_once_with(':nick!user@host PRIVMSG #channel :ಠ')
 
 
-@pytest.mark.asyncio
 async def test_decode_cp1252(run_client):
     """Check that incoming CP1252 is properly decoded.
 
@@ -62,7 +58,6 @@ async def test_decode_cp1252(run_client):
         m.assert_called_once_with(':nick!user@host PRIVMSG #channel :“”')
 
 
-@pytest.mark.asyncio
 async def test_decode_invalid_sequence(run_client):
     """Check that incoming invalid byte sequence is properly handled.
 
@@ -91,7 +86,6 @@ def test_truncate(irc_client_helper):
 
 # Test IRC client behaviour
 
-@pytest.mark.asyncio
 async def test_auto_reconnect_eof(run_client):
     with mock_open_connection_paused() as m:
         assert not m.called
@@ -105,7 +99,6 @@ async def test_auto_reconnect_eof(run_client):
         m.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_auto_reconnect_exception(run_client):
     with mock_open_connection_paused() as m:
         assert not m.called
@@ -119,7 +112,6 @@ async def test_auto_reconnect_exception(run_client):
         m.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_disconnect(run_client):
     with mock_open_connection() as m:
         assert not m.called
@@ -141,7 +133,6 @@ class TestRateLimit:
             'rate_limit_count': 2,
         }
 
-    @pytest.mark.asyncio
     async def test_rate_limit_applied(self, fast_forward, run_client):
         # Make sure startup messages don't contribute to the test
         await fast_forward(10)
@@ -160,7 +151,6 @@ class TestRateLimit:
         run_client.assert_bytes_sent(b"PRIVMSG #channel :3\r\n"
                                      b"PRIVMSG #channel :4\r\n")
 
-    @pytest.mark.asyncio
     async def test_cancel_on_disconnect(self, fast_forward, run_client):
         with mock_open_connection_paused() as m:
             # Make sure startup messages don't contribute to the test
@@ -197,70 +187,44 @@ class TestClientPing:
             'client_ping_interval': 3,
         }
 
-    @pytest.mark.asyncio
     async def test_client_PING(self, fast_forward, run_client):
         """Check that client PING commands are sent at the expected interval."""
         run_client.reset_mock()
         run_client.client.send_line.assert_not_called()
         # Advance time, test that a ping was sent
         await fast_forward(4)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-        ]
+        run_client.assert_sent(['PING 1'], reset_mock=False)
         # Advance time again, test that the right number of pings was sent
         await fast_forward(12)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-            mock.call('PING 2'),
-            mock.call('PING 3'),
-            mock.call('PING 4'),
-            mock.call('PING 5'),
-        ]
+        run_client.assert_sent(['PING 1', 'PING 2', 'PING 3', 'PING 4', 'PING 5'], reset_mock=False)
         # Disconnect, advance time, test that no more pings were sent
         run_client.client.disconnect()
         await run_client.client.disconnected.wait()
         await fast_forward(12)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-            mock.call('PING 2'),
-            mock.call('PING 3'),
-            mock.call('PING 4'),
-            mock.call('PING 5'),
-        ]
+        run_client.assert_sent(['PING 1', 'PING 2', 'PING 3', 'PING 4', 'PING 5'], reset_mock=False)
 
-    @pytest.mark.asyncio
     async def test_client_PING_only_when_needed(self, fast_forward, run_client):
         """Check that client PING commands are sent relative to the last received message."""
         run_client.reset_mock()
         run_client.client.send_line.assert_not_called()
         # Advance time to just before the second PING, check that the first PING was sent
         await fast_forward(5)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-        ]
+        run_client.assert_sent(['PING 1'], reset_mock=False)
         # Receive a message, this should reset the PING timer
         run_client.receive(':nick!user@host PRIVMSG #channel :foo')
         # Advance time to just after when the second PING would happen without any messages
         # received, check that still only one PING was sent
         await fast_forward(2)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-        ]
+        run_client.assert_sent(['PING 1'], reset_mock=False)
         # Advance time to 4 seconds after the last message was received, and check that another
         # PING has now been sent
         await fast_forward(2)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-            mock.call('PING 2'),
-        ]
+        run_client.assert_sent(['PING 1', 'PING 2'], reset_mock=False)
         # Disconnect, advance time, test that no more pings were sent
         run_client.client.disconnect()
         await run_client.client.disconnected.wait()
         await fast_forward(12)
-        assert run_client.client.send_line.mock_calls == [
-            mock.call('PING 1'),
-            mock.call('PING 2'),
-        ]
+        run_client.assert_sent(['PING 1', 'PING 2'], reset_mock=False)
 
 
 def test_PING_PONG(irc_client_helper):
@@ -408,7 +372,6 @@ def test_parse_failure(irc_client_helper):
         irc_client_helper.receive('')
 
 
-@pytest.mark.asyncio
 async def test_wait_for_success(irc_client_helper):
     messages = [
         IRCMessage.create('PING', ['0']),
@@ -444,7 +407,6 @@ async def test_wait_for_success(irc_client_helper):
     ]
 
 
-@pytest.mark.asyncio
 async def test_wait_for_cancelled(irc_client_helper):
     messages = [
         IRCMessage.create('PING', ['0']),
@@ -469,7 +431,6 @@ async def test_wait_for_cancelled(irc_client_helper):
     ]
 
 
-@pytest.mark.asyncio
 async def test_wait_for_exception(irc_client_helper):
     messages = [
         IRCMessage.create('PING', ['0']),
@@ -523,7 +484,6 @@ def test_quit(irc_client_helper):
     irc_client_helper.assert_sent('QUIT :reason')
 
 
-@pytest.mark.asyncio
 async def test_quit_no_reconnect(run_client):
     with run_client.patch('connect') as m:
         run_client.client.quit(reconnect=False)
@@ -532,7 +492,6 @@ async def test_quit_no_reconnect(run_client):
         assert not m.called
 
 
-@pytest.mark.asyncio
 async def test_quit_reconnect(run_client):
     with run_client.patch('connect') as m:
         run_client.client.quit(reconnect=True)

@@ -141,7 +141,6 @@ async def irc_client(irc_client):
     return irc_client
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body, expected_title", encoding_test_cases,
                          ids=[_[0] for _ in encoding_test_cases])
 async def test_encoding_handling(bot_helper, aioresponses, url, content_type, body, expected_title):
@@ -150,7 +149,6 @@ async def test_encoding_handling(bot_helper, aioresponses, url, content_type, bo
     assert result.text == expected_title
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("url, content_type, body", error_test_cases,
                          ids=[_[0] for _ in error_test_cases])
 async def test_html_title_errors(bot_helper, aioresponses, url, content_type, body):
@@ -159,7 +157,6 @@ async def test_html_title_errors(bot_helper, aioresponses, url, content_type, bo
     assert result.is_error
 
 
-@pytest.mark.asyncio
 async def test_not_found(bot_helper, aioresponses):
     # Test our assumptions: direct request should raise connection error, because aioresponses
     # is mocking the internet
@@ -172,7 +169,6 @@ async def test_not_found(bot_helper, aioresponses):
     assert result.is_error
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
 async def test_scan_privmsg(event_loop, bot_helper, aioresponses, msg, urls):
     with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info:
@@ -180,7 +176,6 @@ async def test_scan_privmsg(event_loop, bot_helper, aioresponses, msg, urls):
         get_link_info.assert_has_calls([mock.call(url) for url in urls])
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("msg, urls", [('http://example.com', ['http://example.com'])])
 async def test_command(event_loop, bot_helper, aioresponses, msg, urls):
     with asynctest.mock.patch.object(bot_helper['linkinfo'], 'get_link_info') as get_link_info, \
@@ -191,8 +186,7 @@ async def test_command(event_loop, bot_helper, aioresponses, msg, urls):
         assert link_command.call_count == 1
 
 
-@pytest.mark.asyncio
-def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
+async def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
     """Test that we won't respond too frequently to URLs in messages.
 
     Unfortunately we can't currently test the passage of time, so the only
@@ -203,11 +197,11 @@ def test_scan_privmsg_rate_limit(bot_helper, aioresponses):
     count = linkinfo.config.rate_limit_count
     for i in range(count):
         with asynctest.mock.patch.object(linkinfo, 'get_link_info', ) as get_link_info:
-            yield from bot_helper.client.line_received(
+            await bot_helper.client.line_received(
                 ':nick!user@host PRIVMSG #channel :http://example.com/{}'.format(i))
             get_link_info.assert_called_once_with('http://example.com/{}'.format(i))
     with asynctest.mock.patch.object(linkinfo, 'get_link_info') as get_link_info:
-        yield from bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
+        await bot_helper.client.line_received(':nick!user@host PRIVMSG #channel :http://example.com/12345')
         assert not get_link_info.called
 
 
@@ -221,18 +215,17 @@ class TestNonBlocking:
         def privmsg(self, event):
             self.handler_mock(event['message'])
 
-    CONFIG = f"""\
+    CONFIG = """\
     ["@bot"]
     plugins = ["mockplugin", "linkinfo"]
     """
 
     pytestmark = pytest.mark.bot(plugins=find_plugins() + [MockPlugin], config=CONFIG)
 
-    @pytest.mark.asyncio
     async def test_non_blocking_privmsg(self, event_loop, bot_helper, aioresponses):
         bot_helper.reset_mock()
 
-        event = asyncio.Event(loop=event_loop)
+        event = asyncio.Event()
 
         async def handler(url, **kwargs):
             await event.wait()
@@ -245,7 +238,7 @@ class TestNonBlocking:
             ':nick!user@host PRIVMSG #channel :http://example.com/',
             ':nick!user@host PRIVMSG #channel :b',
         ])
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert bot_helper['mockplugin'].handler_mock.mock_calls == [
             mock.call('a'),
             mock.call('http://example.com/'),
@@ -254,17 +247,14 @@ class TestNonBlocking:
         bot_helper.client.send_line.assert_not_called()
 
         event.set()
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert all(f.done() for f in futures)
-        bot_helper.client.send_line.assert_has_calls([
-            mock.call('NOTICE #channel :foo'),
-        ])
+        bot_helper.assert_sent('NOTICE #channel :foo')
 
-    @pytest.mark.asyncio
     async def test_non_blocking_command(self, event_loop, bot_helper, aioresponses):
         bot_helper.reset_mock()
 
-        event = asyncio.Event(loop=event_loop)
+        event = asyncio.Event()
 
         async def handler(url, **kwargs):
             await event.wait()
@@ -278,7 +268,7 @@ class TestNonBlocking:
             ':nick!user@host PRIVMSG #channel :!link http://example.com/',
             ':nick!user@host PRIVMSG #channel :b',
         ])
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert bot_helper['mockplugin'].handler_mock.mock_calls == [
             mock.call('a'),
             mock.call('!link http://example.com/'),
@@ -287,9 +277,7 @@ class TestNonBlocking:
         bot_helper.client.send_line.assert_not_called()
 
         event.set()
-        await asyncio.wait(futures, loop=event_loop, timeout=0.1)
+        await asyncio.wait(futures, timeout=0.1)
         assert all(f.done() for f in futures)
-        bot_helper.client.send_line.assert_has_calls([
-            mock.call('NOTICE #channel :Error: Content-Type not HTML-ish: '
-                      'application/octet-stream (http://example.com/)'),
-        ])
+        bot_helper.assert_sent('NOTICE #channel :Error: Content-Type not HTML-ish: '
+                               'application/octet-stream (http://example.com/)')

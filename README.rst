@@ -69,15 +69,14 @@ Testing
 -------
 csbot has some unit tests.  (It'd be nice to have more.)  To run them::
 
-    $ pytest
+    $ tox
 
-We're also using Travis-CI for continuous integration and continuous deployment.
+We're also using GitHub Actions for continuous integration and continuous deployment.
 
-.. image:: https://travis-ci.org/HackSoc/csbot.svg?branch=master
-    :target: https://travis-ci.org/HackSoc/csbot
+.. image:: https://github.com/HackSoc/csbot/actions/workflows/main.yml/badge.svg
 
-.. image:: https://coveralls.io/repos/HackSoc/csbot/badge.png
-    :target: https://coveralls.io/r/HackSoc/csbot
+.. image:: https://codecov.io/gh/HackSoc/csbot/branch/main/graph/badge.svg?token=oMJcY9E9lj
+    :target: https://codecov.io/gh/HackSoc/csbot
 
 
 .. [1] csbot depends on lxml_, which is a compiled extension module based on

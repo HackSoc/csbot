@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 
@@ -51,7 +53,11 @@ def test_error(bot_helper):
     assert calc._calc("'B' > 'H'") == "Error, invalid argument"
     assert calc._calc("e ^ pi") == "Error, invalid arguments"
     assert calc._calc("factorial(-42)") == "Error, factorial() not defined for negative values"
-    assert calc._calc("factorial(4.2)") == "Error, factorial() only accepts integral values"
+    if sys.version_info < (3, 10):
+        assert calc._calc("factorial(4.2)") == "Error, factorial() only accepts integral values"
+    else:
+        assert calc._calc("factorial(4.2)") == "Error, invalid arguments"
     assert calc._calc("not await 1").startswith("Error,")   # ast SyntaxError in Python 3.6 but not 3.7
-    assert calc._calc("(" * 200 + ")" * 200) == "Error, unable to parse"
+    if sys.version_info < (3, 9):
+        assert calc._calc("(" * 200 + ")" * 200) == "Error, unable to parse"
     assert calc._calc("1@2") == "Error, invalid operator"

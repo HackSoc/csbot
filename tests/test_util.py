@@ -8,12 +8,10 @@ import pytest
 from csbot import util
 
 
-@pytest.mark.asyncio
 async def test_maybe_future_none():
     assert util.maybe_future(None) is None
 
 
-@pytest.mark.asyncio
 async def test_maybe_future_non_awaitable():
     on_error = mock.Mock(spec=callable)
     assert util.maybe_future("foo", on_error=on_error) is None
@@ -22,7 +20,6 @@ async def test_maybe_future_non_awaitable():
     ]
 
 
-@pytest.mark.asyncio
 async def test_maybe_future_coroutine():
     async def foo():
         await asyncio.sleep(0)
@@ -36,13 +33,11 @@ async def test_maybe_future_coroutine():
     assert future.exception() is None
 
 
-@pytest.mark.asyncio
 async def test_maybe_future_result_none():
     result = await util.maybe_future_result(None)
     assert result is None
 
 
-@pytest.mark.asyncio
 async def test_maybe_future_result_non_awaitable():
     on_error = mock.Mock(spec=callable)
     result = await util.maybe_future_result("foo", on_error=on_error)
@@ -52,7 +47,6 @@ async def test_maybe_future_result_non_awaitable():
     ]
 
 
-@pytest.mark.asyncio
 async def test_maybe_future_result_coroutine():
     async def foo():
         await asyncio.sleep(0)
@@ -73,7 +67,6 @@ def test_truncate_utf8():
 
 # @pytest.mark.skip
 class TestRateLimited:
-    @pytest.mark.asyncio
     async def test_bursts(self, event_loop, fast_forward):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds
@@ -100,7 +93,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_constant_rate(self, event_loop, fast_forward):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds
@@ -131,7 +123,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_restart_with_clear(self, event_loop, fast_forward):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds
@@ -170,7 +161,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_restart_without_clear(self, event_loop, fast_forward):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds
@@ -213,7 +203,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_call_before_start(self, event_loop, fast_forward):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds
@@ -232,7 +221,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_exception(self, event_loop, fast_forward):
         f = mock.Mock(spec=callable, side_effect=Exception("fail"))
         # Test with 2 calls per 2 seconds
@@ -246,7 +234,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_start_stop(self, event_loop):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds
@@ -262,7 +249,6 @@ class TestRateLimited:
 
         rl.stop()
 
-    @pytest.mark.asyncio
     async def test_stop_returns_cancelled_calls(self, event_loop):
         f = mock.Mock(spec=callable)
         # Test with 2 calls per 2 seconds

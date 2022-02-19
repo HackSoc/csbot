@@ -2,7 +2,7 @@ version: "3"
 
 services:
   bot:
-    image: alanbriolat/csbot:latest
+    image: ghcr.io/hacksoc/csbot/csbot:latest
     volumes:
       - ${CSBOT_CONFIG_LOCAL:-./csbot.toml}:/app/csbot.toml
     links:

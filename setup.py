@@ -15,7 +15,7 @@ setuptools.setup(
     ],
     install_requires=[
         'click>=6.2,<7.0',
-        'pymongo>=3.6.0',
+        'pymongo>=4.0.1',
         'requests>=2.9.1,<3.0.0',
         'lxml>=2.3.5',
         'aiogoogle>=0.1.13',

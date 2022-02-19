@@ -127,14 +127,14 @@ def pairwise(iterable):
     return zip(a, b)
 
 
-def cap_string(s, l):
+def cap_string(s, n):
     """If a string is longer than a particular length,
     it gets truncated and has '...' added to the end.
     """
-    if len(s) <= l:
+    if len(s) <= n:
         return s
 
-    return s[0:l-3] + "..."
+    return s[0:n - 3] + "..."
 
 
 def ordinal(value):

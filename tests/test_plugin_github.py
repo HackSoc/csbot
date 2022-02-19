@@ -67,8 +67,8 @@ class TestGitHubPlugin:
 
     ["github/alanbriolat/csbot-webhook-test"]
     notify = "#mychannel"
-    """
-    URL = f'/webhook/github/foobar'
+    """  # noqa: E501
+    URL = '/webhook/github/foobar'
     pytestmark = pytest.mark.bot(plugins=PLUGINS, config=CONFIG)
 
     TEST_CASES = [
@@ -200,7 +200,6 @@ class TestGitHubPlugin:
 
     @pytest.mark.parametrize("fixture_file, expected", TEST_CASES)
     @pytest.mark.usefixtures("run_client")
-    @pytest.mark.asyncio
     async def test_behaviour(self, bot_helper, client, fixture_file, expected):
         payload, headers = bot_helper.payload_and_headers_from_fixture(fixture_file)
         resp = await client.post(self.URL, data=payload, headers=headers)

@@ -25,7 +25,6 @@ pytestmark = [
         plugins = ["usertrack"]
         """),
     pytest.mark.usefixtures("run_client"),
-    pytest.mark.asyncio,
 ]
 
 

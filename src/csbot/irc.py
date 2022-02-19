@@ -276,9 +276,9 @@ class IRCClient:
 
         self.reader, self.writer = None, None
         self._exiting = False
-        self.connected = asyncio.Event(loop=self.loop)
+        self.connected = asyncio.Event()
         self.connected.clear()
-        self.disconnected = asyncio.Event(loop=self.loop)
+        self.disconnected = asyncio.Event()
         self.disconnected.set()
         self._last_message_received = self.loop.time()
         self._client_ping = None
@@ -325,7 +325,6 @@ class IRCClient:
 
         self.reader, self.writer = await asyncio.open_connection(self.__config['host'],
                                                                  self.__config['port'],
-                                                                 loop=self.loop,
                                                                  local_addr=local_addr)
 
     def disconnect(self):

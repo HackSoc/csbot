@@ -1,4 +1,4 @@
-FROM python:3.7
+FROM python:3.10
 
 ARG UID=9000
 ARG GID=9000

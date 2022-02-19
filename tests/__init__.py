@@ -12,10 +12,10 @@ class MockStreamWriter(asyncio.StreamWriter):
         self._reader.feed_eof()
 
 
-def paused(f, *, loop=None):
+def paused(f):
     """Wrap a coroutine function so it waits until explicitly enabled.
     """
-    event = asyncio.Event(loop=loop)
+    event = asyncio.Event()
     resume = event.set
 
     async def _f(*args, **kwargs):
@@ -27,9 +27,10 @@ def paused(f, *, loop=None):
     return _f, resume
 
 
-async def open_mock_connection(*args, loop=None, **kwargs):
+async def open_mock_connection(*args, **kwargs):
     """Create a mock reader and writer pair.
     """
+    loop = asyncio.get_running_loop()
     reader = MockStreamReader(loop=loop)
     writer = MockStreamWriter(None, None, reader, loop)
     writer.write = mock.Mock()
