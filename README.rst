@@ -61,8 +61,9 @@ Of particular use is the "How to write plugins" section.
 
 You can build the documentation yourself with::
 
-    $ pip install sphinx
-    $ cd docs/
+    $ pip install -r requirements.docs.txt
+    $ cd doc/
+    $ ./regen_apidoc.sh
     $ make html
 
 Testing

@@ -5,6 +5,7 @@ Subpackages
 -----------
 
 .. toctree::
+   :maxdepth: 4
 
    csbot.plugins
 
@@ -12,6 +13,7 @@ Submodules
 ----------
 
 .. toctree::
+   :maxdepth: 4
 
    csbot.cli
    csbot.config

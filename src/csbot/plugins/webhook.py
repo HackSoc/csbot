@@ -16,7 +16,7 @@ The ``request`` key of the event contains the :class:`aiohttp.web.Request` objec
 Configuration
 =============
 
-The following configuration options are supported in the ``[webserver]`` config section:
+The following configuration options are supported in the ``[webhook]`` config section:
 
 ==================  ===========
 Setting             Description

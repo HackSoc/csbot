@@ -5,6 +5,7 @@ Submodules
 ----------
 
 .. toctree::
+   :maxdepth: 4
 
    csbot.plugins.auth
    csbot.plugins.calc

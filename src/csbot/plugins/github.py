@@ -103,7 +103,7 @@ There is already customised handling for the following:
 
 Module contents
 ===============
-"""
+"""  # noqa: E501
 import hmac
 import datetime
 import json
