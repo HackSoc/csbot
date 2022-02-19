@@ -1,3 +1,46 @@
+"""
+Uses :mod:`~csbot.plugins.webserver` to create a generic URL for incoming webhooks so that other plugins can handle
+webhook events.
+
+To act as a webhook handler, a plugin should hook the ``webhook.{service}`` event, for example::
+
+    class MyPlugin(Plugin):
+        @Plugin.hook('webhook.myplugin')
+        async def webhook(self, e):
+            self.log.info(f'Handling {e["request"]}')
+
+The ``request`` key of the event contains the :class:`aiohttp.web.Request` object.
+
+.. note:: The webhook plugin only responds to ``POST`` requests.
+
+Configuration
+=============
+
+The following configuration options are supported in the ``[webhook]`` config section:
+
+==================  ===========
+Setting             Description
+==================  ===========
+``prefix``          URL prefix for the web server sub-application. Default: ``/webhook``.
+``url_secret``      Extra URL component to make valid endpoints hard to guess.
+==================  ===========
+
+URL Format & Request Handling
+=============================
+
+The URL path for a webhook is ``{prefix}/{service}/{url_secret}``. The host and port elements, plus any additional
+prefix, are determined by the :mod:`~csbot.plugins.webserver` plugin and/or any reverse-proxy that is in front of it.
+
+For example, the main deployment of csbot received webhooks at ``https://{host}/csbot/webhook/{service}/{url_secret}``
+and sits behind nginx with the following configuration::
+
+    location /csbot/ {
+        proxy_pass http://localhost:8180/;
+    }
+
+Module contents
+===============
+"""
 from aiohttp import web
 
 from ..plugin import Plugin

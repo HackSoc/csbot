@@ -1,3 +1,35 @@
+"""
+Creates a web server using :mod:`aiohttp` so that other plugins can register URL handlers.
+
+To register a URL handler, a plugin should hook the ``webserver.build`` event and create a sub-application,
+for example::
+
+    class MyPlugin(Plugin):
+        @Plugin.hook('webserver.build')
+        def create_app(self, e):
+            with e['webserver'].create_subapp('/my_plugin') as app:
+                app.add_routes([web.get('/{item}', self.request_handler)])
+
+        async def request_handler(self, request):
+            return web.Response(text=f'No {request.match_info["item"]} here, oh dear!')
+
+Configuration
+=============
+
+The following configuration options are supported in the ``[webserver]`` config section:
+
+==================  ===========
+Setting             Description
+==================  ===========
+``host``            Hostname/IP address to listen on. Default: ``localhost``.
+``port``            Port to listen on. Default: ``1337``.
+==================  ===========
+
+Module contents
+===============
+"""
+
+
 from contextlib import contextmanager
 
 from aiohttp import web

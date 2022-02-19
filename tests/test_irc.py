@@ -374,9 +374,9 @@ def test_parse_failure(irc_client_helper):
 
 async def test_wait_for_success(irc_client_helper):
     messages = [
-        IRCMessage(None, 'PING', ['0'], 'PING', 'PING :0'),
-        IRCMessage(None, 'PING', ['1'], 'PING', 'PING :1'),
-        IRCMessage(None, 'PING', ['2'], 'PING', 'PING :2'),
+        IRCMessage.create('PING', ['0']),
+        IRCMessage.create('PING', ['1']),
+        IRCMessage.create('PING', ['2']),
     ]
 
     mock_predicate = mock.Mock(return_value=(False, None))
@@ -409,8 +409,8 @@ async def test_wait_for_success(irc_client_helper):
 
 async def test_wait_for_cancelled(irc_client_helper):
     messages = [
-        IRCMessage(None, 'PING', ['0'], 'PING', 'PING :0'),
-        IRCMessage(None, 'PING', ['1'], 'PING', 'PING :1'),
+        IRCMessage.create('PING', ['0']),
+        IRCMessage.create('PING', ['1']),
     ]
 
     mock_predicate = mock.Mock(return_value=(False, None))
@@ -433,8 +433,8 @@ async def test_wait_for_cancelled(irc_client_helper):
 
 async def test_wait_for_exception(irc_client_helper):
     messages = [
-        IRCMessage(None, 'PING', ['0'], 'PING', 'PING :0'),
-        IRCMessage(None, 'PING', ['1'], 'PING', 'PING :1'),
+        IRCMessage.create('PING', ['0']),
+        IRCMessage.create('PING', ['1']),
     ]
 
     mock_predicate = mock.Mock(side_effect=Exception())

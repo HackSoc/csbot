@@ -1,32 +1,25 @@
 import shlex
 from itertools import tee
-from collections import deque, OrderedDict
+from collections import deque
 import asyncio
 import logging
+import typing
 from typing import (
     Dict,
     Iterator,
-    List,
     Set,
     TypeVar,
 )
 
-import requests
-from async_generator import asynccontextmanager
+import attr
 import aiohttp
+from async_generator import asynccontextmanager
+import requests
 
 
 LOG = logging.getLogger(__name__)
 
 T = TypeVar("T")
-
-
-class User(object):
-    def __init__(self, raw):
-        self.raw = raw
-        self.nick = raw.split('!', 1)[0] if '!' in raw else None
-        self.username = raw.rsplit('@', 1)[0].rsplit('~', 1)[1]
-        self.host = raw.rsplit('@', 1)[1]
 
 
 def nick(user):
@@ -206,131 +199,6 @@ def is_ascii(s):
     return all(ord(c) < 128 for c in s)
 
 
-class NamedObject(object):
-    """Make objects that have specific :meth:`__repr__` text.
-
-    This is mostly useful for singleton objects that you want to give a
-    useful description for auto-generated documentation purposes.
-    """
-    def __init__(self, name):
-        self.name = name
-
-    def __repr__(self):
-        return self.name
-
-
-class StructMeta(type):
-    """A metaclass for :class:`Struct` to turn class attributes into fields.
-    """
-
-    @classmethod
-    def __prepare__(mcs, name, bases):
-        """Use :class:`collections.OrderedDict` to preserve attribute order.
-        """
-        return OrderedDict()
-
-    def __new__(mcs, name, bases, attrs):
-        # Don't molest the base class, there are no fields on it
-        if bases == (object,):
-            return type.__new__(mcs, name, bases, attrs)
-
-        # Find fields in base classes
-        attrs['_fields'] = []
-        for b in bases:
-            attrs['_fields'] += getattr(b, '_fields', [])
-        # Find attributes in this class that should be fields
-        attrs['_fields'] += [k for k, v in attrs.items()
-                             if not k.startswith('_') and not callable(v)]
-        # Build new class
-        return type.__new__(mcs, name, bases, attrs)
-
-
-class Struct(object, metaclass=StructMeta):
-    """A mutable alternative to :func:`collections.namedtuple`.
-
-    To use this class, create a subclass of it.  Any non-callable, non-"hidden"
-    class attributes in the subclass will become struct fields.  Setting of
-    attribute values is limited to attributes recognised as fields.  The class
-    attribute value is effectively the field's default value.
-
-    A struct constructor allows both positional arguments (based on field
-    order) and keyword arguments (based on field name).  If a field's default
-    value is :attr:`REQUIRED`, then an exception will be raised unless its
-    value was set by the constructor.
-
-    Examples:
-
-    >>> class Foo(Struct):
-    ...     a = Struct.REQUIRED
-    ...     b = 12
-    ...     c = None
-    ...
-    >>> Foo()
-    Traceback (most recent call last):
-        ...
-    ValueError: value required for attribute: a
-    >>> Foo(123)
-    Foo(a=123, b=12, c=None)
-    >>> Foo(123, c='Hello, world')
-    Foo(a=123, b=12, c='Hello, world')
-    >>> Foo(bar=False)
-    Traceback (most recent call last):
-        ...
-    AttributeError: struct field does not exist: bar
-    >>> x = Foo(123)
-    >>> x.b
-    12
-    >>> x.b = 21
-    >>> x
-    Foo(a=123, b=21, c=None)
-    >>> x.bar = False
-    Traceback (most recent call last):
-        ...
-    AttributeError: struct field does not exist: bar
-    """
-    #: Singleton object to signify an attribute that *must* be set
-    REQUIRED = NamedObject('Struct.REQUIRED')
-
-    #: Field names of the struct, in order (populated by :class:`StructMeta`)
-    _fields: List[str]
-
-    def __init__(self, *args, **kwargs):
-        values = OrderedDict()
-        # Allow positional arguments, but not too many
-        if len(args) > len(self._fields):
-            raise TypeError('__init__ takes at most {} arguments ({} given)'
-                            .format(len(self._fields), len(args)))
-        # Apply positional arguments
-        values.update(zip(self._fields, args))
-
-        # Apply keyword arguments
-        values.update(kwargs)
-
-        # Set attribute values - those that don't exist will raise errors
-        for k, v in values.items():
-            setattr(self, k, v)
-
-        # Check that required attributes were set
-        for k in self._fields:
-            if getattr(self, k) is Struct.REQUIRED:
-                raise ValueError('value required for attribute: ' + k)
-
-    def __setattr__(self, key, value):
-        """Prevent setting of non-field attributes.
-        """
-        if key not in self._fields:
-            raise AttributeError('struct field does not exist: {}'.format(key))
-        else:
-            object.__setattr__(self, key, value)
-
-    def __repr__(self):
-        """Give a useful representation for the struct object.
-        """
-        return '{}({})'.format(self.__class__.__name__,
-                               ', '.join('{}={!r}'.format(k, getattr(self, k))
-                                         for k in self._fields))
-
-
 def maybe_future(result, *, on_error=None, log=LOG, loop=None):
     """Make *result* a future if possible, otherwise return None.
 
@@ -480,3 +348,66 @@ class RateLimited:
                 except asyncio.QueueEmpty:
                     break
         return cancelled
+
+
+def type_validator(_obj, attrib: attr.Attribute, value):
+    """An attrs validator that inspects the attribute type."""
+    if attrib.type is None:
+        raise TypeError(f"'{attrib.name}' has no type to check")
+    elif getattr(attrib.type, "__origin__", None) is typing.Union:
+        if any(isinstance(value, t) for t in attrib.type.__args__):
+            return True
+    elif isinstance(value, attrib.type):
+        return True
+    raise TypeError(f"'{attrib.name}' must be {attrib.type} (got {value} that is a {type(value)}",
+                    attrib, value)
+
+
+class PrettyStreamHandler(logging.StreamHandler):
+    """Wrap log messages with severity-dependent ANSI terminal colours.
+
+    Use in place of :class:`logging.StreamHandler` to have log messages coloured
+    according to severity.
+
+    >>> handler = PrettyStreamHandler()
+    >>> handler.setFormatter(logging.Formatter('[%(levelname)-8s] %(message)s'))
+    >>> logging.getLogger('').addHandler(handler)
+
+    *stream* corresponds to the same argument to :class:`logging.StreamHandler`,
+    defaulting to stderr.
+
+    *colour* overrides TTY detection to force colour on or off.
+
+    This source for this class is released into the public domain.
+
+    .. codeauthor:: Alan Briolat <alan.briolat@gmail.com>
+    """
+    #: Mapping from logging levels to ANSI colours.
+    COLOURS = {
+        logging.DEBUG: '\033[36m',      # Cyan foreground
+        logging.WARNING: '\033[33m',    # Yellow foreground
+        logging.ERROR: '\033[31m',      # Red foreground
+        logging.CRITICAL: '\033[31;7m'  # Red foreground, inverted
+    }
+    #: ANSI code for resetting the terminal to default colour.
+    COLOUR_END = '\033[0m'
+
+    def __init__(self, stream=None, colour=None):
+        super(PrettyStreamHandler, self).__init__(stream)
+        if colour is None:
+            self.colour = self.stream.isatty()
+        else:
+            self.colour = colour
+
+    def format(self, record):
+        """Get a coloured, formatted message for a log record.
+
+        Calls :func:`logging.StreamHandler.format` and applies a colour to the
+        message if appropriate.
+        """
+        msg = super(PrettyStreamHandler, self).format(record)
+        if self.colour:
+            colour = self.COLOURS.get(record.levelno, '')
+            return colour + msg + self.COLOUR_END
+        else:
+            return msg

@@ -1,9 +1,11 @@
 import collections
 from collections import abc
 from functools import partial
+import importlib
 import itertools
 import logging
 import os
+import pkgutil
 from typing import (
     Any,
     Callable,
@@ -17,10 +19,10 @@ from typing import (
 )
 
 import attr
-import straight.plugin
 
 from . import config
 from .util import topological_sort
+import csbot.plugins
 
 
 def find_plugins():
@@ -28,7 +30,15 @@ def find_plugins():
 
     Returns a list of discovered plugin classes.
     """
-    return list(straight.plugin.load('csbot.plugins', subclasses=Plugin))
+    plugins = []
+    for _finder, name, _ispkg in pkgutil.iter_modules(csbot.plugins.__path__, csbot.plugins.__name__ + '.'):
+        module = importlib.import_module(name)
+        for attr_name in dir(module):
+            if not attr_name.startswith('_'):
+                maybe_plugin = getattr(module, attr_name)
+                if isinstance(maybe_plugin, type) and issubclass(maybe_plugin, Plugin) and maybe_plugin is not Plugin:
+                    plugins.append(maybe_plugin)
+    return plugins
 
 
 def build_plugin_dict(plugins):

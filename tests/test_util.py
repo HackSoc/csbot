@@ -1,6 +1,8 @@
 import asyncio
+import typing
 from unittest import mock
 
+import attr
 import pytest
 
 from csbot import util
@@ -257,3 +259,62 @@ class TestRateLimited:
         assert f.mock_calls == [mock.call(1), mock.call(2)]
         cancelled = rl.stop()
         assert cancelled == [((3,), {}), ((4,), {})]
+
+
+class TestTypeValidator:
+    def test_bare_type(self):
+        @attr.s
+        class A:
+            x: str = attr.ib(validator=util.type_validator)
+
+        A("foo")
+        with pytest.raises(TypeError):
+            A(12)
+        with pytest.raises(TypeError):
+            A(None)
+
+    def test_optional(self):
+        @attr.s
+        class B:
+            x: typing.Optional[str] = attr.ib(validator=util.type_validator)
+
+        B("foo")
+        B(None)
+        with pytest.raises(TypeError):
+            B(12)
+
+    def test_union(self):
+        @attr.s
+        class C:
+            x: typing.Union[int, float] = attr.ib(validator=util.type_validator)
+
+        C(12)
+        C(12.34)
+        with pytest.raises(TypeError):
+            C(None)
+        with pytest.raises(TypeError):
+            C("12")
+
+    def test_no_type(self):
+        @attr.s
+        class D:
+            x = attr.ib(validator=util.type_validator)
+
+        with pytest.raises(TypeError):
+            D(None)
+        with pytest.raises(TypeError):
+            D("foo")
+        with pytest.raises(TypeError):
+            D(12)
+
+    def test_nested_union(self):
+        @attr.s
+        class E:
+            x: typing.Union[typing.Union[typing.Optional[int], str], bool] = attr.ib(validator=util.type_validator)
+
+        E(None)
+        E("foo")
+        E(12)
+        E(False)
+        with pytest.raises(TypeError):
+            E(12.34)

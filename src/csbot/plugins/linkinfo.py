@@ -1,34 +1,50 @@
 import os.path
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, ParseResult
 import collections
-from collections import namedtuple
 import datetime
 from functools import partial
+from typing import (
+    Callable,
+    Generic,
+    Optional,
+    TypeVar,
+)
 
 import aiohttp
+import attr
 import lxml.etree
 import lxml.html
 
 from ..plugin import Plugin
-from ..util import Struct, simple_http_get_async, maybe_future_result
+from ..util import simple_http_get_async, maybe_future_result, type_validator
 from .. import config
 
 
-LinkInfoHandler = namedtuple('LinkInfoHandler', ['filter', 'handler', 'exclusive'])
+LinkInfoFilterResult = TypeVar("LinkInfoFilterResult")
+LinkInfoFilterFunc = Callable[[ParseResult], LinkInfoFilterResult]
+LinkInfoHandlerFunc = Callable[[ParseResult, LinkInfoFilterResult], Optional["LinkInfoResult"]]
 
 
-class LinkInfoResult(Struct):
+@attr.s(frozen=True)
+class LinkInfoHandler(Generic[LinkInfoFilterResult]):
+    filter: LinkInfoFilterFunc = attr.ib(validator=attr.validators.is_callable())
+    handler: LinkInfoHandlerFunc = attr.ib(validator=attr.validators.is_callable())
+    exclusive: bool = attr.ib(validator=type_validator)
+
+
+@attr.s(slots=True)
+class LinkInfoResult:
     #: The URL requested
-    url = Struct.REQUIRED
+    url: str = attr.ib(validator=type_validator)
     #: Information about the URL
-    text = Struct.REQUIRED
+    text: str = attr.ib(validator=type_validator)
     #: Is an error?
-    is_error = False
+    is_error: bool = attr.ib(default=False, validator=type_validator)
     #: URL is not safe for work?
-    nsfw = False
+    nsfw: bool = attr.ib(default=False, validator=type_validator)
     #: URL information is redundant? (e.g. duplicated in URL string)
-    is_redundant = False
+    is_redundant: bool = attr.ib(default=False, validator=type_validator)
 
     def get_message(self):
         if self.is_error:
@@ -269,7 +285,7 @@ class LinkInfo(Plugin):
                 return make_error('Missing or empty <title> tag')
 
             # Build result
-            result = LinkInfoResult(url, title,
+            result = LinkInfoResult(url.geturl(), title,
                                     nsfw=url.netloc.endswith('.xxx'))
             # See if the title is redundant, i.e. appears in the URL
             result.is_redundant = self._filter_title_in_url(url, title)

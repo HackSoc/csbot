@@ -5,6 +5,7 @@ Submodules
 ----------
 
 .. toctree::
+   :maxdepth: 4
 
    csbot.plugins.auth
    csbot.plugins.calc
@@ -31,6 +32,6 @@ Module contents
 ---------------
 
 .. automodule:: csbot.plugins
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
