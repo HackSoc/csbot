@@ -67,8 +67,9 @@ class QuoteDB:
         We keep track of the latest quote ID (they're sequential) in the database
         To update it we remove the old one and insert a new record.
         """
-        self.quotedb.remove({'header': 'currentQuoteId'})
-        self.quotedb.insert({'header': 'currentQuoteId', 'maxQuoteId': id})
+        self.quotedb.replace_one({'header': 'currentQuoteId'},
+                                 {'header': 'currentQuoteId', 'maxQuoteId': id},
+                                 upsert=True)
 
     def get_current_quote_id(self):
         """ Gets the current maximum quote ID
@@ -92,7 +93,7 @@ class QuoteDB:
         id = self.get_current_quote_id()
         sId = id + 1
         quote.quote_id = sId
-        self.quotedb.insert(quote.to_udict())
+        self.quotedb.insert_one(quote.to_udict())
         self.set_current_quote_id(sId)
         return sId
 
@@ -111,7 +112,7 @@ class QuoteDB:
             if not q:
                 return False
 
-            self.quotedb.remove({'quoteId': q.quote_id})
+            self.quotedb.delete_one({'quoteId': q.quote_id})
 
         return True
 
